@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">TAK Convo</string>
+    <!-- description -->
+    <string name="app_desc">XMPP chat for ATAK, based on Conversations</string>
+
+    <!-- spike UI -->
+    <string name="takconvo_reconnect">Reprovision / reconnect</string>
+    <string name="takconvo_to_hint">To (user@domain)</string>
+    <string name="takconvo_body_hint">Message</string>
+    <string name="takconvo_send">Send</string>
+
+    <!-- account pane (Conversations' account screen) -->
+    <string name="takconvo_account_title">XMPP account</string>
+    <string name="takconvo_menu_reconnect">Reconnect</string>
+    <string name="takconvo_menu_test_message">Send test message</string>
+    <string name="takconvo_full_address_required">Enter your full XMPP address (user@server): no XMPP domain is configured</string>
+    <string name="takconvo_status_disabled">Turned off</string>
+    <string name="takconvo_status_no_tak_credentials">Waiting for TAK server credentials</string>
+    <string name="takconvo_status_not_signed_in">Not signed in</string>
+    <string name="takconvo_status_no_domain">No XMPP server configured</string>
+    <string name="takconvo_status_invalid_jid">Invalid XMPP address</string>
+    <string name="takconvo_notice_tak_credentials">Signed in with the credentials of TAK server %1$s. To use another account, turn off \"Use TAK server credentials\" in the settings.</string>
+    <string name="takconvo_notice_disabled">The XMPP connection is turned off in the TAK Convo settings.</string>
+    <string name="takconvo_notice_no_tak_credentials">No TAK server credentials are available. Add a TAK server with a username and password (Settings › Network Preferences › TAK Servers), or sign in with an XMPP account.</string>
+    <string name="takconvo_notice_no_domain">No XMPP server is configured. Import a TAK Convo .pref file (it can come in a mission package), set the XMPP domain in the settings, or sign in with a full XMPP address.</string>
+    <string name="takconvo_notice_invalid_jid">Your TAK server username is not a valid XMPP address. Sign in with an XMPP account instead.</string>
+    <string name="takconvo_use_xmpp_login">Use an XMPP account</string>
+    <string name="takconvo_open_settings">Settings</string>
+    <string name="takconvo_sign_out_confirm">Sign out of %1$s? Its chat history stays on this device.</string>
+
+    <!-- tool preferences -->
+    <string name="takconvo_prefs_title">TAK Convo</string>
+    <string name="takconvo_prefs_summary">XMPP account, server and certificate</string>
+    <string name="takconvo_pref_cat_account">Account</string>
+    <string name="takconvo_pref_enabled">Connection enabled</string>
+    <string name="takconvo_pref_enabled_summary">Connect to the XMPP server and advertise this device\'s XMPP address to other TAK users</string>
+    <string name="takconvo_pref_use_tak">Use TAK server credentials</string>
+    <string name="takconvo_pref_use_tak_summary">Log in with the username and password of your TAK server connection. Clear to sign in with an XMPP account instead.</string>
+    <string name="takconvo_pref_account">XMPP account</string>
+    <string name="takconvo_pref_cat_server">Server</string>
+    <string name="takconvo_pref_domain">XMPP domain</string>
+    <string name="takconvo_pref_domain_summary">The server part of your XMPP address, e.g. chat.example.org</string>
+    <string name="takconvo_pref_host">Custom host</string>
+    <string name="takconvo_pref_host_summary">Connect to this host instead of looking the domain up in DNS (leave empty normally)</string>
+    <string name="takconvo_pref_port">Port</string>
+    <string name="takconvo_pref_cat_trust">Server certificate</string>
+    <string name="takconvo_pref_use_tak_truststore">Use TAK server truststore</string>
+    <string name="takconvo_pref_use_tak_truststore_summary">Trust the certificate authorities of your TAK server connections (the truststores imported in ATAK). Public CAs are always trusted.</string>
+    <string name="takconvo_pref_use_android_ca_store">Use Android CA store</string>
+    <string name="takconvo_pref_use_android_ca_store_summary">Also trust the certificate authorities installed on this device, including ones you imported (Settings › Security › Encryption and credentials) or an MDM installed</string>
+    <string name="takconvo_pref_trusted_ca">Additional CA certificate</string>
+    <string name="takconvo_pref_trusted_ca_none">None: tap to trust a CA certificate file (.pem, .crt, .cer, .der)</string>
+    <string name="takconvo_pref_trusted_ca_choose">Choose certificate file</string>
+    <string name="takconvo_pref_trusted_ca_clear">Trust public CAs only</string>
+    <string name="takconvo_pref_cat_provisioning">Provisioning</string>
+    <string name="takconvo_pref_import">Import settings file (.pref)</string>
+    <string name="takconvo_pref_import_summary">Load these settings from a .pref file. A mission package can carry the same file.</string>
+    <string name="takconvo_pref_imported">Imported %1$d settings from %2$s</string>
+    <string name="takconvo_pref_import_failed">No settings could be read from %1$s</string>
+    <string name="takconvo_pref_not_set">Not set</string>
+</resources>

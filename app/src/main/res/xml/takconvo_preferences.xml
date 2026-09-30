@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keys are ATAK preferences, so a .pref file (or a mission package with one) sets the same
+     values. Plugin preference categories can't have members, hence the flat list. -->
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <PreferenceCategory android:title="@string/takconvo_pref_cat_account" />
+
+    <com.atakmap.android.gui.PanCheckBoxPreference
+        android:defaultValue="true"
+        android:key="takconvo_xmpp_enabled"
+        android:summary="@string/takconvo_pref_enabled_summary"
+        android:title="@string/takconvo_pref_enabled" />
+
+    <com.atakmap.android.gui.PanCheckBoxPreference
+        android:defaultValue="true"
+        android:key="takconvo_xmpp_use_tak_credentials"
+        android:summary="@string/takconvo_pref_use_tak_summary"
+        android:title="@string/takconvo_pref_use_tak" />
+
+    <com.atakmap.android.gui.PanPreference
+        android:key="takconvo_account"
+        android:title="@string/takconvo_pref_account" />
+
+    <PreferenceCategory android:title="@string/takconvo_pref_cat_server" />
+
+    <com.atakmap.android.gui.PanEditTextPreference
+        android:dialogTitle="@string/takconvo_pref_domain"
+        android:inputType="textUri|textNoSuggestions"
+        android:key="takconvo_xmpp_domain"
+        android:singleLine="true"
+        android:title="@string/takconvo_pref_domain" />
+
+    <com.atakmap.android.gui.PanEditTextPreference
+        android:dialogTitle="@string/takconvo_pref_host"
+        android:inputType="textUri|textNoSuggestions"
+        android:key="takconvo_xmpp_host"
+        android:singleLine="true"
+        android:title="@string/takconvo_pref_host" />
+
+    <com.atakmap.android.gui.PanEditTextPreference
+        android:defaultValue="5222"
+        android:dialogTitle="@string/takconvo_pref_port"
+        android:inputType="number"
+        android:key="takconvo_xmpp_port"
+        android:singleLine="true"
+        android:title="@string/takconvo_pref_port" />
+
+    <PreferenceCategory android:title="@string/takconvo_pref_cat_trust" />
+
+    <com.atakmap.android.gui.PanCheckBoxPreference
+        android:defaultValue="true"
+        android:key="takconvo_xmpp_use_tak_truststore"
+        android:summary="@string/takconvo_pref_use_tak_truststore_summary"
+        android:title="@string/takconvo_pref_use_tak_truststore" />
+
+    <com.atakmap.android.gui.PanCheckBoxPreference
+        android:defaultValue="false"
+        android:key="takconvo_xmpp_use_android_ca_store"
+        android:summary="@string/takconvo_pref_use_android_ca_store_summary"
+        android:title="@string/takconvo_pref_use_android_ca_store" />
+
+    <com.atakmap.android.gui.PanPreference
+        android:key="takconvo_trusted_ca_picker"
+        android:title="@string/takconvo_pref_trusted_ca" />
+
+    <PreferenceCategory android:title="@string/takconvo_pref_cat_provisioning" />
+
+    <com.atakmap.android.gui.PanPreference
+        android:key="takconvo_import_pref"
+        android:summary="@string/takconvo_pref_import_summary"
+        android:title="@string/takconvo_pref_import" />
+</PreferenceScreen>

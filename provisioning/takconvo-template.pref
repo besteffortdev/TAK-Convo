@@ -1,0 +1,37 @@
+<?xml version='1.0' standalone='yes'?>
+<!-- TAK Convo provisioning template. Import it on its own or ship it in a mission package.
+     The same values can be edited in ATAK: Settings > Tool Preferences > TAK Convo.
+
+     takconvo_xmpp_domain               XMPP domain; the JID becomes <TAK username>@<domain>
+     takconvo_xmpp_use_tak_credentials  true (default): reuse the TAK server username/password
+                                        false: the user signs in on the TAK Convo account screen
+                                        (the password goes to ATAK's credential store, never in a
+                                        .pref file)
+     takconvo_xmpp_username             optional: username suggested on that sign-in screen
+     takconvo_xmpp_enabled              false turns the XMPP connection off (default true)
+     takconvo_xmpp_host / _port         only if the domain has no SRV/A record reachable from
+                                        the device (omit otherwise; port defaults to 5222)
+     Server certificate: public CAs are always trusted, plus
+     takconvo_xmpp_use_tak_truststore   true (default): the CAs of the TAK server truststores
+                                        imported in ATAK
+     takconvo_xmpp_use_android_ca_store true: the device CA store, including CAs the user
+                                        imported or an MDM installed (default false)
+     takconvo_xmpp_trusted_ca           a CA certificate file (PEM or DER)
+
+     Booleans must use class java.lang.Boolean, as ATAK's own .pref exports do. -->
+<preferences>
+    <preference version="1" name="com.atakmap.app.civ_preferences">
+        <entry key="takconvo_xmpp_domain" class="class java.lang.String">xmpp.example.org</entry>
+        <entry key="takconvo_xmpp_use_tak_credentials" class="class java.lang.Boolean">true</entry>
+        <entry key="takconvo_xmpp_use_tak_truststore" class="class java.lang.Boolean">true</entry>
+        <!-- for CAs deployed to the phones by an MDM:
+        <entry key="takconvo_xmpp_use_android_ca_store" class="class java.lang.Boolean">true</entry>
+        -->
+        <!-- xmpp.example.org presents a certificate issued by the internal CA example-CA -->
+        <entry key="takconvo_xmpp_trusted_ca" class="class java.lang.String">/sdcard/atak/cert/example-CA.crt</entry>
+        <!--
+        <entry key="takconvo_xmpp_host" class="class java.lang.String">xmpp.example.org</entry>
+        <entry key="takconvo_xmpp_port" class="class java.lang.String">5222</entry>
+        -->
+    </preference>
+</preferences>

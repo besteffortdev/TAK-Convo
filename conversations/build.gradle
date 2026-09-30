@@ -1,0 +1,99 @@
+// Conversations 2.20.4, rebuilt as an Android library to embed inside the TAK Convo ATAK plugin.
+// Adapted from upstream's app build.gradle ("conversations" + "free" variant).
+
+apply plugin: 'com.android.library'
+apply from: rootProject.file('gradle/atak-runtime.gradle')
+
+configurations.named('implementation') {
+    exclude group: 'org.jetbrains', module: 'annotations'
+}
+
+dependencies {
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+
+    annotationProcessor 'org.immutables:value:2.12.2'
+    implementation 'org.immutables:value-annotations:2.12.2'
+    annotationProcessor project(':conversations-annotation-processor')
+    implementation project(':conversations-annotation')
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'androidx.cardview:cardview:1.0.0'
+    implementation 'androidx.concurrent:concurrent-futures:1.2.0'
+    implementation 'androidx.documentfile:documentfile:1.1.0'
+    implementation 'androidx.emoji2:emoji2:1.5.0'
+    implementation 'androidx.emoji2:emoji2-bundled:1.5.0'
+    implementation 'androidx.emoji2:emoji2-emojipicker:1.5.0'
+    implementation 'androidx.exifinterface:exifinterface:1.4.1'
+    implementation 'androidx.heifwriter:heifwriter:1.1.0'
+    implementation 'androidx.preference:preference:1.2.1'
+    implementation 'androidx.sharetarget:sharetarget:1.2.0'
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'androidx.viewpager:viewpager:1.0.0'
+    implementation 'androidx.work:work-runtime:2.10.5'
+    implementation 'com.github.open-keychain.open-keychain:openpgp-api:v5.7.1'
+    implementation 'com.google.android.material:material:1.13.0'
+    implementation 'com.google.guava:guava:33.7.1-android'
+    implementation 'com.google.zxing:core:3.5.4'
+    implementation 'com.leinardi.android:speed-dial:3.3.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.11.0'   // TAKCONVO: upstream 5.5.0; ATAK ships 4.11.0
+    implementation 'com.squareup.retrofit2:converter-gson:3.0.0'
+    implementation 'com.squareup.retrofit2:retrofit:3.0.0'
+    implementation 'com.vanniktech:android-image-cropper:4.7.0'
+    implementation 'im.conversations.webrtc:webrtc-android:129.0.0' // TAKCONVO: upstream 149.0.0 requires compileSdk 37 (AGP 9)
+    implementation 'io.deepmedia.community:transcoder-android:0.11.2'
+    implementation 'me.leolin:ShortcutBadger:1.1.22@aar'
+    implementation 'net.fellbaum:jemoji:1.7.6'
+    implementation 'org.bouncycastle:bcmail-jdk18on:1.86'
+    implementation 'org.conscrypt:conscrypt-android:2.7.0'
+    implementation 'org.hsluv:hsluv:1.0.2'
+    implementation 'org.jxmpp:jxmpp-jid:1.1.0'
+    implementation 'org.jxmpp:jxmpp-stringprep-libidn:1.1.0'
+    implementation 'org.minidns:minidns-client:1.1.1'
+    implementation 'org.minidns:minidns-dnssec:1.1.1'
+    implementation 'org.osmdroid:osmdroid-android:6.1.20'
+    implementation 'org.whispersystems:signal-protocol-java:2.6.2'
+}
+
+android {
+    namespace 'eu.siacs.conversations'
+    compileSdk 36
+
+    defaultConfig {
+        minSdk 23
+        consumerProguardFiles 'upstream/proguard-rules.pro'
+
+        // A library BuildConfig has no version fields; upstream code expects them
+        buildConfigField 'String', 'APP_NAME', '"TAK Convo"'
+        buildConfigField 'String', 'VERSION_NAME', '"2.20.4+takconvo"'
+        buildConfigField 'int', 'VERSION_CODE', '42181'
+        buildConfigField 'String', 'APPLICATION_ID', '"com.atakmap.android.takconvo.plugin"'
+        buildConfigField 'String', 'PRIVACY_POLICY', '"https://conversations.im/privacy.html"'
+        resValue 'string', 'app_name', 'TAK Convo'
+        resValue 'string', 'applicationId', 'com.atakmap.android.takconvo.plugin'
+    }
+
+    compileOptions {
+        coreLibraryDesugaringEnabled true
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
+
+    // Same flavor layout as upstream so src/conversations, src/free and src/conversationsFree
+    // overlay src/main exactly as they do in the Conversations app. Only one variant exists;
+    // the plugin selects it with missingDimensionStrategy.
+    flavorDimensions += ['mode', 'distribution']
+    productFlavors {
+        conversations { dimension 'mode' }
+        free { dimension 'distribution' }
+    }
+
+    buildFeatures {
+        buildConfig true
+        resValues true
+        dataBinding true
+    }
+
+    lint {
+        disable += ['MissingTranslation', 'InvalidPackage', 'AppCompatResource']
+        abortOnError false
+    }
+}

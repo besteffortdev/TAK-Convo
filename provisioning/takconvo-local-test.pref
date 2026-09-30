@@ -1,0 +1,12 @@
+<?xml version='1.0' standalone='yes'?>
+<!-- TAK Convo: local test setup (emulator -> Openfire on the dev PC, reached as 10.0.2.2).
+     XMPP login reuses the TAK server's username and password. -->
+<preferences>
+    <preference version="1" name="com.atakmap.app.civ_preferences">
+        <entry key="takconvo_xmpp_domain" class="class java.lang.String">takconvo.test</entry>
+        <entry key="takconvo_xmpp_host" class="class java.lang.String">10.0.2.2</entry>
+        <entry key="takconvo_xmpp_port" class="class java.lang.String">5222</entry>
+        <entry key="takconvo_xmpp_use_tak_credentials" class="class java.lang.Boolean">true</entry>
+        <entry key="takconvo_xmpp_trusted_ca" class="class java.lang.String">/sdcard/atak/cert/takconvo-test-ca.pem</entry>
+    </preference>
+</preferences>

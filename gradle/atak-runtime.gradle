@@ -1,0 +1,100 @@
+// Libraries that ATAK 5.5.1.8 already ships at runtime.
+//
+// Plugin classes are loaded parent-first, so ATAK's copy of any of these classes always wins.
+// Every module therefore compiles against ATAK's exact versions, and the plugin APK does not
+// package them. Versions were read from META-INF/*.version and the dex of the SDK's atak.apk.
+
+// key is "group" (all modules), "group:module" (exact) or "group:prefix*"
+ext.atakProvidedVersions = [
+        'androidx.activity'                     : '1.8.1',
+        'androidx.core:core'                    : '1.15.0',
+        'androidx.core:core-ktx'                : '1.15.0',
+        'androidx.core:core-viewtree'           : '1.0.0',
+        'androidx.exifinterface'                : '1.4.1',
+        'androidx.fragment'                     : '1.8.7',
+        'androidx.lifecycle'                    : '2.9.0',
+        'androidx.savedstate'                   : '1.3.0',
+        'androidx.startup'                      : '1.1.1',
+        'androidx.tracing'                      : '1.2.0',
+        'androidx.profileinstaller'             : '1.4.0',
+        'com.squareup.okhttp3'                  : '4.11.0',
+        'org.jetbrains.kotlinx:kotlinx-coroutines-*' : '1.7.3',
+]
+
+// group:module pairs excluded from the plugin APK (still on the compile classpath)
+ext.atakProvidedModules = [
+        'androidx.activity:activity',
+        'androidx.annotation:annotation-experimental',
+        'androidx.arch.core:core-runtime',
+        'androidx.arch.core:core-common',
+        'androidx.collection:collection',
+        'androidx.collection:collection-jvm',
+        'androidx.collection:collection-ktx',
+        'androidx.concurrent:concurrent-futures',
+        'androidx.core:core',
+        'androidx.core:core-ktx',
+        'androidx.core:core-viewtree',
+        'androidx.customview:customview',
+        'androidx.exifinterface:exifinterface',
+        'androidx.fragment:fragment',
+        'androidx.interpolator:interpolator',
+        'androidx.lifecycle:lifecycle-common',
+        'androidx.lifecycle:lifecycle-common-jvm',
+        'androidx.lifecycle:lifecycle-common-java8',
+        'androidx.lifecycle:lifecycle-livedata',
+        'androidx.lifecycle:lifecycle-livedata-core',
+        'androidx.lifecycle:lifecycle-livedata-core-ktx',
+        'androidx.lifecycle:lifecycle-process',
+        'androidx.lifecycle:lifecycle-runtime',
+        'androidx.lifecycle:lifecycle-runtime-android',
+        'androidx.lifecycle:lifecycle-viewmodel',
+        'androidx.lifecycle:lifecycle-viewmodel-android',
+        'androidx.lifecycle:lifecycle-viewmodel-savedstate',
+        'androidx.lifecycle:lifecycle-viewmodel-savedstate-android',
+        'androidx.loader:loader',
+        'androidx.localbroadcastmanager:localbroadcastmanager',
+        'androidx.profileinstaller:profileinstaller',
+        'androidx.savedstate:savedstate',
+        'androidx.savedstate:savedstate-android',
+        'androidx.startup:startup-runtime',
+        'androidx.tracing:tracing',
+        'androidx.versionedparcelable:versionedparcelable',
+        'androidx.viewpager:viewpager',
+        'com.google.guava:listenablefuture',
+        'com.squareup.okhttp3:okhttp',
+        'com.squareup.okio:okio',
+        'com.squareup.okio:okio-jvm',
+        'org.jetbrains.kotlin:kotlin-stdlib',
+        'org.jetbrains.kotlin:kotlin-stdlib-jdk7',
+        'org.jetbrains.kotlin:kotlin-stdlib-jdk8',
+        'org.jetbrains.kotlinx:kotlinx-coroutines-core',
+        'org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm',
+        'org.jetbrains.kotlinx:kotlinx-coroutines-android',
+]
+
+configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        def g = details.requested.group
+        def m = details.requested.name
+        def version = atakProvidedVersions.find { key, v ->
+            if (!key.contains(':')) return key == g
+            def (kg, km) = key.tokenize(':')
+            if (kg != g) return false
+            return km.endsWith('*') ? m.startsWith(km[0..-2]) : m == km
+        }?.value
+        if (version != null) {
+            details.useVersion version
+            details.because 'provided by ATAK at runtime'
+        }
+    }
+}
+
+// Keep ATAK-provided libraries out of the packaged APK
+ext.excludeAtakProvidedFromRuntime = { Project p ->
+    p.configurations.matching { it.name.endsWith('RuntimeClasspath') }.configureEach { conf ->
+        atakProvidedModules.each { gm ->
+            def (g, m) = gm.tokenize(':')
+            conf.exclude group: g, module: m
+        }
+    }
+}

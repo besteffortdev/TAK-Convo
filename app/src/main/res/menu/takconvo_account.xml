@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/takconvo_action_reconnect"
+        android:icon="@drawable/ic_refresh_24dp"
+        android:title="@string/takconvo_menu_reconnect"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/takconvo_action_settings"
+        android:icon="@drawable/ic_settings_24dp"
+        android:title="@string/takconvo_open_settings"
+        app:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/takconvo_action_test_message"
+        android:title="@string/takconvo_menu_test_message"
+        android:visible="false"
+        app:showAsAction="never" />
+
+    <item
+        android:id="@+id/takconvo_action_sign_out"
+        android:title="@string/log_out"
+        android:visible="false"
+        app:showAsAction="never" />
+</menu>

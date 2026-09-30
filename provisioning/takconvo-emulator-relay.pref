@@ -1,0 +1,17 @@
+<?xml version='1.0' standalone='yes'?>
+<!-- TAK Convo: dev setup against xmpp.example.org from the emulator.
+     The dev PC can't reach the server, so a phone that can relays it:
+       adb -s <phone> shell "nc -L -p 15222 nc -w 10 xmpp.example.org 5222"
+       adb -s <phone> forward tcp:15222 tcp:15222
+     The emulator reaches the PC as 10.0.2.2. The server certificate is issued by the
+     internal CA example-CA, which has to be copied to trusted_ca first.
+     XMPP login reuses the TAK server's username and password. -->
+<preferences>
+    <preference version="1" name="com.atakmap.app.civ_preferences">
+        <entry key="takconvo_xmpp_domain" class="class java.lang.String">xmpp.example.org</entry>
+        <entry key="takconvo_xmpp_host" class="class java.lang.String">10.0.2.2</entry>
+        <entry key="takconvo_xmpp_port" class="class java.lang.String">15222</entry>
+        <entry key="takconvo_xmpp_use_tak_credentials" class="class java.lang.Boolean">true</entry>
+        <entry key="takconvo_xmpp_trusted_ca" class="class java.lang.String">/sdcard/atak/cert/example-CA.crt</entry>
+    </preference>
+</preferences>

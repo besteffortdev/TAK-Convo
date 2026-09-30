@@ -7,8 +7,16 @@ import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Bundle;
 
+import com.atakmap.android.contact.Connector;
+import com.atakmap.android.contact.Contact;
+import com.atakmap.android.contact.ContactConnectorManager;
+import com.atakmap.android.contact.Contacts;
+import com.atakmap.android.contact.IndividualContact;
+import com.atakmap.android.contact.XmppConnector;
 import com.atakmap.android.cot.CotMapComponent;
 import com.atakmap.android.ipc.AtakBroadcast;
+import com.atakmap.android.maps.MapItem;
+import com.atakmap.android.maps.MapView;
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.android.takconvo.plugin.TakConvoPlugin;
 import com.atakmap.android.takconvo.plugin.ui.TakConvoPreferenceFragment;
@@ -17,7 +25,16 @@ import com.atakmap.comms.CotService;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 import com.atakmap.app.SettingsActivity;
 import com.atakmap.app.preferences.PreferenceControl;
+import com.atakmap.coremap.cot.event.CotDetail;
+import com.atakmap.coremap.cot.event.CotEvent;
+import com.atakmap.coremap.cot.event.CotPoint;
 import com.atakmap.coremap.log.Log;
+import com.atakmap.coremap.maps.coords.GeoPoint;
+import com.atakmap.coremap.maps.time.CoordinatedTime;
+
+import eu.siacs.conversations.entities.Conversation;
+import eu.siacs.conversations.entities.Message;
+import eu.siacs.conversations.services.XmppConnectionService;
 
 import java.io.File;
 import java.lang.reflect.Method;
@@ -36,7 +53,19 @@ import java.util.List;
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_OPEN_SETTINGS
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_CHAT
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_CHAT_BACK
+ *
+ * # contacts integration; the JID defaults to this device's own (the self chat)
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_FAKE_CONTACT [--es jid J] [--es callsign C]
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_REMOVE_FAKE_CONTACT
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_OPEN_CONTACT
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_DUMP_CONTACT
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_FAKE_INCOMING [--es from J] --es body B
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_ATAK_BROADCAST --es action A
  * </pre>
+ *
+ * <p>The fake contact is a TAK user SA injected into this ATAK only (ATAK's internal dispatcher:
+ * nothing is sent). A fake incoming message is stored locally as if received; nothing is sent
+ * either.
  */
 public final class DebugReceiver extends BroadcastReceiver {
 
@@ -52,8 +81,19 @@ public final class DebugReceiver extends BroadcastReceiver {
     public static final String ACTION_OPEN_SETTINGS = PREFIX + "DEBUG_OPEN_SETTINGS";
     public static final String ACTION_SHOW_CHAT = PREFIX + "DEBUG_SHOW_CHAT";
     public static final String ACTION_CHAT_BACK = PREFIX + "DEBUG_CHAT_BACK";
+    public static final String ACTION_FAKE_CONTACT = PREFIX + "DEBUG_FAKE_CONTACT";
+    public static final String ACTION_REMOVE_FAKE_CONTACT = PREFIX + "DEBUG_REMOVE_FAKE_CONTACT";
+    public static final String ACTION_OPEN_CONTACT = PREFIX + "DEBUG_OPEN_CONTACT";
+    public static final String ACTION_DUMP_CONTACT = PREFIX + "DEBUG_DUMP_CONTACT";
+    public static final String ACTION_FAKE_INCOMING = PREFIX + "DEBUG_FAKE_INCOMING";
+    public static final String ACTION_ATAK_BROADCAST = PREFIX + "DEBUG_ATAK_BROADCAST";
+
+    /** the fake TAK user's UID */
+    private static final String FAKE_UID = "TAKCONVO-DEBUG-CONTACT";
 
     private final Context context;
+    /** the fake TAK user's XMPP address */
+    private String fakeJid;
 
     private DebugReceiver(final Context context) {
         this.context = context;
@@ -72,6 +112,12 @@ public final class DebugReceiver extends BroadcastReceiver {
         filter.addAction(ACTION_OPEN_SETTINGS);
         filter.addAction(ACTION_SHOW_CHAT);
         filter.addAction(ACTION_CHAT_BACK);
+        filter.addAction(ACTION_FAKE_CONTACT);
+        filter.addAction(ACTION_REMOVE_FAKE_CONTACT);
+        filter.addAction(ACTION_OPEN_CONTACT);
+        filter.addAction(ACTION_DUMP_CONTACT);
+        filter.addAction(ACTION_FAKE_INCOMING);
+        filter.addAction(ACTION_ATAK_BROADCAST);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
         } else {
@@ -142,6 +188,111 @@ public final class DebugReceiver extends BroadcastReceiver {
             final boolean ok = engine.sendMessage(intent.getStringExtra("to"),
                     intent.getStringExtra("body"));
             Log.d(TAG, "send " + (ok ? "queued" : "rejected"));
+        } else if (ACTION_FAKE_CONTACT.equals(action)) {
+            fakeJid = orSelf(intent.getStringExtra("jid"), engine);
+            final String callsign = intent.getStringExtra("callsign");
+            injectFakeContact(fakeJid, callsign == null ? "XMPP Test" : callsign);
+        } else if (ACTION_REMOVE_FAKE_CONTACT.equals(action)) {
+            // from its team group too: removeContactByUuid alone leaves it there, still counted
+            final Contact contact = Contacts.getInstance().getContactByUuid(FAKE_UID);
+            if (contact != null) {
+                Contacts.getInstance().removeContact(contact);
+            }
+            final MapItem item = MapView.getMapView().getRootGroup().deepFindUID(FAKE_UID);
+            if (item != null) {
+                item.removeFromGroup();
+            }
+            Contacts.getInstance().updateTotalUnreadCount();
+            Log.d(TAG, "removed the fake contact");
+        } else if (ACTION_OPEN_CONTACT.equals(action)) {
+            // what tapping the contact's XMPP connector does
+            final boolean handled = CotMapComponent.getInstance().getContactConnectorMgr()
+                    .initiateContact(XmppConnector.CONNECTOR_TYPE, FAKE_UID,
+                            orSelf(fakeJid, engine));
+            Log.d(TAG, "initiated XMPP contact: " + handled);
+        } else if (ACTION_DUMP_CONTACT.equals(action)) {
+            final Contact contact = Contacts.getInstance().getContactByUuid(FAKE_UID);
+            if (contact instanceof IndividualContact) {
+                final IndividualContact individual = (IndividualContact) contact;
+                final Connector xmpp = individual.getConnector(XmppConnector.CONNECTOR_TYPE);
+                final Object presence = xmpp == null ? null : CotMapComponent.getInstance()
+                        .getContactConnectorMgr().getFeature(individual, xmpp,
+                                ContactConnectorManager.ConnectorFeature.Presence);
+                Log.d(TAG, "contact " + individual.getName() + ": unread="
+                        + individual.getUnreadCount() + ", xmpp unread="
+                        + (xmpp == null ? "no connector" : individual.getUnreadCount(xmpp))
+                        + ", xmpp presence=" + presence + ", default connector="
+                        + individual.getDefaultConnector(
+                                AtakPreferences.getInstance(context).getSharedPrefs()));
+            } else {
+                Log.d(TAG, "no fake contact");
+            }
+        } else if (ACTION_ATAK_BROADCAST.equals(action)) {
+            // e.g. com.atakmap.android.contact.CONTACT_LIST opens ATAK's contacts
+            AtakBroadcast.getInstance().sendBroadcast(
+                    new Intent(intent.getStringExtra("action")));
+        } else if (ACTION_FAKE_INCOMING.equals(action) && engine != null) {
+            fakeIncoming(engine, orSelf(intent.getStringExtra("from"), engine),
+                    intent.getStringExtra("body"));
         }
+    }
+
+    private static String orSelf(final String jid, final XmppEngine engine) {
+        if (jid != null || engine == null || engine.getAccount() == null) {
+            return jid;
+        }
+        return engine.getAccount().getJid().asBareJid().toString();
+    }
+
+    /** SA of a TAK user advertising an XMPP address, handled as if it came from the network. */
+    private static void injectFakeContact(final String jid, final String callsign) {
+        if (jid == null) {
+            Log.w(TAG, "no JID for the fake contact");
+            return;
+        }
+        final CoordinatedTime now = new CoordinatedTime();
+        final GeoPoint center = MapView.getMapView().getCenterPoint().get();
+        final CotEvent event = new CotEvent();
+        event.setUID(FAKE_UID);
+        event.setType("a-f-G-U-C");
+        event.setHow("m-g");
+        event.setTime(now);
+        event.setStart(now);
+        event.setStale(now.addMinutes(30));
+        event.setPoint(new CotPoint(center.getLatitude(), center.getLongitude(),
+                CotPoint.UNKNOWN, CotPoint.UNKNOWN, CotPoint.UNKNOWN));
+        final CotDetail detail = new CotDetail("detail");
+        final CotDetail contact = new CotDetail("contact");
+        contact.setAttribute("callsign", callsign);
+        contact.setAttribute("endpoint", "*:-1:stcp");
+        contact.setAttribute("xmppUsername", jid);
+        detail.addChild(contact);
+        final CotDetail group = new CotDetail("__group");
+        group.setAttribute("name", "Cyan");
+        group.setAttribute("role", "Team Member");
+        detail.addChild(group);
+        event.setDetail(detail);
+        CotMapComponent.getInternalDispatcher().dispatch(event);
+        Log.d(TAG, "injected fake contact " + callsign + " with XMPP address " + jid);
+    }
+
+    /** A message stored and notified as if it had been received from {@code from}. */
+    private static void fakeIncoming(final XmppEngine engine, final String from,
+            final String body) {
+        final Conversation conversation = engine.openConversation(from);
+        if (conversation == null || body == null) {
+            Log.w(TAG, "no conversation with " + from + " or no body");
+            return;
+        }
+        final Message message = new Message(conversation, body, Message.ENCRYPTION_NONE,
+                Message.STATUS_RECEIVED);
+        message.markUnread();
+        conversation.add(message);
+        final XmppConnectionService service = engine.getService();
+        service.createMessageAsync(message);
+        service.getNotificationService().push(message);
+        service.updateConversationUi();
+        Log.d(TAG, "fake message from " + from + ", unread now "
+                + conversation.unreadCount());
     }
 }

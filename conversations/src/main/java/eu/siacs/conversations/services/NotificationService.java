@@ -64,6 +64,7 @@ import eu.siacs.conversations.ui.RtpSessionActivity;
 import eu.siacs.conversations.utils.AccountUtils;
 import eu.siacs.conversations.utils.Compatibility;
 import eu.siacs.conversations.utils.GeoHelper;
+import eu.siacs.conversations.utils.TakConvoCompat;
 import eu.siacs.conversations.utils.TorServiceUtils;
 import eu.siacs.conversations.utils.UIHelper;
 import eu.siacs.conversations.xmpp.XmppConnection;
@@ -709,7 +710,7 @@ public class NotificationService {
                 RtpSessionActivity.EXTRA_ACCOUNT, id.account.getJid().asBareJid().toString());
         fullScreenIntent.putExtra(RtpSessionActivity.EXTRA_WITH, id.with.toString());
         fullScreenIntent.putExtra(RtpSessionActivity.EXTRA_SESSION_ID, id.sessionId);
-        return PendingIntent.getActivity(
+        return TakConvoCompat.getActivity( // TAKCONVO
                 mXmppConnectionService,
                 requestCode,
                 fullScreenIntent,
@@ -1410,7 +1411,9 @@ public class NotificationService {
         notificationBuilder.setSmallIcon(R.drawable.ic_app_icon_notification);
         notificationBuilder.setDeleteIntent(createDeleteIntent(conversation));
         notificationBuilder.setContentIntent(createContentIntent(conversation));
-        if (channel.equals(MESSAGES_NOTIFICATION_CHANNEL) && info != null) {
+        if (channel.equals(MESSAGES_NOTIFICATION_CHANNEL)
+                && info != null
+                && !TakConvoCompat.EMBEDDED) { // TAKCONVO: see ShortcutService.refresh
             // when do not want 'customized' notifications for silent notifications in their
             // respective channels
             notificationBuilder.setShortcutInfo(info);
@@ -1617,7 +1620,7 @@ public class NotificationService {
         } catch (final IllegalArgumentException e) {
             return null;
         }
-        return PendingIntent.getActivity(
+        return TakConvoCompat.getActivity( // TAKCONVO
                 mXmppConnectionService,
                 generateRequestCode(message.getConversation(), 18),
                 intent,
@@ -1635,7 +1638,7 @@ public class NotificationService {
         if (downloadMessageUuid != null) {
             viewConversationIntent.putExtra(
                     ConversationsActivity.EXTRA_DOWNLOAD_UUID, downloadMessageUuid);
-            return PendingIntent.getActivity(
+            return TakConvoCompat.getActivity( // TAKCONVO
                     mXmppConnectionService,
                     generateRequestCode(conversationUuid, 8),
                     viewConversationIntent,
@@ -1643,7 +1646,7 @@ public class NotificationService {
                             ? PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
                             : PendingIntent.FLAG_UPDATE_CURRENT);
         } else {
-            return PendingIntent.getActivity(
+            return TakConvoCompat.getActivity( // TAKCONVO
                     mXmppConnectionService,
                     generateRequestCode(conversationUuid, 10),
                     viewConversationIntent,
@@ -1675,7 +1678,7 @@ public class NotificationService {
         intent.setAction(XmppConnectionService.ACTION_CLEAR_MESSAGE_NOTIFICATION);
         if (conversation != null) {
             intent.putExtra("uuid", conversation.getUuid());
-            return PendingIntent.getService(
+            return TakConvoCompat.getService( // TAKCONVO
                     mXmppConnectionService,
                     generateRequestCode(conversation, 20),
                     intent,
@@ -1683,7 +1686,7 @@ public class NotificationService {
                             ? PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
                             : PendingIntent.FLAG_UPDATE_CURRENT);
         }
-        return PendingIntent.getService(
+        return TakConvoCompat.getService( // TAKCONVO
                 mXmppConnectionService,
                 0,
                 intent,
@@ -1697,7 +1700,7 @@ public class NotificationService {
         intent.setAction(XmppConnectionService.ACTION_CLEAR_MISSED_CALL_NOTIFICATION);
         if (conversation != null) {
             intent.putExtra("uuid", conversation.getUuid());
-            return PendingIntent.getService(
+            return TakConvoCompat.getService( // TAKCONVO
                     mXmppConnectionService,
                     generateRequestCode(conversation, 21),
                     intent,
@@ -1705,7 +1708,7 @@ public class NotificationService {
                             ? PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
                             : PendingIntent.FLAG_UPDATE_CURRENT);
         }
-        return PendingIntent.getService(
+        return TakConvoCompat.getService( // TAKCONVO
                 mXmppConnectionService,
                 1,
                 intent,
@@ -1724,7 +1727,7 @@ public class NotificationService {
         intent.putExtra("dismiss_notification", dismissAfterReply);
         intent.putExtra("last_message_uuid", lastMessageUuid);
         final int id = generateRequestCode(conversation, dismissAfterReply ? 12 : 14);
-        return PendingIntent.getService(
+        return TakConvoCompat.getService( // TAKCONVO
                 mXmppConnectionService,
                 id,
                 intent,
@@ -1738,7 +1741,7 @@ public class NotificationService {
         intent.setAction(XmppConnectionService.ACTION_MARK_AS_READ);
         intent.putExtra("uuid", conversation.getUuid());
         intent.setPackage(mXmppConnectionService.getPackageName());
-        return PendingIntent.getService(
+        return TakConvoCompat.getService( // TAKCONVO
                 mXmppConnectionService,
                 generateRequestCode(conversation, 16),
                 intent,
@@ -1778,7 +1781,7 @@ public class NotificationService {
         for (final Map.Entry<String, String> entry : extras.entrySet()) {
             intent.putExtra(entry.getKey(), entry.getValue());
         }
-        return PendingIntent.getService(
+        return TakConvoCompat.getService( // TAKCONVO
                 context,
                 requestCode,
                 intent,
@@ -1861,7 +1864,7 @@ public class NotificationService {
         final Intent intent = new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS);
         intent.putExtra(Settings.EXTRA_APP_PACKAGE, context.getPackageName());
         intent.putExtra(Settings.EXTRA_CHANNEL_ID, "foreground");
-        return PendingIntent.getActivity(
+        return TakConvoCompat.getActivity( // TAKCONVO
                 context,
                 89,
                 intent,
@@ -1872,7 +1875,7 @@ public class NotificationService {
 
     private PendingIntent createOpenConversationsIntent() {
         try {
-            return PendingIntent.getActivity(
+            return TakConvoCompat.getActivity( // TAKCONVO
                     mXmppConnectionService,
                     0,
                     new Intent(mXmppConnectionService, ConversationsActivity.class),
@@ -1950,7 +1953,7 @@ public class NotificationService {
                 mBuilder.addAction(
                         R.drawable.ic_play_circle_24dp,
                         mXmppConnectionService.getString(R.string.start_orbot),
-                        PendingIntent.getActivity(
+                        TakConvoCompat.getActivity( // TAKCONVO
                                 mXmppConnectionService,
                                 147,
                                 TorServiceUtils.LAUNCH_INTENT,
@@ -1962,7 +1965,7 @@ public class NotificationService {
                 mBuilder.addAction(
                         R.drawable.ic_download_24dp,
                         mXmppConnectionService.getString(R.string.install_orbot),
-                        PendingIntent.getActivity(
+                        TakConvoCompat.getActivity( // TAKCONVO
                                 mXmppConnectionService,
                                 146,
                                 TorServiceUtils.INSTALL_INTENT,
@@ -1990,7 +1993,7 @@ public class NotificationService {
             intent.putExtra(EditAccountActivity.EXTRA_OPENED_FROM_NOTIFICATION, true);
         }
         mBuilder.setContentIntent(
-                PendingIntent.getActivity(
+                TakConvoCompat.getActivity( // TAKCONVO
                         mXmppConnectionService,
                         145,
                         intent,
@@ -2041,7 +2044,7 @@ public class NotificationService {
         final var notificationManager =
                 mXmppConnectionService.getSystemService(NotificationManager.class);
         try {
-            notificationManager.notify(tag, id, notification);
+            notificationManager.notify(tag, id, TakConvoCompat.filter(notification)); // TAKCONVO
         } catch (final RuntimeException e) {
             Log.d(Config.LOGTAG, "unable to make notification", e);
         }
@@ -2056,7 +2059,7 @@ public class NotificationService {
             }
             final var notificationManager =
                     mXmppConnectionService.getSystemService(NotificationManager.class);
-            notificationManager.notify(id, notification);
+            notificationManager.notify(id, TakConvoCompat.filter(notification)); // TAKCONVO
         } catch (final RuntimeException e) {
             Log.d(Config.LOGTAG, "unable to make notification", e);
         }

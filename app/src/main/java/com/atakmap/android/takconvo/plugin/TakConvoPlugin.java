@@ -14,11 +14,13 @@ import com.atak.plugins.impl.PluginContextProvider;
 import com.atak.plugins.impl.PluginLayoutInflater;
 import com.atakmap.android.ipc.AtakBroadcast;
 import com.atakmap.android.maps.MapView;
+import com.atakmap.android.takconvo.plugin.contacts.XmppContacts;
 import com.atakmap.android.takconvo.plugin.debug.DebugReceiver;
 import com.atakmap.android.takconvo.plugin.ui.AccountView;
 import com.atakmap.android.takconvo.plugin.ui.TakConvoPreferenceFragment;
 import com.atakmap.android.takconvo.plugin.ui.host.ChatDropDown;
 import com.atakmap.android.takconvo.plugin.ui.host.EmbeddedActivityHost;
+import com.atakmap.android.takconvo.plugin.xmpp.EmbeddedPendingIntents;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 import com.atakmap.app.SettingsActivity;
 import com.atakmap.app.preferences.ToolsPreferenceFragment;
@@ -59,6 +61,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     ToolbarItem toolbarItem;
 
     private XmppEngine engine;
+    private XmppContacts contacts;
     private DebugReceiver debugReceiver;
     private EmbeddedActivityHost chatHost;
     private ChatDropDown chatDropDown;
@@ -68,6 +71,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     private TextView statusView;
     private TextView logView;
     private final Set<String> loggedMessages = new HashSet<>();
+    private String lastStatus;
     private final StringBuilder log = new StringBuilder();
 
     private final BroadcastReceiver showReceiver = new BroadcastReceiver() {
@@ -76,6 +80,13 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             final String action = intent.getAction();
             if (ACTION_SHOW_CHAT.equals(action)) {
                 showChat();
+            } else if (EmbeddedPendingIntents.ACTION_OPEN.equals(action)) {
+                // a notification was tapped
+                final Intent activity = EmbeddedPendingIntents.unwrapActivity(intent,
+                        pluginContext.getClassLoader());
+                if (activity != null) {
+                    showChat(activity);
+                }
             } else if (ACTION_CHAT_BACK.equals(action)) {
                 if (chatDropDown != null) {
                     chatDropDown.goBack();
@@ -127,6 +138,15 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             // never take ATAK down with us
             Log.e(TAG, "unable to start the XMPP engine", t);
         }
+        if (engine != null) {
+            try {
+                contacts = new XmppContacts(pluginContext, atakContext, engine, this::openChat);
+                contacts.start();
+            } catch (final Throwable t) {
+                Log.e(TAG, "unable to join ATAK's contacts", t);
+                contacts = null;
+            }
+        }
         if (BuildConfig.DEBUG) {
             debugReceiver = DebugReceiver.register(atakContext);
         }
@@ -142,7 +162,10 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         filter.addAction(TakConvoPreferenceFragment.ACTION_SHOW_ACCOUNT,
                 "Show the TAK Convo account pane");
         filter.addAction(ACTION_SHOW_CHAT, "Show the TAK Convo chat pane");
-        filter.addAction(ACTION_CHAT_BACK, "Go back in the TAK Convo chat pane");        AtakBroadcast.getInstance().registerReceiver(showReceiver, filter);
+        filter.addAction(ACTION_CHAT_BACK, "Go back in the TAK Convo chat pane");
+        filter.addAction(EmbeddedPendingIntents.ACTION_OPEN,
+                "Open a TAK Convo notification's chat (ATAK sends it when one is tapped)");
+        AtakBroadcast.getInstance().registerReceiver(showReceiver, filter);
 
         // the plugin is starting, add the button to the toolbar
         if (uiService == null)
@@ -155,6 +178,10 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     public void onStop() {
         AtakBroadcast.getInstance().unregisterReceiver(showReceiver);
         ToolsPreferenceFragment.unregister(TakConvoPreferenceFragment.TOOL_KEY);
+        if (contacts != null) {
+            contacts.stop();
+            contacts = null;
+        }
         if (chatDropDown != null) {
             chatDropDown.dispose();
             chatDropDown = null;
@@ -190,12 +217,50 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
 
     /** Conversations' chats. Without an account to chat with, the account screen instead. */
     private void showChat() {
-        if (engine == null) {
+        final EmbeddedActivityHost host = openChatPane();
+        if (host != null) {
+            host.showMain();
+        }
+    }
+
+    /** The chat pane on what a tapped notification aims at. */
+    private void showChat(final Intent activity) {
+        final EmbeddedActivityHost host = openChatPane();
+        if (host != null) {
+            host.startActivity(activity);
+            if (host.isEmpty()) {
+                // it went elsewhere, e.g. to the account pane
+                chatDropDown.closeDropDown();
+            }
+        }
+    }
+
+    /** The chat with an XMPP address, e.g. a TAK user's from ATAK's contacts. */
+    private void openChat(final String address) {
+        final EmbeddedActivityHost host = openChatPane();
+        if (host == null) {
             return;
+        }
+        final Conversation conversation = engine.openConversation(address);
+        if (conversation != null) {
+            host.showConversation(conversation.getUuid());
+        } else {
+            host.showMain();
+        }
+    }
+
+    /**
+     * Shows the chat pane, created on first use.
+     *
+     * @return its host, or null if there is no account to chat with (the account pane shows)
+     */
+    private EmbeddedActivityHost openChatPane() {
+        if (engine == null) {
+            return null;
         }
         if (engine.getAccount() == null) {
             showAccountPane();
-            return;
+            return null;
         }
         final MapView mapView = MapView.getMapView();
         if (chatHost == null) {
@@ -204,7 +269,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             chatDropDown = new ChatDropDown(mapView, chatHost);
         }
         chatDropDown.show();
-        chatHost.showMain();
+        return chatHost;
     }
 
     @Override
@@ -301,7 +366,10 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             return;
         }
         final String status = describe(engine);
-        Log.d(TAG, "status: " + status.replace('\n', ' '));
+        if (!status.equals(lastStatus)) {
+            lastStatus = status;
+            Log.d(TAG, "status: " + status.replace('\n', ' '));
+        }
         collectMessages(engine);
         if (statusView != null) {
             statusView.setText(status);

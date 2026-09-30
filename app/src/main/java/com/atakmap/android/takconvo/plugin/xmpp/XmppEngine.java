@@ -37,6 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
 import javax.net.ssl.X509TrustManager;
@@ -65,9 +66,42 @@ public final class XmppEngine {
     private final EmbeddedXmppService service;
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final XmppConnectionService.OnAccountUpdate accountUpdate = this::dispatchChanged;
-    private final XmppConnectionService.OnConversationUpdate conversationUpdate =
-            this::dispatchChanged;
+    private final AtomicBoolean dispatchPending = new AtomicBoolean();
+    private final Runnable dispatchTask = () -> {
+        dispatchPending.set(false);
+        for (final Listener l : listeners) {
+            l.onXmppStateChanged();
+        }
+    };
+    /**
+     * What the service tells its UI. Not registered as a UI listener: Conversations would then
+     * believe it is always on screen, keep the server's client state active and silence its
+     * notifications.
+     */
+    private final TakConvoCompat.Observer observer = new TakConvoCompat.Observer() {
+        @Override
+        public void onAccountsChanged() {
+            dispatchChanged();
+        }
+
+        @Override
+        public void onConversationsChanged() {
+            dispatchChanged();
+        }
+
+        @Override
+        public void onRosterChanged() {
+            dispatchChanged();
+        }
+
+        @Override
+        public void onUnreadCountChanged(final int count) {
+            unreadCount = count;
+            dispatchChanged();
+        }
+    };
+    private final EmbeddedPendingIntents pendingIntents;
+    private volatile int unreadCount;
     private final Runnable provisionTask = this::provision;
     private final SharedPreferences.OnSharedPreferenceChangeListener prefListener;
     private final CotServiceRemote.OutputsChangedListener takServerListener;
@@ -130,10 +164,15 @@ public final class XmppEngine {
             }
         });
 
+        // notification taps and actions, alarms, notification icons, and what changed
+        pendingIntents = new EmbeddedPendingIntents(this.atakContext, context);
+        pendingIntents.register();
+        TakConvoCompat.PENDING_INTENTS = pendingIntents;
+        TakConvoCompat.NOTIFICATIONS = new EmbeddedNotifications(this.atakContext, pluginContext);
+        TakConvoCompat.OBSERVER = observer;
+
         Log.d(TAG, "starting embedded Conversations engine");
         service.onCreate();
-        service.setOnAccountListChangedListener(accountUpdate);
-        service.setOnConversationListChangedListener(conversationUpdate);
         // the service connects the stored accounts right away: trust has to be in place first
         XmppSettings.normalize(AtakPreferences.getInstance(this.atakContext).getSharedPrefs());
         settings = XmppSettings.load(this.atakContext);
@@ -205,11 +244,13 @@ public final class XmppEngine {
         } catch (final IllegalArgumentException ignored) {
             // not registered
         }
-        service.removeOnAccountListChangedListener(accountUpdate);
-        service.removeOnConversationListChangedListener(conversationUpdate);
         advertise(null);
         service.onTaskRemoved(null); // logs out and saves, as when the app is swiped away
         service.onDestroy();
+        TakConvoCompat.OBSERVER = null;
+        TakConvoCompat.NOTIFICATIONS = null;
+        TakConvoCompat.PENDING_INTENTS = null;
+        pendingIntents.unregister();
         listeners.clear();
     }
 
@@ -435,6 +476,32 @@ public final class XmppEngine {
         return true;
     }
 
+    /**
+     * The 1:1 chat of the provisioned account with an XMPP address, created if there is none.
+     *
+     * @return null if no account is provisioned or the address is not a valid JID
+     */
+    public Conversation openConversation(final String address) {
+        final Account account = getAccount();
+        final Jid jid = bareJid(address);
+        if (account == null || jid == null) {
+            return null;
+        }
+        return service.findOrCreateConversation(account, jid, false, true);
+    }
+
+    /** @return the bare JID of an address as typed or advertised, or null if it isn't one */
+    public static Jid bareJid(final String address) {
+        if (address == null || address.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            return Jid.ofUserInput(address.trim()).asBareJid();
+        } catch (final IllegalArgumentException e) {
+            return null;
+        }
+    }
+
     public List<Conversation> getConversations() {
         return service.getConversations();
     }
@@ -447,13 +514,18 @@ public final class XmppEngine {
         listeners.remove(listener);
     }
 
-    // upstream invokes its listeners from worker threads
+    /**
+     * The count of unread messages Conversations would show on its launcher icon.
+     */
+    public int getUnreadCount() {
+        return unreadCount;
+    }
+
+    // upstream reports changes from worker threads, often many at once (e.g. catching up)
     private void dispatchChanged() {
-        mainHandler.post(() -> {
-            for (final Listener l : listeners) {
-                l.onXmppStateChanged();
-            }
-        });
+        if (dispatchPending.compareAndSet(false, true)) {
+            mainHandler.post(dispatchTask);
+        }
     }
 
     private static String nullToEmpty(final String s) {

@@ -92,8 +92,10 @@ XmppEngine.start(atakContext, pluginContext):          # once per process
     FileBackend.deleteShareableCopies(context)         # see 04, files
     service = new EmbeddedXmppService(); service.attach(context)
     context.setServiceRouter(-> service)
+    TakConvoCompat.PENDING_INTENTS = EmbeddedPendingIntents   # see "PendingIntents" below
+    TakConvoCompat.NOTIFICATIONS   = EmbeddedNotifications    # see 08
+    TakConvoCompat.OBSERVER        = observer                 # see "Changes and threads"
     service.onCreate()                                 # opens the DB, loads accounts
-    listen to account and conversation changes
     settings = XmppSettings.load(); applyTrust()       # before anything connects, see 03
     for account in service.accounts:
         account.resource = "TAK Convo." + random(3)    # see "resource" below
@@ -106,7 +108,14 @@ XmppEngine.shutdown():
     advertise(null)                                    # clear saXmppUsername
     service.onTaskRemoved(null)                        # logs out and saves, as on swipe-away
     service.onDestroy()
+    TakConvoCompat.OBSERVER = NOTIFICATIONS = PENDING_INTENTS = null
+    stop receiving delivered PendingIntents
 ```
+
+Upstream ignores `onTaskRemoved` while its foreground service is on, which it always is on
+Android 8 and later. The fork makes it log out when embedded: the plugin stopping is the end
+of the engine, and a clean `</stream>` doesn't leave a session detached on the server. (Quitting
+ATAK from its menu now logs "sending stream close" and "received stream close".)
 
 ### A fresh resource on every start
 
@@ -123,9 +132,79 @@ ATAK reads the preference `saXmppUsername` and sends it in this device's SA as
 `<contact xmppUsername="...">`, like the TAK Chat plugin does. `provision()` sets it to the
 account's bare JID, and clears it whenever no account is provisioned or the engine stops.
 
-## Listeners and threads
+## Changes and threads
 
-Upstream calls `OnAccountUpdate` and `OnConversationUpdate` from its worker threads.
-`XmppEngine` re-posts them on the main thread to its own `Listener`s (the plugin, the account
-pane). Every method of `XmppEngine` must be called on the main thread, as upstream's service
-expects.
+The plugin needs to know when accounts, conversations, the roster or the unread count change:
+the account pane, the unread badges and the contact list follow them. The obvious way,
+registering as one of the service's UI listeners (`setOnConversationListChangedListener`...),
+is wrong. The service counts those listeners to decide whether Conversations is on screen
+(`checkListeners()`). With the engine always registered, it believed it always was:
+
+- it never sent the server `csi/inactive` or went idle, and
+- it silenced every notification whenever no chat was open ("chat overview is in
+  foreground"), so new messages never made a sound.
+
+Instead the fork calls a `TakConvoCompat.Observer` from the same places it calls its UI
+listeners, and the embedded activities alone register as UI listeners, as they do upstream
+from `onStart`/`onStop`. Conversations is then "in the foreground" exactly while its pane is
+visible and ATAK is started (see 04), and switches to the background when the pane closes.
+
+```text
+fork, XmppConnectionService:
+    updateAccountUi():        ...UI listeners...; OBSERVER?.onAccountsChanged()
+    updateConversationUi():   ...UI listeners...; OBSERVER?.onConversationsChanged()
+    updateRosterUi():         ...UI listeners...; OBSERVER?.onRosterChanged()
+    updateUnreadCountBadge(): if the count changed: OBSERVER?.onUnreadCountChanged(count)
+                              # upstream sets the launcher badge; ATAK's launcher icon isn't ours
+
+XmppEngine.observer (worker threads):
+    on any of them: dispatchChanged()
+    onUnreadCountChanged(n): unreadCount = n; dispatchChanged()
+
+dispatchChanged():                    # changes come in bursts, e.g. catching up after a login
+    if no dispatch is pending: post(main) { for l in listeners: l.onXmppStateChanged() }
+```
+
+Every method of `XmppEngine` must be called on the main thread, as upstream's service expects.
+
+## PendingIntents
+
+Conversations hands the system `PendingIntent`s aimed at its own components: notification taps
+open `ConversationsActivity`, notification actions start `XmppConnectionService`, and
+`AlarmManager` alarms (idle pings, the ping after a connectivity change, reconnection timers)
+go to `SystemEventReceiver`. None of those components exist in ATAK's package, so the system
+dropped them all. Until this was found, **no alarm ever reached the engine**: pings and
+scheduled reconnects only happened when something else woke it.
+
+The fork creates every such `PendingIntent` through `TakConvoCompat.getActivity/getService/
+getBroadcast`, and the plugin's `EmbeddedPendingIntents` redirects the ones aimed at
+Conversations' classes:
+
+```text
+getActivity(ctx, code, intent, flags):              # a notification tap
+    if intent isn't aimed at eu.siacs.conversations.*: return PendingIntent.getActivity(...)
+    open  = Intent(ACTION_OPEN) + intent's extras + {class, action}
+    front = Intent(component = ATAK's main activity, CLEAR_TOP | SINGLE_TOP,
+                   action = "OPEN:" + class + ":" + action)   # keeps PendingIntents apart
+    front.internalIntent = open          # ATAKActivity.onNewIntent rebroadcasts it in-process
+    return PendingIntent.getActivity(atak, code, front, flags)
+
+getService / getBroadcast(ctx, code, intent, flags):  # notification actions, alarms
+    if intent isn't aimed at eu.siacs.conversations.*: unchanged
+    wrapped = copy(intent), component = null, package = ATAK,
+              action = ACTION_DELIVER, data = "takconvo://deliver/<class>/<action>"
+    return PendingIntent.getBroadcast(atak, code, wrapped, flags)
+
+receiver (registered on ATAK's context, not exported, while the engine runs):
+    on ACTION_DELIVER with scheme takconvo:
+        intent = copy(received)           # keeps what the system added: the reply text
+        intent.action = original action; component = (ATAK, class)
+        if class is a Service:           engineContext.startService(intent)   # routed, see above
+        if class is a BroadcastReceiver: new class().onReceive(engineContext, intent)
+```
+
+The data URI does two jobs: one filter (`ACTION_DELIVER` + scheme `takconvo`) matches every
+action, and PendingIntents stay as distinct as their original targets were (a PendingIntent's
+identity includes its data). ATAK's own notifications use the same `internalIntent`
+mechanism (`NotificationUtil`), so a tap behaves like a GeoChat one: ATAK comes to the front
+and the plugin shows the chat. See [08](08-contacts-and-notifications.md).

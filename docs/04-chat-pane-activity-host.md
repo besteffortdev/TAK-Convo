@@ -130,6 +130,13 @@ handler, would still crash ATAK, so test an activity before relying on it.
 `ConversationsActivity` and `StartConversationActivity` are `SINGLE_INSTANCE`, like upstream's
 `singleTask`/`singleTop`.
 
+The plugin starts activities from outside the same way, with no caller: `showMain()` (the chat
+list, if nothing is shown), `showConversation(uuid)` (a TAK user's XMPP connector), and
+`startActivity(intent)` for whatever a tapped notification aimed at (see
+[08](08-contacts-and-notifications.md)). The account screen of the error notification is
+routed to the account pane like any other start, and the plugin closes the chat pane again if
+nothing ended up in it (`isEmpty()`).
+
 ### Other apps and results
 
 Intents for other apps (file picker, camera, "open with") are started by **ATAK's** activity,

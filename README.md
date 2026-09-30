@@ -13,6 +13,10 @@ user's TAK identity.
   truststores (optionally the device CA store, or a CA file), besides the public CAs.
 - **TAK identity**: the device's XMPP address goes out in its SA (`<contact xmppUsername>`), as
   TAK Chat does.
+- **In ATAK's contacts, like GeoChat**: a TAK user who advertises an XMPP address has an XMPP
+  connector in ATAK's contact list that opens the chat in TAK Convo. Unread messages show on the
+  contact, on ATAK's Contacts button and on the TAK Convo button. Conversations' notifications
+  (reply, mark as read) bring ATAK up on the chat when tapped.
 
 ## Status
 
@@ -24,9 +28,11 @@ build, against an Openfire server:
 | engine in-process, provisioning from `.pref`, TAK credentials or XMPP login | voice messages, calls (audio/video) |
 | trust from TAK truststores / Android CA store / CA file | share or show a location (should become ATAK map integration) |
 | account pane, tool preferences, `.pref` import | QR codes, profile pictures, backups |
-| chat pane: chat list, chats, group chats, start chat, channel details, search | contacts integration: ATAK contacts ↔ XMPP chats, unread badges, GeoChat-like notifications |
+| chat pane: chat list, chats, group chats, start chat, channel details, search | TAK callsigns as the names of XMPP contacts |
 | sending/receiving with OMEMO, reactions, context menus, text selection | re-selecting resources when the pane is resized or the device rotated |
 | attachments: pick, upload, open with another app, camera | some Conversations screens are allowed but untested (see docs/04) |
+| ATAK contacts: XMPP connector opens the chat, unread counts on contacts and buttons | XMPP presence dots on contacts: implemented, untested with a real second user |
+| notifications: sound when the pane is closed, tap opens the chat, reply, mark as read | |
 
 Release ATAK (e.g. Play Store ATAK-CAN) loads only plugins signed by TAK.gov, so the plugin
 runs on ATAK developer builds until it goes through TAK.gov signing.
@@ -43,9 +49,13 @@ providers can run. TAK Convo gives Conversations what it expects anyway:
   driven through their lifecycle by the plugin, and their views moved into an ATAK drop-down.
   A stand-in parent activity catches `startActivity`/`finish` and keeps a back stack. Results,
   permissions, context menus and action modes are routed through ATAK's activity and window.
-- **Fork**: 22 upstream files changed and one added, all marked `TAKCONVO`: no Android service,
+- **Contacts and notifications**: a `ContactConnectorHandler` for ATAK's XMPP connectors opens
+  chats and reports unread counts and presence. Conversations' notifications are posted as
+  ATAK's; their taps, actions and alarms are redirected to ATAK's activity and to a receiver in
+  ATAK's process, and their icons drawn as bitmaps.
+- **Fork**: 24 upstream files changed and one added, all marked `TAKCONVO`: no Android service,
   hooks for trust, compatibility with the libraries ATAK loads, activities in a pane, files
-  through ATAK's FileProvider.
+  through ATAK's FileProvider, PendingIntents and notifications that work as ATAK's.
 
 ```mermaid
 flowchart LR
@@ -54,6 +64,8 @@ flowchart LR
     P --> D["ChatDropDown"] --> H["EmbeddedActivityHost"] --> A["Conversations activities"]
     A -->|bindService, routed| S
     E -->|settings, credentials, CAs| AT["ATAK prefs / credential store / truststores"]
+    CL["ATAK contacts"] -->|XMPP connector| C["XmppContacts"] -->|open chat| P
+    S -->|notifications, alarms| N["EmbeddedPendingIntents"] -->|tap| P
 ```
 
 Details in [docs/](docs/README.md).
@@ -189,12 +201,35 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
 24. **`.pref` files may carry Booleans as strings**, which breaks preference check boxes; they are
     normalised on load.
 
+**Notifications, alarms and contacts**
+
+25. **Registering as one of Conversations' UI listeners makes it believe it is on screen.** The
+    engine did, to follow changes, so Conversations never told the server it was inactive and
+    silenced every notification while no chat was open. The fork calls an observer from the same
+    places instead ([docs/02](docs/02-embedded-engine.md#changes-and-threads)).
+26. **Every PendingIntent aimed at the embedded app's components is silently dropped**:
+    notification taps and actions, and all `AlarmManager` alarms, i.e. Conversations' pings and
+    reconnection timers. They go through ATAK's activity (its `internalIntent` extra, like ATAK's
+    own `NotificationUtil`) and a receiver registered in ATAK's process instead.
+27. **An embedded app's notifications are ATAK's.** Resource icons resolve in ATAK's package: a
+    random ATAK drawable, or, if the id doesn't exist there, "Bad notification posted", which
+    kills ATAK. They are posted with bitmap icons. The system shows them as ATAK's (name, app
+    icon on Samsung), and Conversations' notification channels are listed under ATAK.
+28. **Shortcuts an embedded app publishes are ATAK's launcher shortcuts**, opening activities ATAK
+    doesn't have. Conversations publishes them for frequent contacts; that is off.
+29. **ATAK's contacts take plugin handlers per connector type, ahead of their own.** One for
+    `connector.xmpp` replaces ATAK's external-app handler; its `NotificationCount` and `Presence`
+    features feed the contact rows, and `Contacts.updateTotalUnreadCount()` sets ATAK's Contacts
+    and Chat button badges. A plugin's toolbar button is a `NavButtonModel` found by the
+    `ToolbarItem`'s identifier, which carries a badge count
+    ([docs/08](docs/08-contacts-and-notifications.md)).
+
 **Maintenance**
 
-25. **Every change to Conversations is marked and documented**
+30. **Every change to Conversations is marked and documented**
     ([docs/05](docs/05-conversations-fork.md)), and `tools/fork-diff.sh` regenerates the exact
     diff against upstream; the doc has the procedure to move to a newer release.
-26. **Upstream Conversations has paths longer than 260 characters**: clone it with
+31. **Upstream Conversations has paths longer than 260 characters**: clone it with
     `core.longpaths=true` on Windows or files silently go missing.
 
 ## Repository layout
@@ -203,7 +238,8 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
 app/                      the ATAK plugin
   src/main/java/com/atakmap/android/takconvo/plugin/
     TakConvoPlugin.java   entry point (IPlugin)
-    xmpp/                 embedded engine: XmppEngine, EmbeddedContext, ...
+    xmpp/                 embedded engine: XmppEngine, EmbeddedContext, PendingIntents, notifications
+    contacts/             XmppContacts: ATAK contact handler, unread badges
     config/               XmppSettings, TrustSources, TrustedCa
     ui/                   account pane, tool preferences
     ui/host/              chat pane: EmbeddedActivityHost, HostParent, PaneFrame, ChatDropDown
@@ -220,7 +256,8 @@ docs/                     design and maintenance documentation
 ## Documentation
 
 [docs/README.md](docs/README.md): architecture, the embedded engine, provisioning and trust, the
-activity host, the Conversations fork, ATAK's runtime, development and testing.
+activity host, the Conversations fork, ATAK's runtime, development and testing, ATAK contacts
+and notifications.
 
 ## License
 

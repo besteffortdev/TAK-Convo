@@ -41,7 +41,11 @@ flowchart TB
             H["EmbeddedActivityHost<br/>+ HostParent + PaneFrame"]
             CD["ChatDropDown"]
             ACTS["Conversations activities<br/>ConversationsActivity, StartConversation, ..."]
+            XC["XmppContacts<br/>(contact handler, badges)"]
+            PI["EmbeddedPendingIntents<br/>+ EmbeddedNotifications"]
         end
+        CONTACTS["ATAK contacts<br/>(ContactConnectorManager)"]
+        NS["system notifications<br/>+ AlarmManager"]
     end
     XMPP[("XMPP server<br/>e.g. Openfire")]
 
@@ -57,6 +61,11 @@ flowchart TB
     XS -->|STARTTLS / SASL| XMPP
     H <-->|lifecycle, results, permissions| ATAKAct
     CD --> DDM
+    CONTACTS -->|XMPP connector tapped| XC -->|open chat| P
+    XC -->|unread, presence| CONTACTS
+    XS -->|notifications, alarms| PI --> NS
+    NS -->|tap: ATAK's activity + internalIntent| P
+    NS -->|actions, alarms: broadcast| PI -->|onStartCommand| XS
 ```
 
 | Component | Package | Role | Doc |
@@ -68,6 +77,8 @@ flowchart TB
 | `XmppSettings`, `TrustSources`, `TrustedCa` | `plugin.config` | What to connect to, with which credentials, trusting which CAs | [03](03-provisioning-and-trust.md) |
 | `AccountView`, `ConversationsInflater`, `TakConvoPreferenceFragment` | `plugin.ui` | Account pane (Conversations' `activity_edit_account` layout) and the tool preferences page | [03](03-provisioning-and-trust.md) |
 | `EmbeddedActivityHost`, `HostParent`, `PaneFrame`, `ChatDropDown` | `plugin.ui.host` | Run Conversations' own activities, their views shown in an ATAK drop-down | [04](04-chat-pane-activity-host.md) |
+| `EmbeddedPendingIntents`, `EmbeddedNotifications` | `plugin.xmpp` | Make Conversations' notification taps, notification actions, alarms and notification icons work as ATAK's | [02](02-embedded-engine.md#pendingintents), [08](08-contacts-and-notifications.md) |
+| `XmppContacts` | `plugin.contacts` | ATAK's handler for XMPP connectors: opens chats, unread counts and presence for ATAK's contacts, the toolbar badge | [08](08-contacts-and-notifications.md) |
 | `:conversations` | `eu.siacs.conversations` | Conversations 2.20.4, built as a library, with a small set of marked changes | [05](05-conversations-fork.md) |
 | `gradle/atak-runtime.gradle`, `tools/AtakLinkCheck.java` | build | Compile against what ATAK loads at runtime and check for it | [06](06-atak-runtime-and-classloading.md) |
 | `DebugReceiver` | `plugin.debug` | Debug builds: drive the plugin from `adb` | [07](07-development-and-testing.md) |
@@ -84,6 +95,7 @@ ATAK starts, loads the plugin
         service.onStartCommand()          # connects stored accounts
         provision()                        # create/update the one account from settings
         watch: takconvo_* prefs, TAK server connections, device trust store
+    XmppContacts.start()                   # contact handler, badges; see 08
     register the tool preferences page and the pane broadcasts
     add the toolbar button
 
@@ -92,8 +104,15 @@ user taps the toolbar button
     no provisioned account  -> account pane (AccountView)
     otherwise               -> ChatDropDown.show(); host.showMain()   # see 04
 
+user taps a TAK user's XMPP connector in ATAK's contacts
+  XmppContacts.handleContact() -> openChat(address): pane on that chat          # see 08
+
+user taps a TAK Convo notification
+  ATAK comes to the front and rebroadcasts ACTION_OPEN -> showChat(intent)      # see 08
+
 ATAK stops the plugin (or exits)
   TakConvoPlugin.onStop()
+    XmppContacts.stop()   # unregister the handler, clear the badges
     host.destroy()        # activities stop and unbind from the service first
     XmppEngine.shutdown() # clear the SA advertisement, log out, service.onDestroy()
 ```
@@ -101,9 +120,10 @@ ATAK stops the plugin (or exits)
 ## Threads
 
 Everything the plugin does runs on ATAK's main thread, as upstream's service and activities
-expect. Upstream's service calls its listeners from worker threads, so `XmppEngine` posts its
-own notifications back to the main thread. The XMPP connection, database, file and crypto work
-run on Conversations' own executors, unchanged.
+expect. Upstream's service reports changes from worker threads, so `XmppEngine` posts them
+back to the main thread. The XMPP connection, database, file and crypto work run on
+Conversations' own executors, unchanged. ATAK asks contact handlers for unread counts on a
+thread of its own; `XmppContacts` answers from snapshots made on the main thread.
 
 ## Data on the device
 
@@ -114,3 +134,4 @@ run on Conversations' own executors, unchanged.
 | Settings | ATAK's preferences, keys `takconvo_xmpp_*` |
 | Attachments handed to other apps, camera captures | ATAK's external cache: `Android/data/com.atakmap.app.civ/cache/takconvo/{shared,Camera}` (`shared/` is emptied at every start) |
 | This device's XMPP address | ATAK preference `saXmppUsername`, which ATAK sends in the self SA as `<contact xmppUsername=...>` |
+| Notification channels | ATAK's: Conversations creates its own (Messages, Silent messages, ...) in ATAK's package |

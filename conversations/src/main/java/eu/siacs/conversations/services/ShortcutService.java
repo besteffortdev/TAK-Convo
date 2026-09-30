@@ -23,6 +23,7 @@ import eu.siacs.conversations.entities.MucOptions;
 import eu.siacs.conversations.ui.ConversationsActivity;
 import eu.siacs.conversations.ui.StartConversationActivity;
 import eu.siacs.conversations.utils.ReplacingSerialSingleThreadExecutor;
+import eu.siacs.conversations.utils.TakConvoCompat;
 import eu.siacs.conversations.xmpp.Jid;
 import java.util.Collection;
 import java.util.List;
@@ -45,6 +46,10 @@ public class ShortcutService {
     }
 
     public void refresh(final boolean forceUpdate) {
+        if (TakConvoCompat.EMBEDDED) {
+            // TAKCONVO: they would be ATAK's launcher shortcuts, opening activities ATAK lacks
+            return;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
             final Runnable r = () -> refreshImpl(forceUpdate);
             replacingSerialSingleThreadExecutor.execute(r);

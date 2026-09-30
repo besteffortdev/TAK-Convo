@@ -82,16 +82,24 @@ Debug builds register `DebugReceiver` (exported, debug only):
 | `DEBUG_OPEN_SETTINGS` | | opens the tool preferences |
 | `DEBUG_SHOW_CHAT` | | opens the chat pane |
 | `DEBUG_CHAT_BACK` | | presses back in the chat pane |
+| `DEBUG_FAKE_CONTACT` | `jid` (default: own), `callsign` | injects the SA of a TAK user advertising `jid`, into this ATAK only |
+| `DEBUG_REMOVE_FAKE_CONTACT` | | removes it |
+| `DEBUG_OPEN_CONTACT` | | does what tapping its XMPP connector does |
+| `DEBUG_DUMP_CONTACT` | | logs its unread counts, XMPP presence and default connector |
+| `DEBUG_FAKE_INCOMING` | `from` (default: own), `body` | stores and notifies a message as if received (nothing is sent) |
+| `DEBUG_ATAK_BROADCAST` | `action` | sends an ATAK-internal broadcast, e.g. `com.atakmap.android.contact.CONTACT_LIST` opens Contacts |
 
 ```bash
 adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_CHAT
 ```
 
+`adb shell` splits extras on spaces, even quoted: use values without spaces.
+
 ## Logs
 
 | Tag | From |
 |---|---|
-| `TakConvo.Plugin`, `.XmppEngine`, `.Trust`, `.Settings`, `.Host`, `.Debug` | the plugin |
+| `TakConvo.Plugin`, `.XmppEngine`, `.Trust`, `.Settings`, `.Host`, `.Contacts`, `.PendingIntents`, `.Notifications`, `.Debug` | the plugin |
 | `tak convo` | Conversations (its `Config.LOGTAG` is the app name) |
 | `AndroidRuntime` | crashes; `adb logcat -b crash` keeps them after the main buffer rolls |
 
@@ -148,7 +156,15 @@ After an upstream merge, a dependency change or a change to the host:
 10. Text field: select text (floating toolbar), paste as quote.
 11. Attachment row: File → pick a file → send to yourself → open it with another app.
     Camera opens (cancel it).
-12. `adb logcat -b crash` is empty.
+12. Contacts and notifications, with `DEBUG_FAKE_CONTACT` and `DEBUG_FAKE_INCOMING` (see
+    [08](08-contacts-and-notifications.md#testing)): pane closed → a notification with sound
+    and "app switched into background" in `tak convo`; the contact row, the Contacts button
+    and the TAK Convo tool show the count; tapping the notification opens the chat; Reply and
+    Mark as read work; tapping the contact's XMPP connector opens the chat.
+13. `dumpsys alarm` lists ATAK alarms tagged `com.atakmap.android.takconvo.DELIVER`, and
+    `TakConvo.PendingIntents` logs "delivering eu.siacs.conversations.POST_CONNECTIVITY_CHANGE"
+    (about a minute after the account connects) or "... PING" when they fire.
+14. `adb logcat -b crash` is empty.
 
 ## Gotchas
 

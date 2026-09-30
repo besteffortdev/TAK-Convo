@@ -13,6 +13,7 @@ closely; the class named at the top of each section is the reference.
 | 05 | [The Conversations fork](05-conversations-fork.md) | **every change to upstream Conversations 2.20.4**, what the plugin relies on, how to move to a newer upstream |
 | 06 | [ATAK runtime and class loading](06-atak-runtime-and-classloading.md) | parent-first loading, desugared default methods, `AtakLinkCheck`, SDK versions, plugin loading |
 | 07 | [Development and testing](07-development-and-testing.md) | setup, build, deploy, debug broadcasts, logs, the device test checklist, gotchas |
+| 08 | [ATAK contacts and notifications](08-contacts-and-notifications.md) | the XMPP connector handler, unread counts and presence in ATAK's contacts, the toolbar badge, notifications posted as ATAK's: taps, actions, icons |
 
 `user_manual/` holds the end-user manual (Typst) from the ATAK plugin template; it is not
 written yet.

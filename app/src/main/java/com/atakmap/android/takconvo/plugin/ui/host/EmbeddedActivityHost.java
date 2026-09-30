@@ -226,6 +226,19 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         start(null, intent, -1);
     }
 
+    /**
+     * Starts an activity as if the system had, e.g. what a tapped notification aims at. Routed
+     * like one an activity starts: the account screen and settings go to the {@link Listener}.
+     */
+    public void startActivity(final Intent intent) {
+        start(null, intent, -1);
+    }
+
+    /** @return true if no activity is shown */
+    public boolean isEmpty() {
+        return stack.isEmpty();
+    }
+
     /** The pane became visible or hidden; hidden activities are stopped, not destroyed. */
     public void setVisible(final boolean visible) {
         if (this.visible == visible) {

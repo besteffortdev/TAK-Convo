@@ -33,6 +33,10 @@
     <!-- chat pane (Conversations' own screens) -->
     <string name="takconvo_not_available_in_atak">Not available inside ATAK</string>
 
+    <!-- ATAK contacts -->
+    <string name="takconvo_connector_description">Chats with the XMPP address a TAK user advertises, in TAK Convo</string>
+    <string name="takconvo_invalid_xmpp_address">Not a valid XMPP address: %1$s</string>
+
     <!-- tool preferences -->
     <string name="takconvo_prefs_title">TAK Convo</string>
     <string name="takconvo_prefs_summary">XMPP account, server and certificate</string>

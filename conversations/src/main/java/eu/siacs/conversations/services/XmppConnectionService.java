@@ -1312,7 +1312,9 @@ public class XmppConnectionService extends Service {
     private void toggleForegroundService(final boolean force) {
         if (TakConvoCompat.EMBEDDED) {
             // TAKCONVO: not a real Service (startForeground is final and would NPE); ATAK's own
-            // foreground service keeps the process alive
+            // foreground service keeps the process alive. Earlier versions posted the foreground
+            // notification anyway.
+            mNotificationService.cancel(NotificationService.FOREGROUND_NOTIFICATION_ID);
             return;
         }
         final boolean status;
@@ -1393,7 +1395,8 @@ public class XmppConnectionService extends Service {
     }
 
     public boolean foregroundNotificationNeedsUpdatingWhenErrorStateChanges() {
-        return !mOngoingVideoTranscoding.get()
+        return !TakConvoCompat.EMBEDDED // TAKCONVO: there is no foreground notification
+                && !mOngoingVideoTranscoding.get()
                 && ongoingCall.get() == null
                 && appSettings.isKeepForegroundService()
                 && hasEnabledAccounts();
@@ -1402,7 +1405,10 @@ public class XmppConnectionService extends Service {
     @Override
     public void onTaskRemoved(final Intent rootIntent) {
         super.onTaskRemoved(rootIntent);
-        if ((appSettings.isKeepForegroundService() && hasEnabledAccounts())
+        // TAKCONVO: embedded, this is the plugin stopping the engine, and nothing keeps running
+        if ((!TakConvoCompat.EMBEDDED
+                        && appSettings.isKeepForegroundService()
+                        && hasEnabledAccounts())
                 || mOngoingVideoTranscoding.get()
                 || ongoingCall.get() != null) {
             Log.d(Config.LOGTAG, "ignoring onTaskRemoved because foreground service is activated");
@@ -1438,7 +1444,7 @@ public class XmppConnectionService extends Service {
         intent.setAction(ACTION_POST_CONNECTIVITY_CHANGE);
         try {
             final PendingIntent pendingIntent =
-                    PendingIntent.getBroadcast(
+                    TakConvoCompat.getBroadcast( // TAKCONVO: see TakConvoCompat.PENDING_INTENTS
                             this,
                             1,
                             intent,
@@ -1464,7 +1470,7 @@ public class XmppConnectionService extends Service {
         intent.setAction(ACTION_PING);
         try {
             final PendingIntent pendingIntent =
-                    PendingIntent.getBroadcast(
+                    TakConvoCompat.getBroadcast( // TAKCONVO
                             this, requestCode, intent, PendingIntent.FLAG_IMMUTABLE);
             alarmManager.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, timeToWake, pendingIntent);
         } catch (final RuntimeException e) {
@@ -1482,7 +1488,7 @@ public class XmppConnectionService extends Service {
         intent.setAction(ACTION_PING_IDLE);
         try {
             final PendingIntent pendingIntent =
-                    PendingIntent.getBroadcast(
+                    TakConvoCompat.getBroadcast( // TAKCONVO
                             this,
                             0,
                             intent,
@@ -3444,6 +3450,10 @@ public class XmppConnectionService extends Service {
         for (OnConversationUpdate listener : threadSafeList(this.mOnConversationUpdates)) {
             listener.onConversationUpdate();
         }
+        final var observer = TakConvoCompat.observer(); // TAKCONVO
+        if (observer != null) {
+            observer.onConversationsChanged();
+        }
     }
 
     public void notifyJingleRtpConnectionUpdate(
@@ -3470,11 +3480,19 @@ public class XmppConnectionService extends Service {
         for (final OnAccountUpdate listener : threadSafeList(this.mOnAccountUpdates)) {
             listener.onAccountUpdate();
         }
+        final var observer = TakConvoCompat.observer(); // TAKCONVO
+        if (observer != null) {
+            observer.onAccountsChanged();
+        }
     }
 
     public void updateRosterUi() {
         for (OnRosterUpdate listener : threadSafeList(this.mOnRosterUpdates)) {
             listener.onRosterUpdate();
+        }
+        final var observer = TakConvoCompat.observer(); // TAKCONVO
+        if (observer != null) {
+            observer.onRosterChanged();
         }
     }
 
@@ -3590,7 +3608,13 @@ public class XmppConnectionService extends Service {
         int count = unreadCount();
         if (unreadCount != count) {
             Log.d(Config.LOGTAG, "update unread count to " + count);
-            if (count > 0) {
+            final var observer = TakConvoCompat.observer();
+            if (TakConvoCompat.EMBEDDED) {
+                // TAKCONVO: the plugin shows the count; the launcher icon is ATAK's
+                if (observer != null) {
+                    observer.onUnreadCountChanged(count);
+                }
+            } else if (count > 0) {
                 ShortcutBadger.applyCount(getApplicationContext(), count);
             } else {
                 ShortcutBadger.removeCount(getApplicationContext());

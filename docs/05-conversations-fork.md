@@ -12,8 +12,10 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-09-30 it is **22 modified files, 1 added file, 2 removed manifests** (48 hunks). Every
-code change carries a `TAKCONVO` comment: `grep -rn TAKCONVO conversations/src`.
+As of 2026-09-30 (evening) it is **24 modified files, 1 added file, 2 removed manifests**
+(78 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
+comment: `grep -rn TAKCONVO conversations/src`. When codeberg is unreachable,
+`UPSTREAM_DIR=<a checkout of the tag> tools/fork-diff.sh` compares with a local clone.
 
 ## What was imported
 
@@ -159,7 +161,26 @@ ATAK's provider only serves external storage, and a plugin can't declare a provi
 Without this, opening an attachment fails, and taking a photo or showing an image notification
 throws.
 
-### G. Diagnostics
+### G. Notifications, alarms and change observation as ATAK's
+
+Conversations' notifications are posted as ATAK's, its PendingIntents are created in ATAK's
+package, and the plugin needs to follow changes without looking like a UI (see
+[02](02-embedded-engine.md#changes-and-threads) and [08](08-contacts-and-notifications.md)).
+None of these changes does anything unless the plugin has set the corresponding hook.
+
+| File | Change |
+|---|---|
+| `java/eu/siacs/conversations/utils/TakConvoCompat.java` | Three hooks the plugin sets: `PendingIntentFactory PENDING_INTENTS` with the helpers `getActivity`/`getService`/`getBroadcast`; `NotificationFilter NOTIFICATIONS` with `filter(notification)`; `Observer OBSERVER` (`onAccountsChanged`, `onConversationsChanged`, `onRosterChanged`, `onUnreadCountChanged`) with `observer()`. Each helper does what upstream does when the hook isn't set or not embedded. |
+| `java/eu/siacs/conversations/services/NotificationService.java` | Every `PendingIntent.getActivity/getService(` (16 places) → `TakConvoCompat.getActivity/getService(`. Both `notify(...)` methods post `TakConvoCompat.filter(notification)`. The conversation shortcut is neither set on a message notification nor pushed when embedded. |
+| `java/eu/siacs/conversations/services/XmppConnectionService.java` | The three alarms' `PendingIntent.getBroadcast(` → `TakConvoCompat.getBroadcast(`. `updateAccountUi()`, `updateConversationUi()` and `updateRosterUi()` also call the observer. `updateUnreadCountBadge()` reports the count to the observer instead of `ShortcutBadger` when embedded. `foregroundNotificationNeedsUpdatingWhenErrorStateChanges()` is false when embedded, and `toggleForegroundService()` cancels a foreground notification left by an earlier version. `onTaskRemoved()` logs out when embedded instead of keeping the (nonexistent) foreground service. |
+| `java/eu/siacs/conversations/services/ShortcutService.java` | `refresh()` does nothing when embedded: the shortcuts would be ATAK's launcher shortcuts. |
+
+Without these, notification taps, actions and all alarms (pings, reconnection timers) were
+dropped by the system, notifications showed random ATAK icons (or crash ATAK when the id
+doesn't exist there), a "1 of 1 accounts connected" notification appeared, and Conversations
+silenced its notifications whenever no chat was open.
+
+### H. Diagnostics
 
 | File | Change |
 |---|---|
@@ -174,7 +195,11 @@ Conversations APIs the plugin (`app/`) uses directly:
 |---|---|
 | `xmpp/EmbeddedConversations` | extends `Conversations`; `attachBaseContext`, `onCreateEmbedded()` |
 | `xmpp/EmbeddedXmppService` | extends `XmppConnectionService`; `attachBaseContext` |
-| `xmpp/XmppEngine` | `XmppConnectionService`: `onCreate`, `onStartCommand(null, 0, 0)`, `onBind`, `onTaskRemoved`, `onDestroy`, `getAccounts`, `findAccountByJid`, `createAccount`, `updateAccount`, `reconnectAccountInBackground`, `findOrCreateConversation`, `sendMessage`, `getConversations`, `set/removeOnAccountListChangedListener`, `set/removeOnConversationListChangedListener`. `Account` (constructor, `setResource`, `setPassword`, `setHostname`, `setPort`, `setOption`/`isOptionSet(OPTION_DISABLED)`, `isOnlineAndConnected`). `AppSettings.SHOW_CONNECTION_OPTIONS`, `BuildConfig.APP_NAME`, `CryptoHelper.random`, `Jid.ofUserInput`, `FileBackend.deleteShareableCopies` |
+| `xmpp/XmppEngine` | `XmppConnectionService`: `onCreate`, `onStartCommand(null, 0, 0)`, `onBind`, `onTaskRemoved`, `onDestroy`, `getAccounts`, `findAccountByJid`, `createAccount`, `updateAccount`, `reconnectAccountInBackground`, `findOrCreateConversation`, `sendMessage`, `getConversations`. `TakConvoCompat` hooks (section G). `Account` (constructor, `setResource`, `setPassword`, `setHostname`, `setPort`, `setOption`/`isOptionSet(OPTION_DISABLED)`, `isOnlineAndConnected`). `AppSettings.SHOW_CONNECTION_OPTIONS`, `BuildConfig.APP_NAME`, `CryptoHelper.random`, `Jid.ofUserInput`, `FileBackend.deleteShareableCopies` |
+| `xmpp/EmbeddedPendingIntents` | `TakConvoCompat.PendingIntentFactory`; the `eu.siacs.conversations.` package prefix of the components it redirects; `SystemEventReceiver` being a `BroadcastReceiver` with a no-argument constructor, `XmppConnectionService` a `Service` |
+| `xmpp/EmbeddedNotifications` | `TakConvoCompat.NotificationFilter`; style `Theme.Conversations3` (the icons' tints) |
+| `contacts/XmppContacts` | `Conversation`: `getAccount`, `getMode`/`MODE_SINGLE`, `getAddress`, `unreadCount`. `Account.getRoster().getContacts()`, `Contact.getOption(Contact.Options.TO)`, `getShownStatus()`, `Presence.Availability` |
+| `debug/DebugReceiver` | `Message(conversation, body, ENCRYPTION_NONE, STATUS_RECEIVED)`, `markUnread`, `Conversation.add`, `XmppConnectionService.createMessageAsync`, `getNotificationService().push`, `updateConversationUi` |
 | `ui/AccountView` | layout `activity_edit_account` and its view ids (`toolbar`, `avater`, `account_jid(_layout)`, `account_password(_layout)`, `save_button`, `cancel_button`, `stats`, `account_main_layout`, and the ids it hides), style `Theme.Conversations3.Dark`, `AxolotlService`, `UIHelper`, `XmppConnection` and its managers (`Blocking`, `Carbons`, `ClientStateIndication`, `ExternalServiceDiscovery`, `HttpUpload`, `MessageArchive`, `Pep`, `Roster`) |
 | `ui/host/EmbeddedActivityHost` | activity class names (the `SUPPORTED` list, `ui.activity.SettingsActivity`, `EditAccountActivity`, `ManageAccountActivity`), `ConversationsActivity.ACTION_VIEW_CONVERSATION` / `EXTRA_CONVERSATION`, style `Theme.Conversations3`, `BaseActivity.embeddedContent` |
 
@@ -214,5 +239,11 @@ Conversations APIs the plugin (`app/`) uses directly:
    `ActivityCompat`.
 8. **Check new activities.** Any activity that should open inside the pane goes into
    `EmbeddedActivityHost.SUPPORTED` once tested; others show "Not available inside ATAK".
+   **Check new PendingIntents and notification paths**
+   (`grep -rn "PendingIntent.get\|\.notify(\|pushDynamicShortcut" conversations/src/main`):
+   PendingIntents aimed at Conversations' components go through `TakConvoCompat`, and
+   notifications through `NotificationService.notify`. Check that the service still calls its
+   UI listeners from `updateAccountUi`/`updateConversationUi`/`updateRosterUi`, where the
+   observer hooks are.
 9. **Test on the device**, see [07](07-development-and-testing.md#device-test-checklist).
 10. **Update this document**: the base tag at the top, the file tables and the dependency table.

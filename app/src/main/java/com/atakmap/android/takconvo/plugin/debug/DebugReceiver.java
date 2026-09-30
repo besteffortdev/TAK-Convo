@@ -10,6 +10,7 @@ import android.os.Bundle;
 import com.atakmap.android.cot.CotMapComponent;
 import com.atakmap.android.ipc.AtakBroadcast;
 import com.atakmap.android.preference.AtakPreferences;
+import com.atakmap.android.takconvo.plugin.TakConvoPlugin;
 import com.atakmap.android.takconvo.plugin.ui.TakConvoPreferenceFragment;
 import com.atakmap.comms.CommsMapComponent;
 import com.atakmap.comms.CotService;
@@ -33,6 +34,8 @@ import java.util.List;
  *     --es connect host:8089:ssl --es user U --es pass P
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_ACCOUNT
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_OPEN_SETTINGS
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_CHAT
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_CHAT_BACK
  * </pre>
  */
 public final class DebugReceiver extends BroadcastReceiver {
@@ -47,6 +50,8 @@ public final class DebugReceiver extends BroadcastReceiver {
     public static final String ACTION_IMPORT_PREF = PREFIX + "DEBUG_IMPORT_PREF";
     public static final String ACTION_SHOW_ACCOUNT = PREFIX + "DEBUG_SHOW_ACCOUNT";
     public static final String ACTION_OPEN_SETTINGS = PREFIX + "DEBUG_OPEN_SETTINGS";
+    public static final String ACTION_SHOW_CHAT = PREFIX + "DEBUG_SHOW_CHAT";
+    public static final String ACTION_CHAT_BACK = PREFIX + "DEBUG_CHAT_BACK";
 
     private final Context context;
 
@@ -65,6 +70,8 @@ public final class DebugReceiver extends BroadcastReceiver {
         filter.addAction(ACTION_IMPORT_PREF);
         filter.addAction(ACTION_SHOW_ACCOUNT);
         filter.addAction(ACTION_OPEN_SETTINGS);
+        filter.addAction(ACTION_SHOW_CHAT);
+        filter.addAction(ACTION_CHAT_BACK);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
         } else {
@@ -125,6 +132,12 @@ public final class DebugReceiver extends BroadcastReceiver {
                     new Intent(TakConvoPreferenceFragment.ACTION_SHOW_ACCOUNT));
         } else if (ACTION_OPEN_SETTINGS.equals(action)) {
             SettingsActivity.start(TakConvoPreferenceFragment.TOOL_KEY, null);
+        } else if (ACTION_SHOW_CHAT.equals(action)) {
+            AtakBroadcast.getInstance().sendBroadcast(
+                    new Intent(TakConvoPlugin.ACTION_SHOW_CHAT));
+        } else if (ACTION_CHAT_BACK.equals(action)) {
+            AtakBroadcast.getInstance().sendBroadcast(
+                    new Intent(TakConvoPlugin.ACTION_CHAT_BACK));
         } else if (ACTION_SEND.equals(action) && engine != null) {
             final boolean ok = engine.sendMessage(intent.getStringExtra("to"),
                     intent.getStringExtra("body"));

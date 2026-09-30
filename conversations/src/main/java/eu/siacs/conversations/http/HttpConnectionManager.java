@@ -28,7 +28,6 @@ import java.security.KeyManagementException;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -178,7 +177,8 @@ public class HttpConnectionManager extends AbstractConnectionManager {
         final var okHttp =
                 buildHttpClient(httpUrl, account, false)
                         .newBuilder()
-                        .callTimeout(Duration.ofSeconds(5))
+                        // TAKCONVO: ATAK's OkHttp takes java.time, the plugin's is desugared
+                        .callTimeout(5, TimeUnit.SECONDS)
                         .build();
         final var request =
                 new Request.Builder()

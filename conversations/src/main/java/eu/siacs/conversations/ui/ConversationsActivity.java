@@ -46,6 +46,7 @@ import android.util.Log;
 import android.view.KeyEvent;
 import android.widget.Toast;
 import androidx.annotation.IdRes;
+import androidx.activity.BackEventCompat;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
@@ -170,6 +171,9 @@ public class ConversationsActivity extends QrCodeProcessingActivity
         if (xmppConnectionService == null) {
             return;
         }
+        if (eu.siacs.conversations.utils.TakConvoCompat.EMBEDDED) {
+            return; // TAKCONVO: crash reports, battery optimization and permissions are ATAK's
+        }
         final Fragment fragment = getSupportFragmentManager().findFragmentById(R.id.main_fragment);
         if (fragment instanceof ConversationsOverviewFragment) {
             if (ExceptionHelper.checkForCrash(this)) {
@@ -231,7 +235,9 @@ public class ConversationsActivity extends QrCodeProcessingActivity
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                         != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(
+            // TAKCONVO: through ActivityCompat, which the plugin can take over when embedded
+            ActivityCompat.requestPermissions(
+                    this,
                     new String[] {Manifest.permission.POST_NOTIFICATIONS},
                     REQUEST_POST_NOTIFICATION);
         }
@@ -353,8 +359,31 @@ public class ConversationsActivity extends QrCodeProcessingActivity
         this.binding = DataBindingUtil.setContentView(this, R.layout.activity_conversations);
         Activities.setStatusAndNavigationBarColors(this, binding.getRoot());
         ;
+        // TAKCONVO: not a lambda. ATAK's copy of this interface has no default methods, so
+        // every method needs a body here.
         this.getSupportFragmentManager()
-                .addOnBackStackChangedListener(this::showDialogsIfMainIsOverview);
+                .addOnBackStackChangedListener(
+                        new FragmentManager.OnBackStackChangedListener() {
+                            @Override
+                            public void onBackStackChanged() {
+                                showDialogsIfMainIsOverview();
+                            }
+
+                            @Override
+                            public void onBackStackChangeStarted(
+                                    @NonNull Fragment fragment, boolean pop) {}
+
+                            @Override
+                            public void onBackStackChangeProgressed(
+                                    @NonNull BackEventCompat backEventCompat) {}
+
+                            @Override
+                            public void onBackStackChangeCommitted(
+                                    @NonNull Fragment fragment, boolean pop) {}
+
+                            @Override
+                            public void onBackStackChangeCancelled() {}
+                        });
         this.initializeFragments();
         final Intent intent;
         if (savedInstanceState == null) {

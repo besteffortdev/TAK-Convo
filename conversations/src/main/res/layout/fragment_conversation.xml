@@ -73,7 +73,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_alignWithParentIfMissing="true"
-                android:layout_above="@+id/attachment_choices"
+                android:layout_above="@+id/attachment_choices_scroll"
                 android:paddingHorizontal="8dp"
                 android:paddingVertical="6dp">
 
@@ -211,27 +211,35 @@
                     tools:text="@string/leave" />
             </RelativeLayout>
 
-            <androidx.constraintlayout.widget.ConstraintLayout
-                android:id="@+id/attachment_choices"
+            <!-- TAKCONVO: one row that scrolls sideways instead of a grid. An ATAK side pane
+                 is too narrow for more than two choices per row, and too low for their rows. -->
+            <HorizontalScrollView
+                android:id="@+id/attachment_choices_scroll"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_alignParentBottom="true"
-                android:padding="16dp"
-                android:visibility="gone">
+                android:fillViewport="true"
+                android:scrollbars="none">
 
-                <androidx.constraintlayout.helper.widget.Flow
-                    android:id="@+id/attachment_choices_flow"
-                    android:layout_width="0dp"
+                <androidx.constraintlayout.widget.ConstraintLayout
+                    android:id="@+id/attachment_choices"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    app:flow_horizontalStyle="spread"
-                    app:flow_maxElementsWrap="@integer/attachment_choices_max_element_wrap"
-                    app:flow_verticalGap="16dp"
-                    app:flow_wrapMode="aligned"
-                    app:layout_constraintEnd_toEndOf="parent"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintTop_toTopOf="parent" />
+                    android:padding="16dp"
+                    android:visibility="gone">
 
-            </androidx.constraintlayout.widget.ConstraintLayout>
+                    <androidx.constraintlayout.helper.widget.Flow
+                        android:id="@+id/attachment_choices_flow"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:flow_horizontalStyle="spread"
+                        app:flow_wrapMode="none"
+                        app:layout_constraintEnd_toEndOf="parent"
+                        app:layout_constraintStart_toStartOf="parent"
+                        app:layout_constraintTop_toTopOf="parent" />
+
+                </androidx.constraintlayout.widget.ConstraintLayout>
+            </HorizontalScrollView>
 
         </RelativeLayout>
     </LinearLayout>

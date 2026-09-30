@@ -30,6 +30,9 @@
     <string name="takconvo_open_settings">Settings</string>
     <string name="takconvo_sign_out_confirm">Sign out of %1$s? Its chat history stays on this device.</string>
 
+    <!-- chat pane (Conversations' own screens) -->
+    <string name="takconvo_not_available_in_atak">Not available inside ATAK</string>
+
     <!-- tool preferences -->
     <string name="takconvo_prefs_title">TAK Convo</string>
     <string name="takconvo_prefs_summary">XMPP account, server and certificate</string>

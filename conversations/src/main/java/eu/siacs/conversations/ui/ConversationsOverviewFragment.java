@@ -171,6 +171,13 @@ public class ConversationsOverviewFragment extends XmppFragment {
             };
     private final MenuProvider globalMenuProvider =
             new MenuProvider() {
+                // TAKCONVO: ATAK's copy of this interface has no default methods
+                @Override
+                public void onPrepareMenu(@NonNull Menu menu) {}
+
+                @Override
+                public void onMenuClosed(@NonNull Menu menu) {}
+
                 @Override
                 public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater menuInflater) {
                     menuInflater.inflate(R.menu.fragment_global, menu);
@@ -197,6 +204,13 @@ public class ConversationsOverviewFragment extends XmppFragment {
 
     private final MenuProvider menuProvider =
             new MenuProvider() {
+                // TAKCONVO: ATAK's copy of this interface has no default methods
+                @Override
+                public void onPrepareMenu(@NonNull Menu menu) {}
+
+                @Override
+                public void onMenuClosed(@NonNull Menu menu) {}
+
                 @Override
                 public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater menuInflater) {
                     menuInflater.inflate(R.menu.fragment_conversations_overview, menu);

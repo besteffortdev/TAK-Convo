@@ -1,17 +1,20 @@
 package com.atakmap.android.takconvo.plugin.xmpp;
 
+import android.app.Application;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.security.KeyChain;
+import android.view.Display;
 
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.android.takconvo.plugin.config.TrustSources;
@@ -24,6 +27,7 @@ import eu.siacs.conversations.AppSettings;
 import eu.siacs.conversations.entities.Account;
 import eu.siacs.conversations.entities.Conversation;
 import eu.siacs.conversations.entities.Message;
+import eu.siacs.conversations.persistance.FileBackend;
 import eu.siacs.conversations.services.XmppConnectionService;
 import eu.siacs.conversations.utils.CryptoHelper;
 import eu.siacs.conversations.utils.TakConvoCompat;
@@ -101,6 +105,8 @@ public final class XmppEngine {
         final EmbeddedConversations application = new EmbeddedConversations(context);
         context.setApplication(application);
         application.start();
+        // decrypted attachments that were handed to other apps last time
+        FileBackend.deleteShareableCopies(context);
 
         service = new EmbeddedXmppService();
         service.attach(context);
@@ -385,6 +391,19 @@ public final class XmppEngine {
 
     public XmppConnectionService getService() {
         return service;
+    }
+
+    /**
+     * A context for one of Conversations' activities: ATAK's identity, the plugin's resources
+     * for {@code override}, and the engine's storage and service routing.
+     */
+    public Context newUiContext(final Display display, final Configuration override) {
+        return context.forUi(display, override);
+    }
+
+    /** Conversations' Application object, which its activities expect to be attached to. */
+    public Application getApplication() {
+        return (Application) context.getApplicationContext();
     }
 
     /** @return null if provisioning succeeded, otherwise why it did not */

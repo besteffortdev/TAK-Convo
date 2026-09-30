@@ -144,8 +144,9 @@ public class ContactDetailsActivity extends OmemoActivity
         if (hasContactsPermission()) {
             showAddToPhoneBookDialog();
         } else if (QuickConversationsService.isContactListIntegration(this)) {
-            requestPermissions(
-                    new String[] {Manifest.permission.READ_CONTACTS}, REQUEST_SYNC_CONTACTS);
+            // TAKCONVO: through ActivityCompat, which the plugin can take over when embedded
+            androidx.core.app.ActivityCompat.requestPermissions(
+                    this, new String[] {Manifest.permission.READ_CONTACTS}, REQUEST_SYNC_CONTACTS);
         }
     }
 

@@ -47,6 +47,7 @@ import eu.siacs.conversations.ui.adapter.MediaAdapter;
 import eu.siacs.conversations.ui.util.Attachment;
 import eu.siacs.conversations.utils.FileWriterException;
 import eu.siacs.conversations.utils.MimeUtils;
+import eu.siacs.conversations.utils.TakConvoCompat;
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileDescriptor;
@@ -62,7 +63,6 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
@@ -193,9 +193,82 @@ public class FileBackend {
 
     public static Uri getUriForFile(final Context context, final File file) {
         try {
+            if (TakConvoCompat.EMBEDDED) {
+                return FileProvider.getUriForFile(
+                        context, getAuthority(context), shareableFile(context, file));
+            }
             return FileProvider.getUriForFile(context, getAuthority(context), file);
         } catch (final IllegalArgumentException e) {
             throw new SecurityException(e);
+        }
+    }
+
+    /** TAKCONVO: where copies of private files are served from, see {@link #shareableFile} */
+    private static final String SHAREABLE_DIRECTORY = "shared";
+
+    /**
+     * TAKCONVO: inside ATAK there is no provider of our own, only ATAK's, which serves external
+     * storage. A file that is not there, e.g. a private attachment, is served from a copy in
+     * ATAK's external cache, which other apps can only read through the provider. The copy is
+     * kept while it is current, so that the same file always gets the same URI.
+     */
+    private static File shareableFile(final Context context, final File file) {
+        final File external = Environment.getExternalStorageDirectory();
+        if (isBelow(file, external) || isBelow(file, new File("/storage"))) {
+            return file;
+        }
+        final File cache = context.getExternalCacheDir();
+        if (cache == null) {
+            throw new IllegalArgumentException("no external storage to share " + file);
+        }
+        final File filesDir = context.getFilesDir();
+        final String relative =
+                isBelow(file, filesDir)
+                        ? filesDir.toURI().relativize(file.toURI()).getPath()
+                        : "other/" + Integer.toHexString(file.getParent().hashCode())
+                                + "/" + file.getName();
+        final File copy = new File(new File(cache, SHAREABLE_DIRECTORY), relative);
+        if (copy.length() != file.length() || copy.lastModified() < file.lastModified()) {
+            final File parent = copy.getParentFile();
+            if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
+                throw new IllegalArgumentException("unable to create " + parent);
+            }
+            try (final InputStream in = new FileInputStream(file);
+                    final OutputStream out = new FileOutputStream(copy)) {
+                ByteStreams.copy(in, out);
+            } catch (final IOException e) {
+                throw new IllegalArgumentException("unable to share " + file, e);
+            }
+        }
+        return copy;
+    }
+
+    /** TAKCONVO: removes the copies {@link #shareableFile} made, e.g. when the plugin starts */
+    public static void deleteShareableCopies(final Context context) {
+        final File cache = context.getExternalCacheDir();
+        if (cache != null) {
+            deleteRecursively(new File(cache, SHAREABLE_DIRECTORY));
+        }
+    }
+
+    private static void deleteRecursively(final File file) {
+        final File[] children = file.listFiles();
+        if (children != null) {
+            for (final File child : children) {
+                deleteRecursively(child);
+            }
+        }
+        if (file.exists() && !file.delete()) {
+            Log.d(Config.LOGTAG, "unable to delete " + file);
+        }
+    }
+
+    private static boolean isBelow(final File file, final File directory) {
+        try {
+            final String dir = directory.getCanonicalPath() + File.separator;
+            return file.getCanonicalPath().startsWith(dir);
+        } catch (final IOException e) {
+            return false;
         }
     }
 
@@ -218,6 +291,9 @@ public class FileBackend {
     }
 
     private static String getAuthority(final Context context) {
+        if (TakConvoCompat.EMBEDDED) {
+            return context.getPackageName() + ".provider"; // TAKCONVO: ATAK's FileProvider
+        }
         return context.getPackageName() + FILE_PROVIDER;
     }
 
@@ -1539,7 +1615,7 @@ public class FileBackend {
         public File takePicture() {
             final String filename =
                     String.format("IMG_%s.%s", TIMESTAMP_FORMATTER.format(Instant.now()), "jpg");
-            final var cameraDirectory = new File(context.getCacheDir(), DIRECTORY_CAMERA);
+            final var cameraDirectory = new File(cameraRoot(), DIRECTORY_CAMERA);
             final var file = new File(cameraDirectory, filename);
             if (cameraDirectory.mkdirs()) {
                 Log.d(Config.LOGTAG, "create directory " + cameraDirectory.getAbsolutePath());
@@ -1577,12 +1653,27 @@ public class FileBackend {
             if (parent == null) {
                 return false;
             }
-            if (Arrays.asList(DIRECTORY_CAMERA, DIRECTORY_RECORDINGS)
-                    .contains(directory.getName())) {
+            if (DIRECTORY_CAMERA.equals(directory.getName())) {
+                return parent.equals(cameraRoot());
+            } else if (DIRECTORY_RECORDINGS.equals(directory.getName())) {
                 return parent.equals(context.getCacheDir());
             } else {
                 return false;
             }
+        }
+
+        /**
+         * TAKCONVO: embedded, the camera app writes its picture through ATAK's provider, which
+         * only serves external storage.
+         */
+        private File cameraRoot() {
+            if (TakConvoCompat.EMBEDDED) {
+                final File external = context.getExternalCacheDir();
+                if (external != null) {
+                    return external;
+                }
+            }
+            return context.getCacheDir();
         }
 
         public static boolean isRecordingFilenamePattern(final String filename) {

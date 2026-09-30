@@ -1,0 +1,10 @@
+# Findings of AtakLinkCheck that are accepted, one per line: text that the finding's line,
+# or the line of the class it was found in, contains. Say why.
+
+# androidx.startup initializer; a plugin has no manifest provider to run it
+Landroidx/emoji2/text/EmojiCompatInitializer$1;
+# two-pane preference screens; Conversations' settings don't use them
+Landroidx/preference/PreferenceHeaderFragmentCompat$$ExternalSyntheticLambda0;
+# called by DrawerLayout and SlidingPaneLayout only, which no layout of ours uses
+Landroidx/customview/widget/ViewDragHelper;->getDefaultEdgeSize()I
+Landroidx/customview/widget/ViewDragHelper;->setEdgeSize(I)V

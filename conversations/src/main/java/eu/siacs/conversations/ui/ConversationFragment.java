@@ -54,6 +54,7 @@ import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.TextView.OnEditorActionListener;
 import android.widget.Toast;
+import androidx.activity.BackEventCompat;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.DrawableRes;
 import androidx.annotation.IdRes;
@@ -302,6 +303,20 @@ public class ConversationFragment extends XmppFragment
                         binding.toolbar.setNavigationOnClickListener(null);
                     }
                 }
+
+                // TAKCONVO: ATAK's copy of this interface has no default methods
+                @Override
+                public void onBackStackChangeStarted(@NonNull Fragment fragment, boolean pop) {}
+
+                @Override
+                public void onBackStackChangeProgressed(
+                        @NonNull BackEventCompat backEventCompat) {}
+
+                @Override
+                public void onBackStackChangeCommitted(@NonNull Fragment fragment, boolean pop) {}
+
+                @Override
+                public void onBackStackChangeCancelled() {}
             };
     private final OnBackPressedCallback attachmentChoicesBackPressed =
             new OnBackPressedCallback(false) {
@@ -666,6 +681,13 @@ public class ConversationFragment extends XmppFragment
             };
     private final MenuProvider menuProvider =
             new MenuProvider() {
+                // TAKCONVO: ATAK's copy of this interface has no default methods
+                @Override
+                public void onPrepareMenu(@NonNull Menu menu) {}
+
+                @Override
+                public void onMenuClosed(@NonNull Menu menu) {}
+
                 @Override
                 public void onCreateMenu(@NonNull Menu menu, @NonNull MenuInflater menuInflater) {
                     menuInflater.inflate(R.menu.fragment_conversation, menu);

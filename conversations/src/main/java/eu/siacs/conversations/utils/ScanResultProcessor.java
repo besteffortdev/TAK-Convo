@@ -17,7 +17,6 @@ import eu.siacs.conversations.Config;
 import eu.siacs.conversations.http.HttpConnectionManager;
 import java.io.IOException;
 import java.net.UnknownHostException;
-import java.time.Duration;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import okhttp3.Call;
@@ -142,7 +141,8 @@ public class ScanResultProcessor {
                                 })
                         .followRedirects(false)
                         .followSslRedirects(false)
-                        .callTimeout(Duration.ofSeconds(3))
+                        // TAKCONVO: ATAK's OkHttp takes java.time, the plugin's is desugared
+                        .callTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
                         .build();
         final var call = okHttp.newCall(new Request.Builder().url(url).head().build());
         call.enqueue(

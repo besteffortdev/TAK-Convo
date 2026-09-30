@@ -958,8 +958,11 @@ public abstract class XmppActivity extends ActionBarActivity {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
                     != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(
-                        new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE}, requestCode);
+                // TAKCONVO: through ActivityCompat, which the plugin can take over when embedded
+                androidx.core.app.ActivityCompat.requestPermissions(
+                        this,
+                        new String[] {Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                        requestCode);
                 return false;
             } else {
                 return true;

@@ -25,6 +25,9 @@ public final class Activities {
             final View view,
             final boolean isLightMode,
             final boolean raisedStatusBar) {
+        if (eu.siacs.conversations.utils.TakConvoCompat.EMBEDDED) {
+            return; // TAKCONVO: the system bars belong to ATAK's window
+        }
         final var window = activity.getWindow();
         final var flags = view.getSystemUiVisibility();
         // an elevation of 4 matches the MaterialToolbar elevation

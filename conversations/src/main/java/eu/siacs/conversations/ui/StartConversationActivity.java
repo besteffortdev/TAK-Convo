@@ -458,7 +458,9 @@ public class StartConversationActivity extends XmppActivity
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && ActivityCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                         != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(
+            // TAKCONVO: through ActivityCompat, which the plugin can take over when embedded
+            ActivityCompat.requestPermissions(
+                    this,
                     new String[] {Manifest.permission.POST_NOTIFICATIONS},
                     REQUEST_POST_NOTIFICATION);
         }
@@ -894,7 +896,9 @@ public class StartConversationActivity extends XmppActivity
                                         .apply();
                             }
                             if (requestPermission.compareAndSet(false, true)) {
-                                requestPermissions(permission, REQUEST_SYNC_CONTACTS);
+                                // TAKCONVO: through ActivityCompat, see below
+                                ActivityCompat.requestPermissions(
+                                        this, permission, REQUEST_SYNC_CONTACTS);
                             }
                         });
                 if (requiresConsent) {
@@ -912,7 +916,9 @@ public class StartConversationActivity extends XmppActivity
                     builder.setOnDismissListener(
                             dialog -> {
                                 if (requestPermission.compareAndSet(false, true)) {
-                                    requestPermissions(permission, REQUEST_SYNC_CONTACTS);
+                                    // TAKCONVO: through ActivityCompat, see below
+                                    ActivityCompat.requestPermissions(
+                                            this, permission, REQUEST_SYNC_CONTACTS);
                                 }
                             });
                 }
@@ -928,7 +934,8 @@ public class StartConversationActivity extends XmppActivity
                         });
                 dialog.show();
             } else {
-                requestPermissions(permission, REQUEST_SYNC_CONTACTS);
+                // TAKCONVO: through ActivityCompat, which the plugin can take over when embedded
+                ActivityCompat.requestPermissions(this, permission, REQUEST_SYNC_CONTACTS);
             }
         }
         return true;

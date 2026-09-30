@@ -6,8 +6,13 @@ import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.ContextThemeWrapper;
+import android.view.Display;
+import android.view.KeyEvent;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -37,15 +42,15 @@ import eu.siacs.conversations.xmpp.manager.MessageArchiveManager;
 import eu.siacs.conversations.xmpp.manager.PepManager;
 import eu.siacs.conversations.xmpp.manager.RosterManager;
 
-import java.util.Arrays;
-
 /**
  * The XMPP account screen: Conversations' own {@code activity_edit_account} layout, in its
  * Material 3 theme, shown in an ATAK pane and driven by {@link XmppEngine} instead of
  * EditAccountActivity (activities of a plugin can't run inside ATAK).
  *
- * <p>With TAK server credentials the fields only show the account. Otherwise it is the login
- * form; the password it takes goes to ATAK's credential store, see {@link XmppSettings}.
+ * <p>With TAK server credentials the fields only show the account's address, and are hidden
+ * while there is none. Otherwise it is the login form; the password it takes goes to ATAK's
+ * credential store, see {@link XmppSettings}. While the account connects a spinner shows, then
+ * the error it ended with, which stays up while Conversations retries.
  */
 public final class AccountView implements XmppEngine.Listener {
 
@@ -58,6 +63,8 @@ public final class AccountView implements XmppEngine.Listener {
 
     /** Shown, masked, in the disabled password field when a password is stored. */
     private static final String PASSWORD_PLACEHOLDER = "xxxxxxxx";
+    /** How long a sign-in may take before its account's state is shown whatever it is. */
+    private static final long ATTEMPT_TIMEOUT_MS = 30_000;
 
     private final Context ui;
     private final Context dialogContext;
@@ -66,6 +73,8 @@ public final class AccountView implements XmppEngine.Listener {
 
     private final View root;
     private final MaterialToolbar toolbar;
+    private final View editor;
+    private final View progress;
     private final ImageView avatar;
     private final TextInputLayout jidLayout;
     private final EditText jid;
@@ -82,10 +91,30 @@ public final class AccountView implements XmppEngine.Listener {
     private boolean edited;
     /** programmatic text changes, not typing */
     private boolean updating;
+    /**
+     * The error the account's last connection attempt ended with. It stays up while
+     * Conversations retries in the background, until the account connects or the user signs in
+     * again, rather than flickering with every retry.
+     */
+    private Account.State shownError;
+    /**
+     * The account's state when the user signed in, while that sign-in hasn't led anywhere yet:
+     * the reconnection is asynchronous, so the previous attempt's error is still there at first.
+     */
+    private Account.State attemptFrom;
+    private final Runnable attemptTimeout = () -> {
+        attemptFrom = null;
+        refresh();
+    };
 
     public AccountView(final Context pluginContext, final Context atakActivity,
             final XmppEngine engine, final Host host) {
-        this.ui = new ContextThemeWrapper(pluginContext, R.style.Theme_Conversations3_Dark);
+        // Conversations' resources, scaled down like its screens in the chat pane
+        final Display display = ((WindowManager) atakActivity
+                .getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
+        this.ui = new ContextThemeWrapper(
+                engine.newUiContext(display, UiScale.override(atakActivity)),
+                R.style.Theme_Conversations3_Dark);
         this.dialogContext = atakActivity;
         this.engine = engine;
         this.host = host;
@@ -93,6 +122,7 @@ public final class AccountView implements XmppEngine.Listener {
         root = ConversationsInflater.inflate(ui, R.layout.activity_edit_account, null, false);
         root.setFitsSystemWindows(false);
         toolbar = root.findViewById(R.id.toolbar);
+        editor = root.findViewById(R.id.editor);
         avatar = root.findViewById(R.id.avater);
         jidLayout = root.findViewById(R.id.account_jid_layout);
         jid = root.findViewById(R.id.account_jid);
@@ -109,6 +139,31 @@ public final class AccountView implements XmppEngine.Listener {
                 R.id.action_regenerate_axolotl_key, R.id.push_row}) {
             root.findViewById(id).setVisibility(View.GONE);
         }
+
+        // in landscape the keyboard would otherwise replace the pane with a full-screen field
+        for (final EditText field : new EditText[] {jid, password}) {
+            field.setImeOptions(field.getImeOptions() | EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                    | EditorInfo.IME_FLAG_NO_FULLSCREEN);
+        }
+        // the login button is at the bottom of the pane, under the keyboard
+        password.setImeOptions((password.getImeOptions() & ~EditorInfo.IME_MASK_ACTION)
+                | EditorInfo.IME_ACTION_DONE);
+        password.setOnEditorActionListener((v, actionId, event) -> {
+            final boolean enter = actionId == EditorInfo.IME_ACTION_DONE
+                    || (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                            && event.getAction() == KeyEvent.ACTION_DOWN);
+            if (enter && save.getVisibility() == View.VISIBLE && save.isEnabled()) {
+                signIn();
+                return true;
+            }
+            return false;
+        });
+
+        final ViewGroup fields = (ViewGroup) passwordLayout.getParent();
+        progress = ConversationsInflater.inflate(ui,
+                com.atakmap.android.takconvo.plugin.R.layout.takconvo_account_progress, fields,
+                false);
+        fields.addView(progress, fields.indexOfChild(passwordLayout) + 1);
 
         final LinearLayout main = root.findViewById(R.id.account_main_layout);
         notice = ConversationsInflater.inflate(ui,
@@ -173,8 +228,11 @@ public final class AccountView implements XmppEngine.Listener {
     private boolean onMenuItem(final MenuItem item) {
         final int id = item.getItemId();
         if (id == com.atakmap.android.takconvo.plugin.R.id.takconvo_action_reconnect) {
+            final Account before = engine.getAccount();
             engine.provision();
             engine.reconnect();
+            startAttempt(before);
+            refresh();
         } else if (id == com.atakmap.android.takconvo.plugin.R.id.takconvo_action_settings) {
             host.openSettings();
         } else if (id == com.atakmap.android.takconvo.plugin.R.id.takconvo_action_test_message) {
@@ -196,13 +254,30 @@ public final class AccountView implements XmppEngine.Listener {
                     com.atakmap.android.takconvo.plugin.R.string.takconvo_full_address_required));
             return;
         }
+        final Account before = engine.getAccount();
         if (!engine.signIn(user, pass)) {
             jidLayout.setError(ui.getString(R.string.invalid_jid));
             return;
         }
         edited = false;
+        startAttempt(before);
         hideKeyboard();
         refresh();
+    }
+
+    /**
+     * The user started a connection attempt: show a spinner, then how it ended, rather than the
+     * previous attempt's error.
+     *
+     * @param before the account before the attempt was started
+     */
+    private void startAttempt(final Account before) {
+        shownError = null;
+        // a new account has no previous attempt; an existing one still shows its last state
+        attemptFrom = before != null && before == engine.getAccount() ? before.getStatus()
+                : Account.State.OFFLINE;
+        root.removeCallbacks(attemptTimeout);
+        root.postDelayed(attemptTimeout, ATTEMPT_TIMEOUT_MS);
     }
 
     private void confirmSignOut() {
@@ -244,6 +319,7 @@ public final class AccountView implements XmppEngine.Listener {
         final XmppSettings.Problem problem = engine.getProblem();
         final Account account = engine.getAccount();
         final boolean tak = settings == null || settings.usesTakCredentials;
+        followAttempt(account);
 
         toolbar.setSubtitle(account != null
                 ? ui.getString(account.getStatus().getReadableId())
@@ -254,7 +330,8 @@ public final class AccountView implements XmppEngine.Listener {
         } else {
             showLoginForm(settings, account);
         }
-        showErrors(account, problem);
+        progress.setVisibility(isConnecting(account) ? View.VISIBLE : View.GONE);
+        showErrors(problem, tak);
         showNotice(settings, problem, account);
         showAvatar(account);
         showStats(account);
@@ -269,25 +346,28 @@ public final class AccountView implements XmppEngine.Listener {
                 .setVisible(account != null);
     }
 
-    /** TAK server credentials: nothing to edit here, the settings decide. */
+    /**
+     * TAK server credentials: nothing to edit here, the settings decide. The address shows once
+     * there is an account; until then there is nothing to show, and the notice explains why and
+     * offers the login form.
+     */
     private void showTakAccount(final XmppSettings settings, final Account account) {
         edited = false;
+        editor.setVisibility(account != null ? View.VISIBLE : View.GONE);
         jidLayout.setHint(ui.getString(R.string.account_settings_jabber_id));
         jidLayout.setSuffixText(null);
-        final String address = account != null ? account.getJid().asBareJid().toString()
-                : settings != null && settings.jid() != null ? settings.jid() : "";
-        setText(jid, address);
-        setText(password, settings != null && settings.password != null
-                ? PASSWORD_PLACEHOLDER : "");
+        setText(jid, account != null ? account.getJid().asBareJid().toString() : "");
         setEditable(jid, false);
-        setEditable(password, false);
-        passwordLayout.setEndIconMode(TextInputLayout.END_ICON_NONE);
+        // the password is ATAK's: nothing to show
+        passwordLayout.setVisibility(View.GONE);
         save.setVisibility(View.GONE);
         cancel.setVisibility(View.GONE);
     }
 
     /** XMPP login: Conversations' login form. */
     private void showLoginForm(final XmppSettings settings, final Account account) {
+        editor.setVisibility(View.VISIBLE);
+        passwordLayout.setVisibility(View.VISIBLE);
         final boolean loggedIn = account != null
                 && account.isOptionSet(Account.OPTION_LOGGED_IN_SUCCESSFULLY)
                 && !account.unauthorized();
@@ -327,8 +407,7 @@ public final class AccountView implements XmppEngine.Listener {
         final Account account = engine.getAccount();
         final boolean filled = jid.getText().toString().trim().length() > 0
                 && password.getText().length() > 0;
-        final Account.State status = account == null ? null : account.getStatus();
-        if (edited || account == null || status.isError()) {
+        if (edited || account == null || shownError != null) {
             save.setVisibility(View.VISIBLE);
             save.setText(R.string.log_in);
             // the placeholder stands for a stored password: a new one has to be typed
@@ -343,18 +422,54 @@ public final class AccountView implements XmppEngine.Listener {
         }
     }
 
-    private void showErrors(final Account account, final XmppSettings.Problem problem) {
+    /** Keeps {@link #shownError} and {@link #attemptFrom} up to date with the account. */
+    private void followAttempt(final Account account) {
+        if (account == null) {
+            shownError = null;
+            attemptFrom = null;
+            return;
+        }
+        final Account.State status = account.getStatus();
+        if (attemptFrom != null && status != attemptFrom) {
+            attemptFrom = null; // the sign-in's attempt started, or already ended
+        }
+        if (attemptFrom != null) {
+            return;
+        }
+        root.removeCallbacks(attemptTimeout);
+        if (account.isOnlineAndConnected()) {
+            shownError = null;
+        } else if (isError(status)) {
+            shownError = status;
+        }
+    }
+
+    private boolean isConnecting(final Account account) {
+        if (account == null || account.isOnlineAndConnected()) {
+            return false;
+        }
+        if (attemptFrom != null) {
+            return true;
+        }
+        final Account.State status = account.getStatus();
+        return shownError == null
+                && (status == Account.State.CONNECTING || status == Account.State.OFFLINE);
+    }
+
+    private static boolean isError(final Account.State status) {
+        return status.isError() || status == Account.State.NO_INTERNET
+                || status == Account.State.AIRPLANE_MODE;
+    }
+
+    private void showErrors(final XmppSettings.Problem problem, final boolean tak) {
         TextInputLayout errorLayout = null;
         String error = null;
-        if (account != null && !account.isOnlineAndConnected()) {
-            final Account.State status = account.getStatus();
-            if (status.isError() || Arrays.asList(Account.State.NO_INTERNET,
-                    Account.State.AIRPLANE_MODE).contains(status)) {
-                errorLayout = status == Account.State.UNAUTHORIZED
-                        || status == Account.State.DOWNGRADE_ATTACK
-                        ? passwordLayout : jidLayout;
-                error = ui.getString(status.getReadableId());
-            }
+        if (shownError != null && attemptFrom == null) {
+            // with TAK server credentials the password field isn't shown
+            errorLayout = !tak && (shownError == Account.State.UNAUTHORIZED
+                    || shownError == Account.State.DOWNGRADE_ATTACK)
+                    ? passwordLayout : jidLayout;
+            error = ui.getString(shownError.getReadableId());
         } else if (problem == XmppSettings.Problem.INVALID_JID) {
             errorLayout = jidLayout;
             error = ui.getString(R.string.invalid_jid);
@@ -392,6 +507,10 @@ public final class AccountView implements XmppEngine.Listener {
             text = ui.getString(
                     com.atakmap.android.takconvo.plugin.R.string.takconvo_notice_invalid_jid);
             offerLogin = true;
+        } else if (shownError == Account.State.TLS_ERROR_UNTRUSTED && attemptFrom == null) {
+            // Conversations would ask whether to trust the certificate; here the settings decide
+            text = ui.getString(
+                    com.atakmap.android.takconvo.plugin.R.string.takconvo_notice_untrusted);
         } else if (tak && account != null) {
             text = ui.getString(
                     com.atakmap.android.takconvo.plugin.R.string.takconvo_notice_tak_credentials,
@@ -402,8 +521,10 @@ public final class AccountView implements XmppEngine.Listener {
         noticeSecondary.setVisibility(offerLogin ? View.VISIBLE : View.GONE);
     }
 
+    /** Once the account has worked: a login that is still being tried keeps the plain form. */
     private void showAvatar(final Account account) {
-        if (account == null) {
+        if (account == null || !(account.isOnlineAndConnected()
+                || account.isOptionSet(Account.OPTION_LOGGED_IN_SUCCESSFULLY))) {
             avatar.setVisibility(View.GONE);
             return;
         }

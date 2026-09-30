@@ -62,4 +62,5 @@ for ($i = 0; $i -lt 30; $i++) {
     if ($online) { Write-Host 'XMPP account online'; exit 0 }
 }
 Write-Host 'the account did not come online within 60 s; recent log:'
-& $Adb -s $Serial logcat -d | Select-String 'TakConvo\.|AndroidRuntime' | Select-Object -Last 20
+& $Adb -s $Serial logcat -d -s TakConvo.Plugin:D TakConvo.XmppEngine:D AndroidRuntime:E |
+    Select-Object -Last 20

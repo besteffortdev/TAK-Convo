@@ -12,8 +12,8 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-09-30 (evening) it is **26 modified files, 1 added file, 2 removed manifests**
-(81 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
+As of 2026-09-30 (evening) it is **29 modified files, 1 added file, 2 removed manifests**
+(90 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
 comment: `grep -rn TAKCONVO conversations/src`. When codeberg is unreachable,
 `UPSTREAM_DIR=<a checkout of the tag> tools/fork-diff.sh` compares with a local clone.
 
@@ -149,7 +149,10 @@ Conversations' activities run hosted by the plugin, their views moved into an AT
 | `java/eu/siacs/conversations/ui/Activities.java` | `setStatusAndNavigationBarColors()` does nothing when embedded: the system bars belong to ATAK's window. |
 | `java/eu/siacs/conversations/ui/ConversationsActivity.java` | The start-up checks in `onBackendConnected()` (crash report prompt, battery optimisation, permission prompts) are skipped when embedded. |
 | `java/eu/siacs/conversations/ui/XmppActivity.java`, `ContactDetailsActivity.java`, `ConversationsActivity.java`, `StartConversationActivity.java` (4 places) | `requestPermissions(...)` → `ActivityCompat.requestPermissions(this, ...)`. `Activity.requestPermissions` NPEs in an embedded activity (it has no `ActivityThread`); `ActivityCompat` lets the plugin's `PermissionCompatDelegate` make the request through ATAK's activity. Same behaviour outside ATAK. |
-| `res/layout/fragment_conversation.xml` | The attachment choices are one horizontally scrolling row (`HorizontalScrollView` around the `ConstraintLayout`, `Flow` with `wrapMode="none"`) instead of a wrapping grid. A 350 dp pane only fits two choices per row, and three rows didn't fit in the pane's height. `message_input_box` is laid out above the new `attachment_choices_scroll`. The `attachment_choices_max_element_wrap` integer is now unused. |
+| `res/layout/fragment_conversation.xml` | The attachment choices are one horizontally scrolling row (`HorizontalScrollView` around the `ConstraintLayout`, `Flow` with `wrapMode="none"`) instead of a wrapping grid. A 350 dp pane only fits two choices per row, and three rows didn't fit in the pane's height. `message_input_box` is laid out above the new `attachment_choices_scroll`. The `attachment_choices_max_element_wrap` integer is now unused. The input row is more compact: less padding (4 dp instead of 6 dp, 8sp and 12 dp), a 20 dp attach icon without the icon button's minimum size and insets, a 24 dp send icon instead of 32 dp. |
+| `res/values/dimens.xml` | `bubble_avatar_size` 48 → 36 dp (the avatar next to messages, and a bubble's minimum height), `avatar_on_conversation_overview` 56 → 44 dp. |
+| `res/layout/item_conversation.xml` | The chat list avatar is `@dimen/avatar_on_conversation_overview` (the size its image is loaded at) instead of a fixed 56 dp. |
+| `res/layout/item_media_choice.xml` | Attachment choices: 76 dp wide instead of 108, 28 dp icons with 12 dp padding instead of 40 and 16. |
 
 ### F. Files handed to other apps
 
@@ -212,7 +215,7 @@ Conversations APIs the plugin (`app/`) uses directly:
 | `xmpp/EmbeddedNotifications` | `TakConvoCompat.NotificationFilter`; style `Theme.Conversations3` (the icons' tints) |
 | `contacts/XmppContacts` | `Conversation`: `getAccount`, `getMode`/`MODE_SINGLE`, `getAddress`, `unreadCount`. `Account.getRoster().getContacts()`, `Contact.getOption(Contact.Options.TO)`, `getShownStatus()`, `Presence.Availability` |
 | `debug/DebugReceiver` | `Message(conversation, body, ENCRYPTION_NONE, STATUS_RECEIVED)`, `markUnread`, `Conversation.add`, `XmppConnectionService.createMessageAsync`, `getNotificationService().push`, `updateConversationUi` |
-| `ui/AccountView` | layout `activity_edit_account` and its view ids (`toolbar`, `avater`, `account_jid(_layout)`, `account_password(_layout)`, `save_button`, `cancel_button`, `stats`, `account_main_layout`, and the ids it hides), style `Theme.Conversations3.Dark`, `AxolotlService`, `UIHelper`, `XmppConnection` and its managers (`Blocking`, `Carbons`, `ClientStateIndication`, `ExternalServiceDiscovery`, `HttpUpload`, `MessageArchive`, `Pep`, `Roster`) |
+| `ui/AccountView` | layout `activity_edit_account` and its view ids (`toolbar`, `editor`, `avater`, `account_jid(_layout)`, `account_password(_layout)` and that they share a parent, `save_button`, `cancel_button`, `stats`, `account_main_layout`, and the ids it hides), string `account_status_connecting`, `Account.State` and `getReadableId()`, style `Theme.Conversations3.Dark`, `AxolotlService`, `UIHelper`, `XmppConnection` and its managers (`Blocking`, `Carbons`, `ClientStateIndication`, `ExternalServiceDiscovery`, `HttpUpload`, `MessageArchive`, `Pep`, `Roster`) |
 | `ui/host/EmbeddedActivityHost` | activity class names (the `SUPPORTED` and `FLOATING` lists, `ui.activity.SettingsActivity`, `EditAccountActivity`, `ManageAccountActivity`), `ConversationsActivity.ACTION_VIEW_CONVERSATION` / `EXTRA_CONVERSATION`, styles `Theme.Conversations3` and `Theme.Conversations3.Dialog`, `BaseActivity.embeddedContent` |
 
 ## Moving to a newer upstream release

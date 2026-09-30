@@ -17,7 +17,6 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -40,6 +39,7 @@ import androidx.lifecycle.LifecycleEventObserver;
 import androidx.lifecycle.LifecycleOwner;
 import androidx.lifecycle.LifecycleRegistry;
 
+import com.atakmap.android.takconvo.plugin.ui.UiScale;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 import com.atakmap.coremap.log.Log;
 
@@ -461,7 +461,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
      * pane. Touches outside it do nothing, as with {@code setFinishOnTouchOutside(false)}.
      */
     private View floatOver(final Activity activity, final View content) {
-        final float density = atak.getResources().getDisplayMetrics().density;
+        final float density = activity.getResources().getDisplayMetrics().density;
         final TypedArray a = activity.obtainStyledAttributes(new int[] {
                 com.google.android.material.R.attr.colorSurfaceContainerHigh});
         final GradientDrawable background = new GradientDrawable();
@@ -483,18 +483,18 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     }
 
     /**
-     * The resources an activity gets: dark, and sized like the pane rather than the screen, so
-     * that Conversations picks its phone layouts in a side pane of a tablet.
+     * The resources an activity gets: dark, scaled down ({@link UiScale}), and sized like the
+     * pane rather than the screen, so that Conversations picks its phone layouts in a side pane
+     * of a tablet.
      */
     private Configuration paneConfiguration() {
-        final Configuration override = new Configuration();
-        override.uiMode = Configuration.UI_MODE_NIGHT_YES;
-        final DisplayMetrics metrics = atak.getResources().getDisplayMetrics();
+        final Configuration override = UiScale.override(atak);
+        final float density = UiScale.density(atak);
         final int width = container.getWidth() > 0 ? container.getWidth() : paneWidthPx;
         final int height = container.getHeight() > 0 ? container.getHeight() : paneHeightPx;
         if (width > 0 && height > 0) {
-            override.screenWidthDp = Math.round(width / metrics.density);
-            override.screenHeightDp = Math.round(height / metrics.density);
+            override.screenWidthDp = Math.round(width / density);
+            override.screenHeightDp = Math.round(height / density);
             override.smallestScreenWidthDp =
                     Math.min(override.screenWidthDp, override.screenHeightDp);
             override.orientation = width > height ? Configuration.ORIENTATION_LANDSCAPE

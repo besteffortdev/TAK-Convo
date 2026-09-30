@@ -3,12 +3,13 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- TAKCONVO: 108dp wide, 40dp icons with 16dp padding; smaller in an ATAK side pane -->
     <LinearLayout
         android:id="@+id/item_file"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:minWidth="108dp"
+        android:minWidth="76dp"
         android:orientation="vertical">
 
         <com.google.android.material.button.MaterialButton
@@ -16,8 +17,8 @@
             style="?attr/materialIconButtonFilledTonalStyle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:padding="16dp"
-            app:iconSize="40dp"
+            android:padding="12dp"
+            app:iconSize="28dp"
             tools:icon="@drawable/ic_description_24dp" />
 
         <TextView

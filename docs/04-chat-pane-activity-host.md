@@ -313,18 +313,24 @@ request for `READ_CONTACTS` (undeclared by ATAK → denied) together with `CAMER
 ```text
 paneConfiguration():
     uiMode = NIGHT_YES                                   # ATAK is always dark
+    densityDpi = ATAK's densityDpi × UiScale.FACTOR (0.8)
     if pane size is known:
-        screenWidthDp, screenHeightDp = pane size / density
+        screenWidthDp, screenHeightDp = pane size / scaled density
         smallestScreenWidthDp = min(...); orientation from the pane's shape
 ```
 
+Conversations is designed for a whole phone screen, and next to ATAK's denser UI its screens
+looked oversized in a side pane. A lower density scales every dp and sp of its resources
+alike: text, icons, touch targets. The pane also gets more dp (a 350 dp pane becomes 437 dp),
+which selects Conversations' `w384dp` resources.
+
 Resources are chosen for the **pane's** size, not the screen's, so a half-screen pane on a
 tablet gets Conversations' phone layouts. On a 480 dpi phone in landscape a half-width pane is
-about 350 × 330 dp. The first activity is created before the pane is laid out, so
-`ChatDropDown` estimates the size: half (or all) of the **map view**, which ATAK divides
-between the map and the pane. The display's size was too large: it counts the system bars, and
-it put a 350 dp pane in Conversations' `w384dp` bucket, where a voice message's player is wider
-than its bubble. The host also sets `AppCompatDelegate.setDefaultNightMode(MODE_NIGHT_YES)`,
+about 350 × 330 dp at ATAK's density. The first activity is created before the pane is laid
+out, so `ChatDropDown` estimates the size: half (or all) of the **map view**, which ATAK
+divides between the map and the pane. The display's size was too large: it counts the system
+bars, and before the 0.8 scale it put a 350 dp pane in Conversations' `w384dp` bucket, where a
+voice message's player was wider than its bubble. The host also sets `AppCompatDelegate.setDefaultNightMode(MODE_NIGHT_YES)`,
 because AppCompat would otherwise follow the device and an embedded activity can't
 `recreate()`. That setting is process-wide: it would also affect another AppCompat plugin in
 ATAK.
@@ -366,6 +372,7 @@ through the provider's grant.
 | `ConversationsActivity.onBackendConnected` skips start-up prompts | crash reports, battery optimisation and permissions are ATAK's business |
 | `requestPermissions` → `ActivityCompat.requestPermissions` | see "Runtime permissions" |
 | attachment choices in one scrolling row | the pane is too narrow and low for the grid |
+| smaller avatars (chat list 44 dp, messages 36 dp) and attachment choices, a compact message field | in proportion with the pane, on top of the 0.8 scale |
 | `FileBackend` provider and camera | see "Files handed to other apps" |
 | call buttons hidden, calls neither advertised nor accepted | `RtpSessionActivity` can't run embedded, see [05](05-conversations-fork.md#h-no-calls-inside-atak) |
 

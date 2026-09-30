@@ -202,37 +202,41 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
 23. **Switch a feature off rather than refuse its screen.** Conversations' call button sends the
     call proposal, and the contact's phone rings, before it opens the call screen. Calls are
     hidden, not advertised and not accepted, reusing upstream's "no calls over Tor" paths.
+24. **A phone app's UI is oversized in a side pane.** A lower `densityDpi` in the embedded
+    screens' configuration (0.8 × ATAK's) scales all of Conversations' dp and sp at once; only
+    the few sizes still out of proportion (avatars, attachment buttons, the input row) were
+    changed in the fork.
 
 **Server and provisioning**
 
-24. **Openfire holds a killed client's session detached and doesn't answer a bind for the same
+25. **Openfire holds a killed client's session detached and doesn't answer a bind for the same
     resource** until it drops it (the new stream idles out after 10 s first). A fresh resource
     on every ATAK start makes login immediate.
-25. **TAK server credentials arrive after the plugin starts.** Provisioning re-runs on TAK
+26. **TAK server credentials arrive after the plugin starts.** Provisioning re-runs on TAK
     server connection changes and never falls back to another identity in the meantime.
-26. **The organisation's CA is already in ATAK's TAK server truststore**, so reusing it as a
+27. **The organisation's CA is already in ATAK's TAK server truststore**, so reusing it as a
     trust source needs no extra provisioning. `CertificateManager.getLocalTrustManager(String)`
     rebuilds from ATAK's database on each call, so newly imported truststores count.
-27. **`.pref` files may carry Booleans as strings**, which breaks preference check boxes; they are
+28. **`.pref` files may carry Booleans as strings**, which breaks preference check boxes; they are
     normalised on load.
 
 **Notifications, alarms and contacts**
 
-28. **Registering as one of Conversations' UI listeners makes it believe it is on screen.** The
+29. **Registering as one of Conversations' UI listeners makes it believe it is on screen.** The
     engine did, to follow changes, so Conversations never told the server it was inactive and
     silenced every notification while no chat was open. The fork calls an observer from the same
     places instead ([docs/02](docs/02-embedded-engine.md#changes-and-threads)).
-29. **Every PendingIntent aimed at the embedded app's components is silently dropped**:
+30. **Every PendingIntent aimed at the embedded app's components is silently dropped**:
     notification taps and actions, and all `AlarmManager` alarms, i.e. Conversations' pings and
     reconnection timers. They go through ATAK's activity (its `internalIntent` extra, like ATAK's
     own `NotificationUtil`) and a receiver registered in ATAK's process instead.
-30. **An embedded app's notifications are ATAK's.** Resource icons resolve in ATAK's package: a
+31. **An embedded app's notifications are ATAK's.** Resource icons resolve in ATAK's package: a
     random ATAK drawable, or, if the id doesn't exist there, "Bad notification posted", which
     kills ATAK. They are posted with bitmap icons. The system shows them as ATAK's (name, app
     icon on Samsung), and Conversations' notification channels are listed under ATAK.
-31. **Shortcuts an embedded app publishes are ATAK's launcher shortcuts**, opening activities ATAK
+32. **Shortcuts an embedded app publishes are ATAK's launcher shortcuts**, opening activities ATAK
     doesn't have. Conversations publishes them for frequent contacts; that is off.
-32. **ATAK's contacts take plugin handlers per connector type, ahead of their own.** One for
+33. **ATAK's contacts take plugin handlers per connector type, ahead of their own.** One for
     `connector.xmpp` replaces ATAK's external-app handler; its `NotificationCount` and `Presence`
     features feed the contact rows, and `Contacts.updateTotalUnreadCount()` sets ATAK's Contacts
     and Chat button badges. A plugin's toolbar button is a `NavButtonModel` found by the
@@ -241,10 +245,10 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
 
 **Maintenance**
 
-33. **Every change to Conversations is marked and documented**
+34. **Every change to Conversations is marked and documented**
     ([docs/05](docs/05-conversations-fork.md)), and `tools/fork-diff.sh` regenerates the exact
     diff against upstream; the doc has the procedure to move to a newer release.
-34. **Upstream Conversations has paths longer than 260 characters**: clone it with
+35. **Upstream Conversations has paths longer than 260 characters**: clone it with
     `core.longpaths=true` on Windows or files silently go missing.
 
 ## Repository layout

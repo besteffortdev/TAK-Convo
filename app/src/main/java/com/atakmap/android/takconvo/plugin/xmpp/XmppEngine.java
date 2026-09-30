@@ -373,8 +373,19 @@ public final class XmppEngine {
             return false;
         }
         Log.d(TAG, "signing in as " + username);
+        final Account before = getAccount();
+        final String previousPassword = before == null ? null : before.getPassword();
         XmppSettings.saveLogin(username, password);
         provision();
+        final Account account = getAccount();
+        if (account != null && account == before
+                && Objects.equals(previousPassword, account.getPassword())
+                && !account.isOptionSet(Account.OPTION_DISABLED)
+                && !account.isOnlineAndConnected()) {
+            // nothing changed, so provision() left it alone: try now rather than after the
+            // backoff, e.g. the server is back or its CA was just imported
+            service.reconnectAccountInBackground(account);
+        }
         return true;
     }
 

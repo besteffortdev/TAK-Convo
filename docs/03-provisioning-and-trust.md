@@ -150,6 +150,31 @@ connects stored accounts right away.
 `Theme.Conversations3.Dark`, driven by `XmppEngine` instead of `EditAccountActivity`: status,
 the account's address, server features, and login/logout in login mode. Parts that don't apply
 to a provisioned account (registration, port fields, push, OMEMO regeneration...) are hidden.
+It uses the same scaled-down UI context as the chat pane (`UiScale`, see
+[04](04-chat-pane-activity-host.md#configuration-and-theme)).
+
+```text
+refresh():
+    TAK credentials:  address and password fields hidden until there is an account; then the
+                      address only, read-only. The notice explains a missing account and offers
+                      "Use an XMPP account", which switches to the login form.
+    login form:       address and password, editable until the account has logged in once;
+                      no keyboard extract mode (IME_FLAG_NO_EXTRACT_UI / NO_FULLSCREEN), and
+                      "Done" on the password signs in (the button is under the keyboard)
+    avatar:           only once the account is online or has logged in before
+    spinner:          while the account connects and no error is shown
+    error:            the state the last attempt ended with (shownError), under the address or
+                      password field; it stays while Conversations retries in the background,
+                      until the account connects or the user signs in or reconnects again
+    TLS_ERROR_UNTRUSTED: the notice explains the trust sources (Conversations would ask
+                      whether to trust the certificate; here the settings decide)
+
+signIn() / Reconnect:
+    engine.signIn(...)                 # reconnects even when nothing changed
+    shownError = null; attemptFrom = the account's state now
+    # the reconnection is asynchronous: while the state is still attemptFrom, it is the
+    # previous attempt's and shows as the spinner (for at most 30 s)
+```
 
 A plugin view outside an `AppCompatActivity` has no `AppCompatDelegate` to turn `<Button>`,
 `<TextView>`... tags into their Material versions, so they lost their styling.

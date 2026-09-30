@@ -68,6 +68,9 @@
                 app:textColor="?colorOnTertiaryContainer"
                 tools:ignore="RtlCompat" />
 
+            <!-- TAKCONVO: a more compact input row for an ATAK side pane: less padding
+                 (6dp, 8sp, 12dp), a 20dp attach icon without the button's minimum size, and
+                 a 24dp send icon (32dp) -->
             <RelativeLayout
                 android:id="@+id/message_input_box"
                 android:layout_width="match_parent"
@@ -75,7 +78,7 @@
                 android:layout_alignWithParentIfMissing="true"
                 android:layout_above="@+id/attachment_choices_scroll"
                 android:paddingHorizontal="8dp"
-                android:paddingVertical="6dp">
+                android:paddingVertical="4dp">
 
                 <RelativeLayout
                     android:id="@+id/input_layout"
@@ -94,8 +97,8 @@
                         android:layout_height="wrap_content"
                         android:layout_alignParentStart="true"
                         android:layout_centerVertical="true"
-                        android:layout_marginHorizontal="12dp"
-                        android:layout_marginVertical="8sp"
+                        android:layout_marginHorizontal="8dp"
+                        android:layout_marginVertical="4dp"
                         android:layout_toStartOf="@+id/attach_button"
                         android:orientation="vertical">
 
@@ -103,7 +106,7 @@
                             android:id="@+id/text_input_hint"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="8sp"
+                            android:layout_marginBottom="4dp"
                             android:maxLines="1"
                             android:textAppearance="?textAppearanceBodySmall"
                             android:textColor="?colorOnTertiaryContainer"
@@ -151,8 +154,13 @@
                         android:layout_alignParentEnd="true"
                         android:layout_centerVertical="true"
                         android:contentDescription="@string/add_attachment"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:minWidth="0dp"
+                        android:minHeight="0dp"
+                        android:padding="8dp"
                         app:icon="@drawable/ic_attach_file_24dp"
-                        app:iconSize="24dp"
+                        app:iconSize="20dp"
                         app:iconTint="?colorOnTertiaryContainer" />
 
 
@@ -169,7 +177,7 @@
                     android:backgroundTint="?colorSurfaceContainerHigh"
                     android:contentDescription="@string/send_message"
                     app:icon="@drawable/ic_send_24dp"
-                    app:iconSize="32dp" />
+                    app:iconSize="24dp" />
             </RelativeLayout>
 
             <RelativeLayout

@@ -174,7 +174,10 @@ After an upstream merge, a dependency change or a change to the host:
 
 1. `AtakLinkCheck`: no finding.
 2. ATAK starts, the plugin loads, `status: ONLINE` in `TakConvo.Plugin`.
-3. Account pane: status, server features; login and logout in XMPP-login mode.
+3. Account pane: status, server features; login and logout in XMPP-login mode. Without TAK
+   credentials only the notice shows, and "Use an XMPP account" brings the fields. In
+   landscape the keyboard leaves the pane visible. Signing in to a server that fails shows a
+   spinner, then the error, which stays up during background retries (Reconnect does the same).
 4. Chat pane from the toolbar: chat list; open a chat; send to yourself; the message is
    delivered (double tick) and encrypted (shield).
 5. Back: chat → list → pane closes. Reopen: same state.

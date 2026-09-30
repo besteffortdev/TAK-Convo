@@ -25,17 +25,19 @@ build, against an Openfire server:
 
 | Works | Not yet |
 |---|---|
-| engine in-process, provisioning from `.pref`, TAK credentials or XMPP login | voice messages, calls (audio/video) |
+| engine in-process, provisioning from `.pref`, TAK credentials or XMPP login | calls (audio/video): switched off, not advertised |
 | trust from TAK truststores / Android CA store / CA file | share or show a location (should become ATAK map integration) |
 | account pane, tool preferences, `.pref` import | QR codes, profile pictures, backups |
 | chat pane: chat list, chats, group chats, start chat, channel details, search | TAK callsigns as the names of XMPP contacts |
 | sending/receiving with OMEMO, reactions, context menus, text selection | re-selecting resources when the pane is resized or the device rotated |
-| attachments: pick, upload, open with another app, camera | some Conversations screens are allowed but untested (see docs/04) |
+| attachments: pick, upload, open with another app, camera; voice messages | some Conversations screens are allowed but untested (see docs/04) |
 | ATAK contacts: XMPP connector opens the chat, unread counts on contacts and buttons | XMPP presence dots on contacts: implemented, untested with a real second user |
 | notifications: sound when the pane is closed, tap opens the chat, reply, mark as read | |
 
-Release ATAK (e.g. Play Store ATAK-CAN) loads only plugins signed by TAK.gov, so the plugin
-runs on ATAK developer builds until it goes through TAK.gov signing.
+Release ATAK (e.g. Play Store ATAK-CAN 5.8) loads only plugins signed by TAK.gov, and its API
+is obfuscated, so a plugin for it must be built with that version's SDK and mapping. Until the
+plugin goes through TAK.gov signing, it runs on the SDK's developer ATAK (see
+[docs/07](docs/07-development-and-testing.md#other-atak-versions-and-release-atak)).
 
 ## How it works
 
@@ -128,8 +130,10 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
 **ATAK as a platform**
 
 1. **Release ATAK only loads TAK.gov-signed plugins.** Play Store ATAK-CAN 5.8 logs
-   `signature mismatch` and refuses a self-signed plugin whatever its `plugin-api`. Use the
-   SDK's developer `atak.apk` until the plugin goes through TAK.gov signing.
+   `signature mismatch` and refuses a self-signed plugin whatever its `plugin-api`. Its API is
+   also ProGuard-obfuscated (`AtakBroadcast.getInstance()` is `a()`): release plugins are built
+   with the SDK's mapping of that exact version. Use the SDK's developer `atak.apk` until the
+   plugin goes through TAK.gov signing.
 2. **`artifacts.tak.gov` is behind an Appgate SDP gateway.** The build uses the public
    ATAK-CIV SDK offline (`takdev.plugin` + `sdk.path`).
 3. **A plugin's components never run.** Activities, services, receivers and providers in the
@@ -187,37 +191,48 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
 20. **Conversations must not change the process**: its `Application.onCreate` installs Conscrypt
     as the first security provider and a global exception handler. The fork has an embedded
     variant without them.
+21. **A plugin's resource id means nothing to an ATAK context.** `Toast.makeText(atak,
+    R.string.x, ...)` looks the id up in ATAK's resources and throws
+    `Resources$NotFoundException`. The "Not available inside ATAK" toast did that, so every
+    unavailable button (the voice message button among them) crashed ATAK. Resolve with the
+    plugin's context and pass the text.
+22. **Dialog-themed activities can float in the pane.** The voice recorder is shown centred over
+    a scrim, and the chat under it stays visible and paused. The `FLAG_KEEP_SCREEN_ON` it sets
+    on its unseen window is moved to its views in ATAK's window.
+23. **Switch a feature off rather than refuse its screen.** Conversations' call button sends the
+    call proposal, and the contact's phone rings, before it opens the call screen. Calls are
+    hidden, not advertised and not accepted, reusing upstream's "no calls over Tor" paths.
 
 **Server and provisioning**
 
-21. **Openfire holds a killed client's session detached and doesn't answer a bind for the same
+24. **Openfire holds a killed client's session detached and doesn't answer a bind for the same
     resource** until it drops it (the new stream idles out after 10 s first). A fresh resource
     on every ATAK start makes login immediate.
-22. **TAK server credentials arrive after the plugin starts.** Provisioning re-runs on TAK
+25. **TAK server credentials arrive after the plugin starts.** Provisioning re-runs on TAK
     server connection changes and never falls back to another identity in the meantime.
-23. **The organisation's CA is already in ATAK's TAK server truststore**, so reusing it as a
+26. **The organisation's CA is already in ATAK's TAK server truststore**, so reusing it as a
     trust source needs no extra provisioning. `CertificateManager.getLocalTrustManager(String)`
     rebuilds from ATAK's database on each call, so newly imported truststores count.
-24. **`.pref` files may carry Booleans as strings**, which breaks preference check boxes; they are
+27. **`.pref` files may carry Booleans as strings**, which breaks preference check boxes; they are
     normalised on load.
 
 **Notifications, alarms and contacts**
 
-25. **Registering as one of Conversations' UI listeners makes it believe it is on screen.** The
+28. **Registering as one of Conversations' UI listeners makes it believe it is on screen.** The
     engine did, to follow changes, so Conversations never told the server it was inactive and
     silenced every notification while no chat was open. The fork calls an observer from the same
     places instead ([docs/02](docs/02-embedded-engine.md#changes-and-threads)).
-26. **Every PendingIntent aimed at the embedded app's components is silently dropped**:
+29. **Every PendingIntent aimed at the embedded app's components is silently dropped**:
     notification taps and actions, and all `AlarmManager` alarms, i.e. Conversations' pings and
     reconnection timers. They go through ATAK's activity (its `internalIntent` extra, like ATAK's
     own `NotificationUtil`) and a receiver registered in ATAK's process instead.
-27. **An embedded app's notifications are ATAK's.** Resource icons resolve in ATAK's package: a
+30. **An embedded app's notifications are ATAK's.** Resource icons resolve in ATAK's package: a
     random ATAK drawable, or, if the id doesn't exist there, "Bad notification posted", which
     kills ATAK. They are posted with bitmap icons. The system shows them as ATAK's (name, app
     icon on Samsung), and Conversations' notification channels are listed under ATAK.
-28. **Shortcuts an embedded app publishes are ATAK's launcher shortcuts**, opening activities ATAK
+31. **Shortcuts an embedded app publishes are ATAK's launcher shortcuts**, opening activities ATAK
     doesn't have. Conversations publishes them for frequent contacts; that is off.
-29. **ATAK's contacts take plugin handlers per connector type, ahead of their own.** One for
+32. **ATAK's contacts take plugin handlers per connector type, ahead of their own.** One for
     `connector.xmpp` replaces ATAK's external-app handler; its `NotificationCount` and `Presence`
     features feed the contact rows, and `Contacts.updateTotalUnreadCount()` sets ATAK's Contacts
     and Chat button badges. A plugin's toolbar button is a `NavButtonModel` found by the
@@ -226,10 +241,10 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
 
 **Maintenance**
 
-30. **Every change to Conversations is marked and documented**
+33. **Every change to Conversations is marked and documented**
     ([docs/05](docs/05-conversations-fork.md)), and `tools/fork-diff.sh` regenerates the exact
     diff against upstream; the doc has the procedure to move to a newer release.
-31. **Upstream Conversations has paths longer than 260 characters**: clone it with
+34. **Upstream Conversations has paths longer than 260 characters**: clone it with
     `core.longpaths=true` on Windows or files silently go missing.
 
 ## Repository layout

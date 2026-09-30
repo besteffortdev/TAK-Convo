@@ -29,14 +29,16 @@ public final class ChatDropDown extends DropDownReceiver implements DropDown.OnS
             }
             return;
         }
-        final DisplayMetrics metrics = getMapView().getContext().getResources()
-                .getDisplayMetrics();
+        // ATAK sizes the pane as a fraction of the map's area, which the closed pane leaves
+        // whole; the display also counts the system bars
+        final MapView mapView = getMapView();
+        final DisplayMetrics metrics = mapView.getContext().getResources().getDisplayMetrics();
+        final int width = mapView.getWidth() > 0 ? mapView.getWidth() : metrics.widthPixels;
+        final int height = mapView.getHeight() > 0 ? mapView.getHeight() : metrics.heightPixels;
         if (isPortrait()) {
-            host.setPaneSize((int) (metrics.widthPixels * FULL_WIDTH),
-                    (int) (metrics.heightPixels * HALF_HEIGHT));
+            host.setPaneSize((int) (width * FULL_WIDTH), (int) (height * HALF_HEIGHT));
         } else {
-            host.setPaneSize((int) (metrics.widthPixels * HALF_WIDTH),
-                    (int) (metrics.heightPixels * FULL_HEIGHT));
+            host.setPaneSize((int) (width * HALF_WIDTH), (int) (height * FULL_HEIGHT));
         }
         // ignoreBackButton: ATAK keeps the pane on its stack under other drop-downs, and back
         // never closes it by itself, only goBack() does

@@ -12,8 +12,8 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-09-30 (evening) it is **24 modified files, 1 added file, 2 removed manifests**
-(78 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
+As of 2026-09-30 (evening) it is **26 modified files, 1 added file, 2 removed manifests**
+(81 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
 comment: `grep -rn TAKCONVO conversations/src`. When codeberg is unreachable,
 `UPSTREAM_DIR=<a checkout of the tag> tools/fork-diff.sh` compares with a local clone.
 
@@ -180,7 +180,19 @@ dropped by the system, notifications showed random ATAK icons (or crash ATAK whe
 doesn't exist there), a "1 of 1 accounts connected" notification appeared, and Conversations
 silenced its notifications whenever no chat was open.
 
-### H. Diagnostics
+### H. No calls inside ATAK
+
+Calls need `RtpSessionActivity`, a full-screen activity with the system's call integration,
+which a plugin can't run. Upstream's own switch for "no calls" is Tor mode, and these changes
+reuse its paths.
+
+| File | Change |
+|---|---|
+| `java/eu/siacs/conversations/ui/ConversationFragment.java` | The call and ongoing-call toolbar items are hidden when embedded. Upstream's call button proposes the call (the contact's device rings) before it starts `RtpSessionActivity`, so it wouldn't just fail. |
+| `java/eu/siacs/conversations/xmpp/manager/DiscoManager.java` | The Jingle RTP features (`VOIP_NAMESPACES`) aren't advertised when embedded, so contacts' clients don't offer to call this device. |
+| `java/eu/siacs/conversations/xmpp/manager/JingleManager.java` | `isUsingClearNet()`, which only gates RTP, is false when embedded: incoming RTP `session-initiate`s get an `unsupported-info` error, and call proposals are ignored, as over Tor. |
+
+### I. Diagnostics
 
 | File | Change |
 |---|---|
@@ -201,7 +213,7 @@ Conversations APIs the plugin (`app/`) uses directly:
 | `contacts/XmppContacts` | `Conversation`: `getAccount`, `getMode`/`MODE_SINGLE`, `getAddress`, `unreadCount`. `Account.getRoster().getContacts()`, `Contact.getOption(Contact.Options.TO)`, `getShownStatus()`, `Presence.Availability` |
 | `debug/DebugReceiver` | `Message(conversation, body, ENCRYPTION_NONE, STATUS_RECEIVED)`, `markUnread`, `Conversation.add`, `XmppConnectionService.createMessageAsync`, `getNotificationService().push`, `updateConversationUi` |
 | `ui/AccountView` | layout `activity_edit_account` and its view ids (`toolbar`, `avater`, `account_jid(_layout)`, `account_password(_layout)`, `save_button`, `cancel_button`, `stats`, `account_main_layout`, and the ids it hides), style `Theme.Conversations3.Dark`, `AxolotlService`, `UIHelper`, `XmppConnection` and its managers (`Blocking`, `Carbons`, `ClientStateIndication`, `ExternalServiceDiscovery`, `HttpUpload`, `MessageArchive`, `Pep`, `Roster`) |
-| `ui/host/EmbeddedActivityHost` | activity class names (the `SUPPORTED` list, `ui.activity.SettingsActivity`, `EditAccountActivity`, `ManageAccountActivity`), `ConversationsActivity.ACTION_VIEW_CONVERSATION` / `EXTRA_CONVERSATION`, style `Theme.Conversations3`, `BaseActivity.embeddedContent` |
+| `ui/host/EmbeddedActivityHost` | activity class names (the `SUPPORTED` and `FLOATING` lists, `ui.activity.SettingsActivity`, `EditAccountActivity`, `ManageAccountActivity`), `ConversationsActivity.ACTION_VIEW_CONVERSATION` / `EXTRA_CONVERSATION`, styles `Theme.Conversations3` and `Theme.Conversations3.Dialog`, `BaseActivity.embeddedContent` |
 
 ## Moving to a newer upstream release
 
@@ -238,7 +250,9 @@ Conversations APIs the plugin (`app/`) uses directly:
    (`grep -rn "[^.a-zA-Z]requestPermissions(" conversations/src`) and route them through
    `ActivityCompat`.
 8. **Check new activities.** Any activity that should open inside the pane goes into
-   `EmbeddedActivityHost.SUPPORTED` once tested; others show "Not available inside ATAK".
+   `EmbeddedActivityHost.SUPPORTED` once tested, and into `FLOATING` too if its theme is a
+   dialog; others show "Not available inside ATAK". A new entry point to calls must be hidden
+   like the toolbar's (section H).
    **Check new PendingIntents and notification paths**
    (`grep -rn "PendingIntent.get\|\.notify(\|pushDynamicShortcut" conversations/src/main`):
    PendingIntents aimed at Conversations' components go through `TakConvoCompat`, and

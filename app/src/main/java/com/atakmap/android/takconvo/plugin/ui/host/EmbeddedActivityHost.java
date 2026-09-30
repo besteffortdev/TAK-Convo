@@ -11,14 +11,18 @@ import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.content.res.TypedArray;
+import android.graphics.Color;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.DisplayMetrics;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
@@ -98,7 +102,15 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             "eu.siacs.conversations.ui.MediaBrowserActivity",
             "eu.siacs.conversations.ui.BlocklistActivity",
             "eu.siacs.conversations.ui.SearchActivity",
-            "eu.siacs.conversations.ui.TrustKeysActivity"));
+            "eu.siacs.conversations.ui.TrustKeysActivity",
+            "eu.siacs.conversations.ui.RecordingActivity"));
+
+    /**
+     * Dialog-themed activities: shown over the activity below, which stays visible and paused,
+     * as a floating window would leave it.
+     */
+    private static final Set<String> FLOATING = new HashSet<>(Arrays.asList(
+            "eu.siacs.conversations.ui.RecordingActivity"));
 
     private static final String SETTINGS_ACTIVITY =
             "eu.siacs.conversations.ui.activity.SettingsActivity";
@@ -113,16 +125,20 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         /** who gets the result, or null */
         final Record caller;
         final int requestCode;
+        /** shown over the activity below instead of hiding it */
+        final boolean floating;
         View content;
         boolean started;
         boolean resumed;
         boolean stoppedBefore;
         boolean finishing;
 
-        Record(final Activity activity, final Record caller, final int requestCode) {
+        Record(final Activity activity, final Record caller, final int requestCode,
+                final boolean floating) {
             this.activity = activity;
             this.caller = caller;
             this.requestCode = requestCode;
+            this.floating = floating;
         }
 
         @Override
@@ -245,7 +261,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             return;
         }
         this.visible = visible;
-        settleTop();
+        settleShown();
     }
 
     /**
@@ -322,8 +338,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         }
         if (!SUPPORTED.contains(name)) {
             Log.w(TAG, "not available embedded: " + name);
-            Toast.makeText(atak, com.atakmap.android.takconvo.plugin.R.string
-                    .takconvo_not_available_in_atak, Toast.LENGTH_SHORT).show();
+            toastNotAvailable();
             deliverResult(caller, requestCode, Activity.RESULT_CANCELED, null);
             return;
         }
@@ -354,8 +369,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             record = create(name, intent, caller, requestCode);
         } catch (final Throwable t) {
             Log.e(TAG, "unable to create " + name, t);
-            Toast.makeText(atak, com.atakmap.android.takconvo.plugin.R.string
-                    .takconvo_not_available_in_atak, Toast.LENGTH_SHORT).show();
+            toastNotAvailable();
             if (previous != null) {
                 guarded(previous, "resume", () -> settle(previous));
             }
@@ -365,9 +379,16 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         if (!record.finishing) {
             guarded(record, "resume", () -> settle(record));
         }
-        if (previous != null) {
-            previous.content.setVisibility(View.GONE);
-            guarded(previous, "stop", () -> stop(previous));
+        if (!record.floating) {
+            // what was shown below, including what showed through a floating activity
+            for (int i = stack.indexOf(record) - 1; i >= 0; i--) {
+                final Record below = stack.get(i);
+                if (below.content.getVisibility() == View.GONE) {
+                    break;
+                }
+                below.content.setVisibility(View.GONE);
+                guarded(below, "stop", () -> stop(below));
+            }
         }
     }
 
@@ -384,13 +405,11 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         if (!wasTop) {
             return;
         }
-        final Record next = top();
-        if (next == null) {
+        if (stack.isEmpty()) {
             listener.onHostEmpty();
             return;
         }
-        next.content.setVisibility(View.VISIBLE);
-        guarded(next, "resume", () -> settle(next));
+        settleShown();
     }
 
     private Record create(final String className, final Intent intent, final Record caller,
@@ -402,31 +421,65 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
                 paneConfiguration());
         intent.setComponent(new ComponentName(atak.getPackageName(), className));
         intent.setExtrasClassLoader(plugin.getClassLoader());
+        final boolean floating = FLOATING.contains(className);
         final ActivityInfo info = new ActivityInfo();
         info.applicationInfo = atak.getApplicationInfo();
         info.packageName = atak.getPackageName();
         info.name = className;
-        info.theme = R.style.Theme_Conversations3;
+        info.theme = floating ? R.style.Theme_Conversations3_Dialog
+                : R.style.Theme_Conversations3;
         info.flags = ActivityInfo.FLAG_HARDWARE_ACCELERATED;
 
         Log.d(TAG, "creating " + className);
         final Activity activity = instrumentation.newActivity(cls, base, null,
                 engine.getApplication(), intent, info, "", parent, className, null);
         activity.setTheme(info.theme);
-        final Record record = new Record(activity, caller, requestCode);
+        final Record record = new Record(activity, caller, requestCode, floating);
         // on the stack before onCreate, which may already start or finish activities
         stack.add(record);
         try {
             instrumentation.callActivityOnCreate(activity, null);
             instrumentation.callActivityOnPostCreate(activity, null);
-            record.content = takeContent(activity);
+            final View content = takeContent(activity);
+            record.content = floating ? floatOver(activity, content) : content;
         } catch (final Throwable t) {
             stack.remove(record);
             throw t;
         }
+        // set on the activity's own window, which is never shown; the pane is in ATAK's
+        if ((activity.getWindow().getAttributes().flags
+                & WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0) {
+            record.content.setKeepScreenOn(true);
+        }
         container.addView(record.content, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         return record;
+    }
+
+    /**
+     * What a floating window would look like: the content in a dialog's shape over a dimmed
+     * pane. Touches outside it do nothing, as with {@code setFinishOnTouchOutside(false)}.
+     */
+    private View floatOver(final Activity activity, final View content) {
+        final float density = atak.getResources().getDisplayMetrics().density;
+        final TypedArray a = activity.obtainStyledAttributes(new int[] {
+                com.google.android.material.R.attr.colorSurfaceContainerHigh});
+        final GradientDrawable background = new GradientDrawable();
+        background.setColor(a.getColor(0, Color.DKGRAY));
+        a.recycle();
+        background.setCornerRadius(28 * density);
+        content.setBackground(background);
+
+        final FrameLayout scrim = new FrameLayout(atak);
+        scrim.setBackgroundColor(Color.argb(153, 0, 0, 0));
+        scrim.setClickable(true);
+        final int margin = Math.round(24 * density);
+        final FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER);
+        params.setMargins(margin, margin, margin, margin);
+        scrim.addView(content, params);
+        return scrim;
     }
 
     /**
@@ -486,16 +539,16 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     // --- lifecycle ---
 
     /**
-     * Brings an activity to the state it would have as the top of a task: resumed while the
-     * pane is visible and ATAK is resumed, paused while ATAK is only started, stopped
-     * otherwise. Conversations marks what a resumed chat shows as read and holds back its
-     * notifications, so it must not stay resumed behind other apps.
+     * Brings a shown activity to the state it would have in a task: the top one resumed while
+     * the pane is visible and ATAK is resumed, paused while ATAK is only started (or, below a
+     * floating one, always), stopped otherwise. Conversations marks what a resumed chat shows
+     * as read and holds back its notifications, so it must not stay resumed behind other apps.
      */
     private void settle(final Record r) throws Exception {
         final Lifecycle.State atakState = atak instanceof LifecycleOwner
                 ? ((LifecycleOwner) atak).getLifecycle().getCurrentState()
                 : Lifecycle.State.RESUMED;
-        if (visible && atakState.isAtLeast(Lifecycle.State.RESUMED)) {
+        if (visible && r == top() && atakState.isAtLeast(Lifecycle.State.RESUMED)) {
             resume(r);
         } else if (visible && atakState.isAtLeast(Lifecycle.State.STARTED)) {
             pause(r);
@@ -505,17 +558,24 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         }
     }
 
-    private void settleTop() {
-        final Record top = top();
-        if (top != null) {
-            guarded(top, "settle", () -> settle(top));
+    /** Shows and settles the top activity and, below a floating one, what it floats over. */
+    private void settleShown() {
+        for (int i = stack.size() - 1; i >= 0; i--) {
+            final Record r = stack.get(i);
+            if (r.content != null) {
+                r.content.setVisibility(View.VISIBLE);
+            }
+            guarded(r, "settle", () -> settle(r));
+            if (!r.floating) {
+                return;
+            }
         }
     }
 
     /** Follows ATAK's activity and takes over the permission requests of the activities here. */
     private void attachToAtak() {
         if (atakObserver == null && atak instanceof LifecycleOwner) {
-            atakObserver = (source, event) -> settleTop();
+            atakObserver = (source, event) -> settleShown();
             ((LifecycleOwner) atak).getLifecycle().addObserver(atakObserver);
         }
         if (ActivityCompat.getPermissionCompatDelegate() != permissionDelegate) {
@@ -644,10 +704,15 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             l.launch(intent);
         } catch (final ActivityNotFoundException | SecurityException e) {
             Log.w(TAG, "unable to start " + intent, e);
-            Toast.makeText(atak, com.atakmap.android.takconvo.plugin.R.string
-                    .takconvo_not_available_in_atak, Toast.LENGTH_SHORT).show();
+            toastNotAvailable();
             deliverResult(caller, requestCode, Activity.RESULT_CANCELED, null);
         }
+    }
+
+    /** From the plugin's resources: ATAK's context would look the string up in ATAK's. */
+    private void toastNotAvailable() {
+        Toast.makeText(atak, plugin.getString(com.atakmap.android.takconvo.plugin.R.string
+                .takconvo_not_available_in_atak), Toast.LENGTH_SHORT).show();
     }
 
     private void requestPermissionsFor(final Record record, final String[] permissions,

@@ -44,17 +44,21 @@ EmbeddedActivityHost.create(className, intent, caller, requestCode):
     attachToAtak()                               # lifecycle observer + permission delegate
     cls  = pluginClassLoader.loadClass(className)
     base = engine.newUiContext(display, paneConfiguration())    # see "configuration"
-    info = ActivityInfo(package = ATAK, name = className, theme = Theme.Conversations3,
+    floating = className in FLOATING                     # see "Floating activities"
+    info = ActivityInfo(package = ATAK, name = className,
+                        theme = floating ? Theme.Conversations3.Dialog : Theme.Conversations3,
                         flags = HARDWARE_ACCELERATED)
     intent.component = (ATAK package, className)
     activity = instrumentation.newActivity(cls, base, token = null, engine.application,
                                            intent, info, title = "", parent = hostParent,
                                            id = className, lastNonConfigurationInstance = null)
     activity.setTheme(info.theme)
-    stack.push(Record(activity, caller, requestCode))   # before onCreate: it may start or finish
-    instrumentation.callActivityOnCreate(activity, null)
+    stack.push(Record(activity, caller, requestCode, floating))  # before onCreate: it may
+    instrumentation.callActivityOnCreate(activity, null)          # start or finish
     instrumentation.callActivityOnPostCreate(activity, null)
-    record.content = takeContent(activity)
+    record.content = floating ? floatOver(takeContent(activity)) : takeContent(activity)
+    if activity.window has FLAG_KEEP_SCREEN_ON:          # its own window is never shown
+        record.content.keepScreenOn = true               # keeps ATAK's on while visible
     paneFrame.addView(record.content, MATCH_PARENT)
 
 takeContent(activity):
@@ -106,7 +110,9 @@ start(caller, intent, requestCode):
     pause(top)
     record = create(name, intent, caller, requestCode)    # on failure: toast, cancel, settle(top)
     settle(record)
-    previous.content.visibility = GONE; stop(previous)
+    if not record.floating:
+        for each record below it that is shown:            # the previous one, and what showed
+            content.visibility = GONE; stop(it)            # through a floating one
 
 finishFromChild(child):       # marks it finishing, then posts:
     finish(record):
@@ -114,16 +120,25 @@ finishFromChild(child):       # marks it finishing, then posts:
         deliverResult(record.caller, record.requestCode,
                       activity.mResultCode, activity.mResultData)   # read by reflection
         if record was on top:
-            next = top()
-            if next == null: listener.onHostEmpty()     # -> close the pane
-            else: next.content.visibility = VISIBLE; settle(next)
+            if the stack is empty: listener.onHostEmpty()  # -> close the pane
+            else: settleShown()
+
+settleShown():                # the top, and below a floating record what it floats over
+    for r from the top down:
+        r.content.visibility = VISIBLE; settle(r)
+        if not r.floating: break
 ```
+
+The toast's text comes from the plugin's resources. `Toast.makeText(atak, resId, ...)` would
+look the id up in ATAK's resources and throw `Resources$NotFoundException`. Until 2026-09-30
+that crashed ATAK whenever an unavailable activity was asked for, e.g. the voice message
+button.
 
 `SUPPORTED` lists the activities allowed to open in the pane:
 
 | Tested on a device | Allowed, not yet tested |
 |---|---|
-| `ConversationsActivity`, `StartConversationActivity`, `ConferenceDetailsActivity`, `SearchActivity` | `ContactDetailsActivity`, `TrustKeysActivity`, `AddReactionActivity` (the full emoji picker; quick reactions are a dialog and work), `MucUsersActivity`, `ChooseContactActivity`, `ChannelDiscoveryActivity`, `EditHistoryActivity`, `MediaBrowserActivity`, `BlocklistActivity` |
+| `ConversationsActivity`, `StartConversationActivity`, `ConferenceDetailsActivity`, `SearchActivity`, `RecordingActivity` (floating) | `ContactDetailsActivity`, `TrustKeysActivity`, `AddReactionActivity` (the full emoji picker; quick reactions are a dialog and work), `MucUsersActivity`, `ChooseContactActivity`, `ChannelDiscoveryActivity`, `EditHistoryActivity`, `MediaBrowserActivity`, `BlocklistActivity` |
 
 A failure in `onCreate` is caught (toast, `RESULT_CANCELED`); a failure later, e.g. in a click
 handler, would still crash ATAK, so test an activity before relying on it.
@@ -136,6 +151,29 @@ list, if nothing is shown), `showConversation(uuid)` (a TAK user's XMPP connecto
 [08](08-contacts-and-notifications.md)). The account screen of the error notification is
 routed to the account pane like any other start, and the plugin closes the chat pane again if
 nothing ended up in it (`isEmpty()`).
+
+### Floating activities
+
+A dialog-themed activity (`windowIsFloating`) would float over the activity that started it,
+which stays visible and paused. `FLOATING` lists those the host shows that way; today that is
+`RecordingActivity`, the voice message recorder:
+
+```text
+floatOver(content):
+    content.background = rounded rectangle (28 dp, ?colorSurfaceContainerHigh)
+    scrim = FrameLayout(background = 60 % black, clickable)   # touches outside do nothing,
+    scrim.addView(content, MATCH_PARENT × WRAP_CONTENT,       # as setFinishOnTouchOutside(false)
+                  gravity CENTER, margins 24 dp)
+    return scrim                                              # the record's content
+```
+
+The activity below keeps its content visible and is paused, not stopped. `settle` resumes only
+the top record, and `settleShown` settles both, so closing the pane or leaving ATAK stops both.
+The recorder's result (the file's URI) comes back through `deliverResult` like any other.
+`RecordingActivity` records with `MediaRecorder` under ATAK's `RECORD_AUDIO` permission. It
+sets `FLAG_KEEP_SCREEN_ON` on its own window, which the host carries over to the content in
+ATAK's window. Upstream discards the recording when the recorder stops, and so does the host:
+closing the pane, leaving ATAK or pressing back while recording cancels it.
 
 ### Other apps and results
 
@@ -169,9 +207,9 @@ notifications, so a chat must not stay resumed behind other apps.
 ```text
 settle(record):                      # called on every change of any of the three
     atakState = atak.lifecycle.currentState       # ATAK's activity is a LifecycleOwner
-    if paneVisible and atakState >= RESUMED:  resume(record)
-    elif paneVisible and atakState >= STARTED: pause(record); start(record)
-    else:                                       stop(record)
+    if paneVisible and record is on top and atakState >= RESUMED:  resume(record)
+    elif paneVisible and atakState >= STARTED:  pause(record); start(record)   # or below a
+    else:                                        stop(record)                  # floating one
 
 resume(r): start(r); callActivityOnResume; onPostResume (reflection, resumes fragments);
            lifecycle ON_RESUME
@@ -186,7 +224,7 @@ activity's own `LifecycleRegistry`, so the host dispatches those events itself. 
 one that already happened does nothing.
 
 Inputs: `ChatDropDown.onDropDownVisible/onDropDownClose` → `setVisible()`; a
-`LifecycleEventObserver` on ATAK's activity → `settleTop()`. Closing the pane only stops the
+`LifecycleEventObserver` on ATAK's activity → `settleShown()`. Closing the pane only stops the
 activities; they are destroyed when the plugin stops.
 
 ## Back
@@ -282,7 +320,11 @@ paneConfiguration():
 
 Resources are chosen for the **pane's** size, not the screen's, so a half-screen pane on a
 tablet gets Conversations' phone layouts. On a 480 dpi phone in landscape a half-width pane is
-about 350 × 330 dp. The host also sets `AppCompatDelegate.setDefaultNightMode(MODE_NIGHT_YES)`,
+about 350 × 330 dp. The first activity is created before the pane is laid out, so
+`ChatDropDown` estimates the size: half (or all) of the **map view**, which ATAK divides
+between the map and the pane. The display's size was too large: it counts the system bars, and
+it put a 350 dp pane in Conversations' `w384dp` bucket, where a voice message's player is wider
+than its bubble. The host also sets `AppCompatDelegate.setDefaultNightMode(MODE_NIGHT_YES)`,
 because AppCompat would otherwise follow the device and an embedded activity can't
 `recreate()`. That setting is process-wide: it would also affect another AppCompat plugin in
 ATAK.
@@ -325,10 +367,11 @@ through the provider's grant.
 | `requestPermissions` → `ActivityCompat.requestPermissions` | see "Runtime permissions" |
 | attachment choices in one scrolling row | the pane is too narrow and low for the grid |
 | `FileBackend` provider and camera | see "Files handed to other apps" |
+| call buttons hidden, calls neither advertised nor accepted | `RtpSessionActivity` can't run embedded, see [05](05-conversations-fork.md#h-no-calls-inside-atak) |
 
 ## Not available yet
 
-Started from Conversations' UI, these show "Not available inside ATAK": voice recording
-(`RecordingActivity`), calls (`RtpSessionActivity`), share/show location, QR code scanning,
-profile pictures, Conversations' own settings (replaced by the plugin's), backup import.
-Dialog-themed activities would fill the pane rather than float.
+Started from Conversations' UI, these show "Not available inside ATAK": share/show location,
+QR code scanning, profile pictures, Conversations' own settings (replaced by the plugin's),
+backup import. Calls (`RtpSessionActivity`) are switched off rather than refused: the call
+button would already have made the contact's device ring.

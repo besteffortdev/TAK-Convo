@@ -348,7 +348,9 @@ public class DiscoManager extends AbstractManager {
         features.add(AxolotlService.PEP_DEVICE_LIST_NOTIFY);
         if (!appSettings.isUseTor() && !account.isOnion()) {
             features.addAll(PRIVACY_SENSITIVE);
-            features.addAll(VOIP_NAMESPACES);
+            if (!eu.siacs.conversations.utils.TakConvoCompat.EMBEDDED) {
+                features.addAll(VOIP_NAMESPACES); // TAKCONVO: no calls inside ATAK
+            }
             features.add(Namespace.JINGLE_TRANSPORT_WEBRTC_DATA_CHANNEL);
         }
         if (appSettings.isBroadcastLastActivity()) {

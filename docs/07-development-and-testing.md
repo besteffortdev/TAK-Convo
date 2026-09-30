@@ -29,8 +29,38 @@ one, and `settings.gradle` then fails to parse.
 java tools/AtakLinkCheck.java <sdk.path>/atak.apk app/build/outputs/apk/civ/debug/<apk>
 ```
 
+In PowerShell, quote the property: `.\gradlew.bat assembleCivDebug --offline
+"-PatakVersion=5.8.0"`. Unquoted, PowerShell splits the argument at the first dot and Gradle
+looks for a task named `.8.0`. Each build replaces the APK of the other version in the output
+directory.
+
 `AtakLinkCheck` must report no finding before an APK goes on a device (see
 [06](06-atak-runtime-and-classloading.md)).
+
+### Other ATAK versions and release ATAK
+
+The plugin loads in the SDK's **developer** ATAK (build type `sdk`), whatever its
+`plugin-api`. Since 4.10 ATAK also accepts a plugin built for an older API than its own. A
+**release** ATAK (Play Store, or an organisation's loadout) won't load it, and building with
+`-PatakVersion` doesn't change that:
+
+- **Signature.** `AtakPluginRegistry.verifySignature` only accepts plugins signed with ATAK's
+  own key, a TAK.gov key (`ACCEPTABLE_KEY_LIST`) or an App Transparency signature. It logs
+  `signature mismatch[com.atakmap.android.takconvo.plugin]`, and no setting bypasses it.
+- **Obfuscation.** Release ATAK is ProGuard-obfuscated. Checked against ATAK-CAN 5.8.0.5
+  (`civSmall-release`, `[playstore]`), the 5.8 build refers to 7 ATAK methods that were
+  renamed (`AtakBroadcast.getInstance()` is `a()`, and `registerReceiver`, `sendBroadcast`,
+  `CotMapComponent.getInstance`...). It also refers to 2 methods of OkHttp's `RequestBody`,
+  which ATAK 5.8 bundles, with Okio renamed (`okio.ByteString` is `atak.core.e2`). ATAK's copy
+  shadows the plugin's.
+
+A release build for a given ATAK has to be made with that version's SDK. The template's
+`release` build type applies the SDK's ProGuard mapping (`-applymapping`) and moves the
+plugin's classes, OkHttp included, into `atakplugin.takconvo` (`-repackageclasses`). It then
+has to be signed by TAK.gov, for example through its third-party plugin pipeline. Until then,
+a test device needs the developer ATAK. Only 5.5.1.8 is public (GitHub
+`TAK-Product-Center/atak-civ`), and installing it replaces a release ATAK, whose app data goes
+with it (`/sdcard/atak` stays).
 
 ## Install and run
 
@@ -155,7 +185,9 @@ After an upstream merge, a dependency change or a change to the host:
 9. Long-press a message: context menu, add a reaction.
 10. Text field: select text (floating toolbar), paste as quote.
 11. Attachment row: File → pick a file → send to yourself → open it with another app.
-    Camera opens (cancel it).
+    Camera opens (cancel it). Voice message (the microphone send button): the recorder floats
+    over the chat, the timer runs, Send delivers it, and it plays. Cancel and back discard it
+    ("deleted canceled recording" in `tak convo`). A chat has no call button.
 12. Contacts and notifications, with `DEBUG_FAKE_CONTACT` and `DEBUG_FAKE_INCOMING` (see
     [08](08-contacts-and-notifications.md#testing)): pane closed → a notification with sound
     and "app switched into background" in `tak convo`; the contact row, the Contacts button

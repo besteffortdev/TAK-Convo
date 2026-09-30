@@ -735,6 +735,11 @@ public class ConversationFragment extends XmppFragment
                                         .isEmpty());
                         menuInviteContact.setTitle(R.string.start_group_chat);
                     }
+                    if (eu.siacs.conversations.utils.TakConvoCompat.EMBEDDED) {
+                        // TAKCONVO: no calls inside ATAK (RtpSessionActivity can't run there)
+                        menuCall.setVisible(false);
+                        menuOngoingCall.setVisible(false);
+                    }
                     if (c.isMuted()) {
                         menuMute.setVisible(false);
                     } else {

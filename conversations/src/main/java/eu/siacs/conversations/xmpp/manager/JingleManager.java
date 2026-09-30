@@ -455,6 +455,9 @@ public class JingleManager extends AbstractManager {
     }
 
     private boolean isUsingClearNet() {
+        if (eu.siacs.conversations.utils.TakConvoCompat.EMBEDDED) {
+            return false; // TAKCONVO: no calls inside ATAK; this only gates RTP, as over Tor
+        }
         final var appSettings = new AppSettings(context);
         final var account = getAccount();
         return !account.isOnion() && !appSettings.isUseTor();

@@ -275,6 +275,7 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
 app/                      the ATAK plugin
   src/main/java/com/atakmap/android/takconvo/plugin/
     TakConvoPlugin.java   entry point (IPlugin)
+    SensitiveLog.java     debug-only logs that name users
     xmpp/                 embedded engine: XmppEngine, EmbeddedContext, PendingIntents, notifications
     contacts/             XmppContacts: ATAK contact handler, unread badges
     config/               XmppSettings, TrustSources, TrustedCa
@@ -294,7 +295,7 @@ docs/                     design and maintenance documentation
 
 [docs/README.md](docs/README.md): architecture, the embedded engine, provisioning and trust, the
 activity host, the Conversations fork, ATAK's runtime, development and testing, ATAK contacts
-and notifications.
+and notifications, and the code guidelines (error handling, logging, style).
 
 ## License
 

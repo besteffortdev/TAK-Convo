@@ -10,12 +10,12 @@ import com.atakmap.android.dropdown.DropDownReceiver;
 import com.atakmap.android.maps.MapView;
 
 /**
- * The ATAK side pane that shows Conversations. A drop-down of our own rather than a
- * {@code Pane}, because it needs the back button and the visibility changes.
+ * The ATAK drop-down that shows Conversations; a drop-down rather than a Pane for the back
+ * button and visibility changes. See docs/04.
  */
 public final class ChatDropDown extends DropDownReceiver implements DropDown.OnStateListener {
 
-    /** The pane's share of the map: its width in landscape, its height in portrait. */
+    /** The pane's width in landscape, height in portrait. */
     public static final double PANE_FRACTION = 0.4;
 
     private final EmbeddedActivityHost host;
@@ -26,10 +26,8 @@ public final class ChatDropDown extends DropDownReceiver implements DropDown.OnS
     }
 
     /**
-     * Opens the pane on whatever the host currently shows, on top of ATAK's other drop-downs.
-     * Open but hidden under another drop-down (e.g. the account pane opened from a chat), it
-     * is brought to the front: showDropDown closes it first, which only stops the host's
-     * activities. Unhiding instead would unhide the drop-down on top, not this one.
+     * Shows the pane on top, also when hidden under another drop-down: showDropDown moves it
+     * up (unhideDropDown would unhide the top one instead).
      */
     public void show() {
         if (!isClosed() && isVisible()) {
@@ -37,17 +35,14 @@ public final class ChatDropDown extends DropDownReceiver implements DropDown.OnS
         }
         final int[] size = estimatePaneSize(getMapView());
         host.setPaneSize(size[0], size[1]);
-        // ignoreBackButton: ATAK keeps the pane on its stack under other drop-downs, and back
-        // never closes it by itself, only goBack() does
+        // ignoreBackButton: kept on ATAK's stack, closed by goBack() only
         showDropDown(host.getView(), PANE_FRACTION, FULL_HEIGHT, FULL_WIDTH, PANE_FRACTION, true,
                 this);
     }
 
     /**
-     * The size in pixels a pane of {@link #PANE_FRACTION} gets, before it is laid out. ATAK
-     * sizes it as a fraction of its content area, which the map fills while no pane is open
-     * (another open pane narrows the map, not that area); the display also counts the
-     * system bars.
+     * The pane's size in pixels before layout: a fraction of ATAK's content area. Another open
+     * pane narrows the map view, and the display counts the system bars.
      */
     public static int[] estimatePaneSize(final MapView mapView) {
         final View content = mapView.getRootView().findViewById(android.R.id.content);
@@ -64,7 +59,7 @@ public final class ChatDropDown extends DropDownReceiver implements DropDown.OnS
                 (int) (height * (portrait ? PANE_FRACTION : FULL_HEIGHT))};
     }
 
-    /** Back in Conversations; closes the pane once there is nothing left to go back to. */
+    /** Goes back in Conversations; closes the pane when nothing is left. */
     public void goBack() {
         if (!host.onBackPressed()) {
             closeDropDown();

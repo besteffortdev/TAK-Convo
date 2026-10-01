@@ -7,13 +7,13 @@ import android.app.RemoteInput;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Resources;
-import android.media.AudioAttributes;
-import android.media.RingtoneManager;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.Icon;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
 import android.os.Build;
 import android.util.SparseArray;
 
@@ -25,25 +25,15 @@ import eu.siacs.conversations.R;
 import eu.siacs.conversations.utils.TakConvoCompat;
 
 /**
- * Gives Conversations' notifications icons that work when they are posted as ATAK's, and the
- * sound and vibration the plugin's settings ask for.
- *
- * <p>Conversations sets its icons as resource ids, which a notification resolves in the package
- * that posts it: ATAK's. The system UI then draws whichever ATAK drawable has that id, or fails
- * to, which crashes the posting app ("Bad notification posted"). The small icon and the action
- * icons are replaced by bitmaps drawn from the plugin's resources.
- *
- * <p>A message notification's sound and vibration are its channel's (Android 8 and later), and
- * only the user can change a channel's once it exists. Conversations' {@code messages} channel
- * has both; with either turned off in the settings, messages go to a channel of the plugin's
- * created without it.
+ * Fixes Conversations' notifications for ATAK: resource icons become bitmaps (as ATAK's they
+ * would resolve in ATAK's package, or crash it), and message notifications move to a channel
+ * with the sound and vibration of the plugin's settings. See docs/08.
  */
 final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
 
     private static final String TAG = "TakConvo.Notifications";
-    /** status bar icons are 24dp */
     private static final int ICON_DP = 24;
-    /** Conversations' channel of message notifications that alert */
+    /** Conversations' alerting message channel. */
     private static final String MESSAGES_CHANNEL = "messages";
 
     private final Context atak;
@@ -57,7 +47,7 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
         this.plugin = plugin;
         this.resources = plugin.getResources();
         this.theme = resources.newTheme();
-        // the icons' tints refer to theme attributes
+        // for the icons' tints
         theme.applyStyle(R.style.Theme_Conversations3, true);
     }
 
@@ -94,8 +84,8 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
     }
 
     /**
-     * The channel a message notification goes to instead of Conversations' own, for the sound
-     * and vibration set in the plugin's settings; null to leave it.
+     * The channel for the sound and vibration settings, or null to keep Conversations'. Only
+     * the user can change a channel once it exists, hence one channel per combination.
      */
     private String alertChannel(final Notification notification) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O
@@ -106,7 +96,7 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
         final boolean sound = XmppSettings.notificationSound(prefs);
         final boolean vibrate = XmppSettings.notificationVibrate(prefs);
         if (sound && vibrate) {
-            return null; // Conversations' channel, as the user may have set it up
+            return null; // as the user may have set it up
         }
         final String id = "takconvo_messages" + (sound ? "_sound" : "")
                 + (vibrate ? "_vibrate" : "");
@@ -119,9 +109,9 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
                                     .takconvo_channel_messages_no_sound
                                     : com.atakmap.android.takconvo.plugin.R.string
                                             .takconvo_channel_messages_silent),
-                    // high: still a heads-up notification, only quieter
+                    // still heads-up, only quieter
                     NotificationManager.IMPORTANCE_HIGH);
-            created.setGroup("chats"); // Conversations' group of message channels
+            created.setGroup("chats"); // Conversations' channel group
             created.setShowBadge(true);
             created.enableLights(true);
             created.setSound(sound ? RingtoneManager.getDefaultUri(
@@ -177,7 +167,7 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
         return false;
     }
 
-    /** A resource icon of Conversations: in the posting package's, or no, package. */
+    /** A resource icon that isn't the system's. */
     private static boolean needsIcon(final Icon icon) {
         return icon != null && icon.getType() == Icon.TYPE_RESOURCE
                 && !"android".equals(icon.getResPackage());
@@ -188,7 +178,7 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
         Icon icon = icons.get(id);
         if (icon == null) {
             final Drawable drawable = resources.getDrawable(id, theme).mutate();
-            // the system only uses the icon's alpha
+            // only the alpha is used
             drawable.setTint(Color.WHITE);
             final int size = Math.round(ICON_DP * resources.getDisplayMetrics().density);
             final Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);

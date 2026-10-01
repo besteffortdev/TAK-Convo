@@ -14,6 +14,7 @@ import com.atakmap.android.cot.CotMapComponent;
 import com.atakmap.android.navigation.NavButtonManager;
 import com.atakmap.android.navigation.models.NavButtonModel;
 import com.atakmap.android.takconvo.plugin.R;
+import com.atakmap.android.takconvo.plugin.SensitiveLog;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 import com.atakmap.coremap.log.Log;
 
@@ -30,30 +31,18 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * TAK Convo in ATAK's contacts.
- *
- * <p>A TAK user whose SA advertises an XMPP address ({@code <contact xmppUsername>}) gets an XMPP
- * connector in ATAK's contact list. ATAK's own handler for it starts an external XMPP app; this
- * one, registered ahead of it, opens the chat in TAK Convo instead, and gives the connector the
- * chat's unread count and the address's XMPP presence. ATAK adds those unread counts to the
- * contact's row and to its Contacts button, like GeoChat's.
- *
- * <p>The open XMPP group chats are contacts too, at the top of the list ({@link
- * XmppRoomContact}), so that ATAK's contact list has both the users and the group chats.
- *
- * <p>It also shows Conversations' total unread count on the plugin's toolbar button.
- *
- * <p>ATAK asks for connector features on its UI thread and on its unread count thread, so they
- * are answered from a snapshot, made on the main thread when Conversations reports a change.
+ * TAK Convo in ATAK's contacts: handles the XMPP connector of TAK users (opens the chat, gives
+ * unread counts and presence), lists the open group chats as contacts, and badges the toolbar
+ * button. Features are answered from snapshots, as ATAK asks from several threads. See docs/08.
  */
 public final class XmppContacts extends ContactConnectorManager.ContactConnectorHandler
         implements XmppEngine.Listener {
 
     private static final String TAG = "TakConvo.Contacts";
-    /** Conversations reports changes in bursts */
+    /** Conversations reports changes in bursts. */
     private static final long REFRESH_DELAY_MS = 300;
 
-    /** Opens the chat with an XMPP address. Called on the main thread. */
+    /** Opens the chat with an XMPP address, on the main thread. */
     public interface ChatOpener {
         void openChat(String address);
     }
@@ -62,7 +51,7 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
     private final Context atak;
     private final XmppEngine engine;
     private final ChatOpener opener;
-    /** of the plugin's toolbar button: its identifier */
+    /** The toolbar button's identifier. */
     private final String toolbarReference;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable refreshTask = this::refresh;
@@ -70,18 +59,15 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
             new NavButtonManager.OnModelListChangedListener() {
                 @Override
                 public void onModelListChanged() {
-                    // e.g. the toolbar button was just added, or the user moved it
+                    // e.g. the button was added or moved
                     handler.post(() -> updateToolbar(engine.getUnreadCount()));
                 }
             };
-    /** unread messages of the chats with each bare JID (lower case), 1:1 and group chats */
+    /** Unread count by lower-case bare JID, 1:1 and group chats. */
     private volatile Map<String, Integer> unread = Collections.emptyMap();
-    /**
-     * presence of each bare JID whose presence we are subscribed to, and of each group chat
-     * (joined or not)
-     */
+    /** Presence of subscribed contacts and of group chats (joined or not). */
     private volatile Map<String, Contact.UpdateStatus> presence = Collections.emptyMap();
-    /** the group chats' contacts, by bare JID (lower case); main thread */
+    /** Group chat contacts by lower-case bare JID; main thread. */
     private final Map<String, XmppRoomContact> rooms = new HashMap<>();
     private boolean started;
 
@@ -94,7 +80,7 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
         this.toolbarReference = plugin.getPackageName();
     }
 
-    /** Registers with ATAK's contact connectors and starts following Conversations. */
+    /** Registers with ATAK's contacts and follows Conversations. */
     public void start() {
         if (started) {
             return;
@@ -145,7 +131,7 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
         }
         final Map<String, Integer> newUnread = new HashMap<>();
         final Map<String, Contact.UpdateStatus> newPresence = new HashMap<>();
-        /* the open group chats: address to name */
+        // address to name
         final Map<String, String> openRooms = new HashMap<>();
         final Account account = engine.getAccount();
         if (account != null) {
@@ -176,7 +162,7 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
                     }
                 }
             } catch (final RuntimeException e) {
-                // e.g. the account's connection being replaced; the next change retries
+                // e.g. the connection being replaced; the next change retries
                 Log.w(TAG, "unable to read unread counts and presence", e);
                 return;
             }
@@ -186,20 +172,14 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
         presence = newPresence;
         final boolean roomsChanged = syncRooms(openRooms);
         if (changed || roomsChanged) {
-            Log.d(TAG, "unread " + newUnread + ", presence of " + newPresence.size()
+            SensitiveLog.d(TAG, "unread " + newUnread + ", presence of " + newPresence.size()
                     + ", group chats " + rooms.size());
             updateContacts();
         }
         updateToolbar(engine.getUnreadCount());
     }
 
-    /**
-     * Makes the group chat contacts, at the top of ATAK's contact list, those of the open group
-     * chats.
-     *
-     * @param open the open group chats: address to name
-     * @return whether any contact was added, removed or renamed
-     */
+    /** Matches the group chat contacts to the open group chats; returns whether any changed. */
     private boolean syncRooms(final Map<String, String> open) {
         final Contacts contacts = Contacts.getInstance();
         if (contacts == null) {
@@ -236,7 +216,7 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
         return changed;
     }
 
-    /** ATAK recounts its contacts' unread messages and redraws their rows. */
+    /** Has ATAK recount unread messages and redraw the rows. */
     private static void updateContacts() {
         final Contacts contacts = Contacts.getInstance();
         if (contacts != null) {
@@ -283,18 +263,18 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
         return plugin.getString(R.string.takconvo_connector_description);
     }
 
-    /** The XMPP connector was tapped: on the UI thread. */
+    /** The XMPP connector was tapped; UI thread. */
     @Override
     public boolean handleContact(final String connectorType, final String contactUid,
             final String address) {
-        Log.d(TAG, "chat with " + address + " (contact " + contactUid + ")");
+        SensitiveLog.d(TAG, "chat with " + address + " (contact " + contactUid + ")");
         if (XmppEngine.bareJid(address) == null) {
             Toast.makeText(atak, plugin.getString(R.string.takconvo_invalid_xmpp_address,
                     address), Toast.LENGTH_SHORT).show();
         } else {
             opener.openChat(address);
         }
-        // handled either way: ATAK's fallback would look for an external XMPP app
+        // handled either way, or ATAK looks for an external XMPP app
         return true;
     }
 
@@ -310,7 +290,7 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
             final Integer count = unread.get(key);
             return count == null ? 0 : count;
         } else if (feature == ContactConnectorManager.ConnectorFeature.Presence) {
-            // null when we don't see its presence: no dot rather than "offline"
+            // null without a subscription: no dot rather than "offline"
             return presence.get(key);
         }
         return null;
@@ -320,7 +300,7 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
         return jid == null ? null : jid.asBareJid().toString().toLowerCase(Locale.ROOT);
     }
 
-    /** ATAK colors a connector green, yellow or red by these */
+    /** Green, yellow or red in ATAK. */
     private static Contact.UpdateStatus status(final Presence.Availability availability) {
         switch (availability) {
             case CHAT:

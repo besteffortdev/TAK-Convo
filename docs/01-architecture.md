@@ -82,6 +82,7 @@ flowchart TB
 | `:conversations` | `eu.siacs.conversations` | Conversations 2.20.4, built as a library, with a small set of marked changes | [05](05-conversations-fork.md) |
 | `gradle/atak-runtime.gradle`, `tools/AtakLinkCheck.java` | build | Compile against what ATAK loads at runtime and check for it | [06](06-atak-runtime-and-classloading.md) |
 | `DebugReceiver` | `plugin.debug` | Debug builds: drive the plugin from `adb` | [07](07-development-and-testing.md) |
+| `SensitiveLog` | `plugin` | Debug logs that name users, left out of release builds | [09](09-code-guidelines.md#logging) |
 
 ## Lifecycle of the whole thing
 

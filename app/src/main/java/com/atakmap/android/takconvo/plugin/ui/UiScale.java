@@ -5,9 +5,8 @@ import android.content.res.Configuration;
 import android.util.DisplayMetrics;
 
 /**
- * The size of the plugin's Conversations screens relative to ATAK's: Conversations is designed
- * for a whole phone screen, and in an ATAK side pane it looks oversized next to ATAK's own
- * denser UI. Its resources are given a lower density, which scales every dp and sp alike.
+ * Scales Conversations' screens to ATAK's denser UI, through a lower density that scales every
+ * dp and sp alike.
  */
 public final class UiScale {
 
@@ -16,7 +15,6 @@ public final class UiScale {
     private UiScale() {
     }
 
-    /** The density the plugin's screens use, from ATAK's. */
     public static int densityDpi(final Context atak) {
         return Math.round(atak.getResources().getConfiguration().densityDpi * FACTOR);
     }
@@ -26,7 +24,7 @@ public final class UiScale {
         return densityDpi(atak) / (float) DisplayMetrics.DENSITY_DEFAULT;
     }
 
-    /** A configuration override with the scaled density, dark like ATAK. */
+    /** The scaled density, dark like ATAK. */
     public static Configuration override(final Context atak) {
         final Configuration override = new Configuration();
         override.uiMode = Configuration.UI_MODE_NIGHT_YES;

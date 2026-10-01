@@ -17,6 +17,7 @@ import android.security.KeyChain;
 import android.view.Display;
 
 import com.atakmap.android.preference.AtakPreferences;
+import com.atakmap.android.takconvo.plugin.SensitiveLog;
 import com.atakmap.android.takconvo.plugin.config.TrustSources;
 import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.comms.CommsMapComponent;
@@ -27,13 +28,13 @@ import eu.siacs.conversations.AppSettings;
 import eu.siacs.conversations.entities.Account;
 import eu.siacs.conversations.entities.Conversation;
 import eu.siacs.conversations.entities.Message;
+import eu.siacs.conversations.entities.MucOptions;
 import eu.siacs.conversations.persistance.FileBackend;
 import eu.siacs.conversations.services.ChannelDiscoveryService;
 import eu.siacs.conversations.services.XmppConnectionService;
 import eu.siacs.conversations.utils.CryptoHelper;
 import eu.siacs.conversations.utils.TakConvoCompat;
 import eu.siacs.conversations.xmpp.Jid;
-import eu.siacs.conversations.entities.MucOptions;
 import eu.siacs.conversations.xmpp.manager.BookmarkManager;
 import eu.siacs.conversations.xmpp.manager.MultiUserChatManager;
 
@@ -41,7 +42,9 @@ import im.conversations.android.model.Bookmark;
 import im.conversations.android.model.ImmutableBookmark;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -49,16 +52,12 @@ import java.util.function.Predicate;
 
 import javax.net.ssl.X509TrustManager;
 
-/**
- * Runs Conversations' XMPP engine inside the ATAK process.
- *
- * <p>All methods must be called on the main thread, like the upstream service expects.
- */
+/** Runs Conversations' XMPP engine inside the ATAK process. Main thread only. */
 public final class XmppEngine {
 
     private static final String TAG = "TakConvo.XmppEngine";
 
-    /** ATAK preference whose value ATAK puts in this device's SA as contact@xmppUsername. */
+    /** ATAK preference that ATAK puts in this device's SA as contact@xmppUsername. */
     public static final String PREF_SA_XMPP_USERNAME = "saXmppUsername";
 
     /** Notified on the main thread when accounts or conversations change. */
@@ -82,14 +81,13 @@ public final class XmppEngine {
             l.onXmppStateChanged();
         }
     };
-    /** the group chats whose bookmarked nickname was set to the callsign: address to callsign */
-    private final java.util.Map<String, String> renamedBookmarks = new java.util.HashMap<>();
-    /** the group chats asked to rename to the callsign: address to callsign */
-    private final java.util.Map<String, String> renamedRooms = new java.util.HashMap<>();
+    /** Room address to the callsign its bookmark nickname was set to. */
+    private final Map<String, String> renamedBookmarks = new HashMap<>();
+    /** Room address to the callsign it was asked to rename to. */
+    private final Map<String, String> renamedRooms = new HashMap<>();
     /**
-     * What the service tells its UI. Not registered as a UI listener: Conversations would then
-     * believe it is always on screen, keep the server's client state active and silence its
-     * notifications.
+     * The service's changes. Not a UI listener: Conversations would think it is always on
+     * screen, keep the client state active and silence notifications.
      */
     private final TakConvoCompat.Observer observer = new TakConvoCompat.Observer() {
         @Override
@@ -120,7 +118,7 @@ public final class XmppEngine {
     private final CotServiceRemote.OutputsChangedListener takServerListener;
     private final BroadcastReceiver trustStoreReceiver;
     private XmppSettings settings;
-    /** of the trusted CA set, see {@link TrustSources#fingerprint} */
+    /** See {@link TrustSources#fingerprint}. */
     private String trustFingerprint;
     private XmppSettings.Problem lastProblem;
     private Jid provisionedJid;
@@ -152,7 +150,7 @@ public final class XmppEngine {
         final EmbeddedConversations application = new EmbeddedConversations(context);
         context.setApplication(application);
         application.start();
-        // decrypted attachments that were handed to other apps last time
+        // decrypted attachments handed to other apps last time
         FileBackend.deleteShareableCopies(context);
 
         service = new EmbeddedXmppService();
@@ -177,7 +175,6 @@ public final class XmppEngine {
             }
         });
 
-        // notification taps and actions, alarms, notification icons, and what changed
         pendingIntents = new EmbeddedPendingIntents(this.atakContext, context);
         pendingIntents.register();
         TakConvoCompat.PENDING_INTENTS = pendingIntents;
@@ -186,14 +183,12 @@ public final class XmppEngine {
 
         Log.d(TAG, "starting embedded Conversations engine");
         service.onCreate();
-        // the service connects the stored accounts right away: trust has to be in place first
+        // trust must be in place before the service connects the stored accounts
         XmppSettings.normalize(AtakPreferences.getInstance(this.atakContext).getSharedPrefs());
         settings = XmppSettings.load(this.atakContext);
         applyTrust();
-        // When ATAK is killed, the server keeps its XMPP session detached for stream management
-        // resumption, which we can't do after a restart. Openfire then doesn't answer a bind for
-        // that same resource until it drops the old session (it closes the new stream as idle
-        // first). A new resource per ATAK start avoids that; the old session expires by itself.
+        // a new resource per start: Openfire holds the previous session for resumption and
+        // doesn't answer a bind of the same resource until it drops it
         for (final Account account : service.getAccounts()) {
             account.setResource(String.format("%s.%s",
                     eu.siacs.conversations.BuildConfig.APP_NAME, CryptoHelper.random(3)));
@@ -201,9 +196,8 @@ public final class XmppEngine {
         service.onStartCommand(null, 0, 0);
         provision();
 
-        // Re-provision when the inputs change: a .pref import (or any edit) of our keys, and
-        // TAK server connections being added, changed or connected. At ATAK startup the TAK
-        // server credentials are usually not available yet when the plugin starts.
+        // re-provision on our preferences (e.g. a .pref import) and TAK server changes; the
+        // TAK credentials are often not there yet when the plugin starts
         prefListener = (prefs, key) -> {
             if (key != null && key.startsWith(XmppSettings.KEY_PREFIX)) {
                 scheduleProvision();
@@ -225,7 +219,7 @@ public final class XmppEngine {
         };
         CommsMapComponent.getInstance().addOutputsChangedListener(takServerListener);
 
-        // a CA added to (or removed from) the device, by the user or an MDM
+        // a CA added to or removed from the device
         trustStoreReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(final Context c, final Intent intent) {
@@ -256,8 +250,8 @@ public final class XmppEngine {
         CommsMapComponent.getInstance().removeOutputsChangedListener(takServerListener);
         try {
             atakContext.unregisterReceiver(trustStoreReceiver);
-        } catch (final IllegalArgumentException ignored) {
-            // not registered
+        } catch (final IllegalArgumentException e) {
+            Log.w(TAG, "trust store receiver was not registered");
         }
         advertise(null);
         service.onTaskRemoved(null); // logs out and saves, as when the app is swiped away
@@ -271,13 +265,9 @@ public final class XmppEngine {
     }
 
     /**
-     * Creates or updates the XMPP account from {@link XmppSettings}. Idempotent: called on
-     * start, on changes to takconvo_xmpp_* preferences and TAK server connections. An
-     * unchanged configuration leaves the connection alone.
-     *
-     * <p>The device has one active XMPP identity. When the configured JID changes, accounts
-     * for other JIDs are disabled, never deleted, so their history survives a transient or
-     * mistaken configuration.
+     * Creates or updates the XMPP account from {@link XmppSettings}; an unchanged configuration
+     * leaves the connection alone. Accounts of another address are disabled, never deleted, so
+     * their history survives a mistaken configuration.
      */
     public void provision() {
         mainHandler.removeCallbacks(provisionTask);
@@ -285,19 +275,18 @@ public final class XmppEngine {
         settings = XmppSettings.load(atakContext);
         final boolean trustChanged = applyTrust();
         applyChannelDiscovery();
-        Log.d(TAG, "provisioning " + settings);
+        SensitiveLog.d(TAG, "provisioning " + settings);
 
         lastProblem = settings.problem();
         if (lastProblem == XmppSettings.Problem.NO_TAK_CREDENTIALS) {
-            // TAK server credentials often arrive after the plugin starts, so an account on the
-            // configured domain is kept as it is; accounts of another configuration are not
+            // the TAK credentials often come later: keep an account on the configured domain
             Log.w(TAG, "not provisioning: " + lastProblem);
             disableAccountsExcept(a -> settings.domain != null
                     && settings.domain.equalsIgnoreCase(a.getDomain().toString()));
             unprovision();
             return;
         } else if (lastProblem != null) {
-            // turned off, signed out or not configured: no account stays online
+            // turned off, signed out or not configured
             Log.w(TAG, "not provisioning: " + lastProblem);
             disableAccountsExcept(a -> false);
             unprovision();
@@ -307,20 +296,17 @@ public final class XmppEngine {
         try {
             jid = Jid.ofUserInput(settings.jid()).asBareJid();
         } catch (final IllegalArgumentException e) {
-            Log.w(TAG, "not provisioning: invalid JID " + settings.jid());
+            Log.w(TAG, "not provisioning: invalid JID");
             lastProblem = XmppSettings.Problem.INVALID_JID;
             disableAccountsExcept(a -> false);
             unprovision();
             return;
         }
 
-        // upstream only honours an account's hostname/port when "extended connection settings"
-        // is on; enable it exactly when a host override is provisioned
-        // (the file PreferenceManager.getDefaultSharedPreferences uses; EmbeddedContext prefixes it)
-        context.getSharedPreferences(context.getPackageName() + "_preferences",
-                        Context.MODE_PRIVATE).edit()
+        // upstream uses an account's host and port only with "extended connection settings" on
+        defaultPreferences().edit()
                 .putBoolean(AppSettings.SHOW_CONNECTION_OPTIONS, settings.host != null)
-                .commit();
+                .apply();
 
         disableAccountsExcept(a -> a.asBareJid().equals(jid));
 
@@ -328,7 +314,7 @@ public final class XmppEngine {
         if (account == null) {
             account = new Account(jid, settings.password);
             applyConnectionSettings(account);
-            Log.d(TAG, "creating account " + jid);
+            SensitiveLog.d(TAG, "creating account " + jid);
             service.createAccount(account);
         } else {
             final boolean changed = !Objects.equals(account.getPassword(), settings.password)
@@ -339,11 +325,11 @@ public final class XmppEngine {
                 account.setPassword(settings.password);
                 applyConnectionSettings(account);
                 account.setOption(Account.OPTION_DISABLED, false);
-                Log.d(TAG, "updating account " + jid);
+                SensitiveLog.d(TAG, "updating account " + jid);
                 service.updateAccount(account);
             } else if (trustChanged && !account.isOnlineAndConnected()) {
-                // e.g. the CA its certificate needs was just provided: don't wait out the backoff
-                Log.d(TAG, "trusted CAs changed, reconnecting " + jid);
+                // e.g. the CA it needs was just added: don't wait out the backoff
+                SensitiveLog.d(TAG, "trusted CAs changed, reconnecting " + jid);
                 service.reconnectAccountInBackground(account);
             }
         }
@@ -352,11 +338,13 @@ public final class XmppEngine {
         dispatchChanged();
     }
 
-    /**
-     * Makes Conversations trust the CAs {@link #settings} select.
-     *
-     * @return whether the set of trusted CAs changed since the last call
-     */
+    /** The file PreferenceManager.getDefaultSharedPreferences uses, as EmbeddedContext names it. */
+    private SharedPreferences defaultPreferences() {
+        return context.getSharedPreferences(context.getPackageName() + "_preferences",
+                Context.MODE_PRIVATE);
+    }
+
+    /** Makes Conversations trust the selected CAs; returns whether they changed. */
     private boolean applyTrust() {
         final X509TrustManager trust = TrustSources.build(settings);
         TakConvoCompat.EXTRA_TRUST_MANAGER = trust;
@@ -367,15 +355,8 @@ public final class XmppEngine {
     }
 
     /**
-     * Makes the ATAK callsign the account's XMPP nickname, while the account is online and
-     * {@link XmppSettings#KEY_USE_CALLSIGN} is on:
-     * <ul>
-     *   <li>its display name, published as User Nickname (XEP-0172): what contacts' clients
-     *       show, and the nickname it gets in group chats by default;</li>
-     *   <li>the nickname of the group chats bookmarked with another one, which would override
-     *       it. Each is asked once per callsign: the bookmark update comes back from the server,
-     *       and Conversations renames itself in the room then.</li>
-     * </ul>
+     * Makes the ATAK callsign the XMPP nickname while online: the display name (XEP-0172 User
+     * Nickname) and the nickname of bookmarked group chats, each asked once per callsign.
      */
     private void syncCallsign() {
         final Account account = getAccount();
@@ -389,11 +370,12 @@ public final class XmppEngine {
             return;
         }
         if (!callsign.equals(account.getDisplayName())) {
-            Log.d(TAG, "nickname " + account.getDisplayName() + " -> callsign " + callsign);
+            SensitiveLog.d(TAG, "nickname " + account.getDisplayName() + " -> callsign "
+                    + callsign);
             account.setDisplayName(callsign);
             service.databaseBackend.updateAccount(account);
             service.publishDisplayName(account);
-            // the group chats that use the display name as nickname
+            // the group chats that use the display name
             service.checkMucRequiresRename();
         }
         final BookmarkManager bookmarks =
@@ -411,14 +393,12 @@ public final class XmppEngine {
                 if (bookmark != null && bookmark.getNick() != null
                         && !callsign.equals(bookmark.getNick())
                         && !callsign.equals(renamedBookmarks.put(room, callsign))) {
-                    // asked once per callsign, not again on every change
-                    Log.d(TAG, "bookmarked nickname in " + room + ": " + bookmark.getNick()
-                            + " -> " + callsign);
+                    SensitiveLog.d(TAG, "bookmarked nickname in " + room + ": "
+                            + bookmark.getNick() + " -> " + callsign);
                     bookmarks.create(
                             ImmutableBookmark.builder().from(bookmark).nick(callsign).build());
                 }
-                // joined before the display name changed, e.g. right after connecting:
-                // Conversations renames only when it changes while joined
+                // joined before the display name changed: Conversations only renames on change
                 final MucOptions options = conversation.getMucOptions();
                 if (options.online() && !callsign.equals(options.getActualNick())
                         && !callsign.equals(renamedRooms.put(room, callsign))) {
@@ -426,15 +406,14 @@ public final class XmppEngine {
                 }
             }
         } catch (final RuntimeException e) {
-            // e.g. the conversations changing on another thread: the next change retries
+            // e.g. the conversations changing on another thread; the next change retries
             Log.w(TAG, "unable to check the group chats' nicknames", e);
         }
     }
 
     /**
-     * Where "Discover channels" looks: Conversations' own setting (the public directory or XMPP
-     * servers), and the fork's hook for a server other than the account's. A server that isn't
-     * a valid address falls back to the account's.
+     * Sets where "Discover channels" looks: Conversations' own setting, and the fork's hook for
+     * a server other than the account's. An invalid server falls back to the account's.
      */
     private void applyChannelDiscovery() {
         Jid server = null;
@@ -443,16 +422,14 @@ public final class XmppEngine {
             try {
                 server = Jid.ofUserInput(settings.channelServer);
             } catch (final IllegalArgumentException e) {
-                Log.w(TAG, "invalid channel discovery server " + settings.channelServer);
+                Log.w(TAG, "invalid channel discovery server");
             }
         }
         TakConvoCompat.CHANNEL_DISCOVERY_SERVER = server;
         final String method = settings.channelDiscovery == XmppSettings.ChannelDiscovery.PUBLIC
                 ? ChannelDiscoveryService.Method.JABBER_NETWORK.name()
                 : ChannelDiscoveryService.Method.LOCAL_SERVER.name();
-        // the file PreferenceManager.getDefaultSharedPreferences uses; EmbeddedContext prefixes it
-        context.getSharedPreferences(context.getPackageName() + "_preferences",
-                        Context.MODE_PRIVATE).edit()
+        defaultPreferences().edit()
                 .putString(AppSettings.CHANNEL_DISCOVERY_METHOD, method)
                 .apply();
     }
@@ -464,10 +441,8 @@ public final class XmppEngine {
     }
 
     /**
-     * Signs in with an XMPP login entered by the user (used when TAK server credentials are not
-     * reused). A bare username gets the configured domain appended.
-     *
-     * @return false if that does not make a valid XMPP address; nothing is stored then
+     * Signs in with an XMPP login; a bare username gets the configured domain. Returns false,
+     * storing nothing, if that isn't a valid address.
      */
     public boolean signIn(final String user, final String password) {
         final String username = user.trim();
@@ -480,7 +455,7 @@ public final class XmppEngine {
         } catch (final IllegalArgumentException e) {
             return false;
         }
-        Log.d(TAG, "signing in as " + username);
+        SensitiveLog.d(TAG, "signing in as " + username);
         final Account before = getAccount();
         final String previousPassword = before == null ? null : before.getPassword();
         XmppSettings.saveLogin(username, password);
@@ -490,17 +465,16 @@ public final class XmppEngine {
                 && Objects.equals(previousPassword, account.getPassword())
                 && !account.isOptionSet(Account.OPTION_DISABLED)
                 && !account.isOnlineAndConnected()) {
-            // nothing changed, so provision() left it alone: try now rather than after the
-            // backoff, e.g. the server is back or its CA was just imported
+            // unchanged, so provision() left it alone: retry now rather than after the backoff
             service.reconnectAccountInBackground(account);
         }
         return true;
     }
 
-    /** Forgets the XMPP login and disables its account (history is kept). */
+    /** Forgets the XMPP login and disables its account; the history is kept. */
     public void signOut() {
         final Account account = getAccount();
-        Log.d(TAG, "signing out " + (account == null ? "" : account.getJid().asBareJid()));
+        SensitiveLog.d(TAG, "signing out " + (account == null ? "" : account.getJid().asBareJid()));
         XmppSettings.clearLogin();
         if (account != null) {
             account.setPassword("");
@@ -508,7 +482,6 @@ public final class XmppEngine {
         provision();
     }
 
-    /** Forces a reconnect of the provisioned account (e.g. from a "retry" button). */
     public void reconnect() {
         final Account account = getAccount();
         if (account != null) {
@@ -516,12 +489,12 @@ public final class XmppEngine {
         }
     }
 
-    /** Disables (never deletes) every enabled account whose bare JID {@code keep} rejects. */
+    /** Disables, never deletes, every enabled account that {@code keep} rejects. */
     private void disableAccountsExcept(final Predicate<Jid> keep) {
         for (final Account other : new ArrayList<>(service.getAccounts())) {
             if (!keep.test(other.getJid().asBareJid())
                     && !other.isOptionSet(Account.OPTION_DISABLED)) {
-                Log.d(TAG, "disabling account of a previous configuration " + other.getJid());
+                SensitiveLog.d(TAG, "disabling account " + other.getJid());
                 other.setOption(Account.OPTION_DISABLED, true);
                 service.updateAccount(other);
             }
@@ -533,7 +506,7 @@ public final class XmppEngine {
         account.setPort(settings.port);
     }
 
-    /** Publishes (or clears) this device's XMPP address in its SA, via ATAK's own preference. */
+    /** Publishes or clears this device's XMPP address in its SA. */
     private void advertise(final String jid) {
         final AtakPreferences prefs = AtakPreferences.getInstance(atakContext);
         if (jid == null) {
@@ -541,10 +514,10 @@ public final class XmppEngine {
         } else {
             prefs.set(PREF_SA_XMPP_USERNAME, jid);
         }
-        Log.d(TAG, "advertising " + PREF_SA_XMPP_USERNAME + "=" + jid);
+        SensitiveLog.d(TAG, "advertising " + PREF_SA_XMPP_USERNAME + "=" + jid);
     }
 
-    /** @return the account of the current configuration, or null if none is provisioned */
+    /** The account of the current configuration, or null. */
     public Account getAccount() {
         return provisionedJid == null ? null : service.findAccountByJid(provisionedJid);
     }
@@ -553,20 +526,17 @@ public final class XmppEngine {
         return service;
     }
 
-    /**
-     * A context for one of Conversations' activities: ATAK's identity, the plugin's resources
-     * for {@code override}, and the engine's storage and service routing.
-     */
+    /** Context for a Conversations activity: ATAK's identity, the plugin's resources. */
     public Context newUiContext(final Display display, final Configuration override) {
         return context.forUi(display, override);
     }
 
-    /** Conversations' Application object, which its activities expect to be attached to. */
+    /** Conversations' Application, which its activities expect. */
     public Application getApplication() {
         return (Application) context.getApplicationContext();
     }
 
-    /** @return null if provisioning succeeded, otherwise why it did not */
+    /** Why provisioning failed, or null. */
     public XmppSettings.Problem getProblem() {
         return lastProblem;
     }
@@ -575,7 +545,7 @@ public final class XmppEngine {
         return settings;
     }
 
-    /** Sends a plain-text 1:1 message. @return false if there is no account or the JID is bad */
+    /** Sends a plain-text message; false if there is no account or the address is invalid. */
     public boolean sendMessage(final String to, final String body) {
         final Account account = getAccount();
         if (account == null || to == null || body == null || body.isEmpty()) {
@@ -591,15 +561,11 @@ public final class XmppEngine {
                 service.findOrCreateConversation(account, jid, false, false);
         final Message message = new Message(conversation, body, Message.ENCRYPTION_NONE);
         service.sendMessage(message);
-        Log.d(TAG, "sent message to " + jid);
+        SensitiveLog.d(TAG, "sent message to " + jid);
         return true;
     }
 
-    /**
-     * The 1:1 chat of the provisioned account with an XMPP address, created if there is none.
-     *
-     * @return null if no account is provisioned or the address is not a valid JID
-     */
+    /** The 1:1 chat with an address, created if needed; null without account or valid JID. */
     public Conversation openConversation(final String address) {
         final Account account = getAccount();
         final Jid jid = bareJid(address);
@@ -609,7 +575,7 @@ public final class XmppEngine {
         return service.findOrCreateConversation(account, jid, false, true);
     }
 
-    /** @return the bare JID of an address as typed or advertised, or null if it isn't one */
+    /** The bare JID of a typed or advertised address, or null if it isn't one. */
     public static Jid bareJid(final String address) {
         if (address == null || address.trim().isEmpty()) {
             return null;
@@ -633,14 +599,12 @@ public final class XmppEngine {
         listeners.remove(listener);
     }
 
-    /**
-     * The count of unread messages Conversations would show on its launcher icon.
-     */
+    /** The unread count Conversations would show on its launcher icon. */
     public int getUnreadCount() {
         return unreadCount;
     }
 
-    // upstream reports changes from worker threads, often many at once (e.g. catching up)
+    // upstream reports changes from worker threads, often many at once
     private void dispatchChanged() {
         if (dispatchPending.compareAndSet(false, true)) {
             mainHandler.post(dispatchTask);

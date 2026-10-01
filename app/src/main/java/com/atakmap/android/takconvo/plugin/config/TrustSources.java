@@ -3,6 +3,9 @@ package com.atakmap.android.takconvo.plugin.config;
 import com.atakmap.coremap.log.Log;
 import com.atakmap.net.CertificateManager;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.MessageDigest;
 import java.security.cert.CertificateException;
@@ -18,18 +21,9 @@ import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 
 /**
- * The CAs TAK Convo trusts for the XMPP server's certificate, in addition to the public CAs
- * Conversations already trusts:
- *
- * <ul>
- *   <li>the TAK server truststores configured in ATAK ({@link XmppSettings#useTakTrustStore}),
- *   <li>the Android CA store, which includes CAs the user or an MDM installed
- *       ({@link XmppSettings#useAndroidCaStore}),
- *   <li>a CA file ({@link XmppSettings#trustedCaPath}).
- * </ul>
- *
- * A certificate is trusted if any of them validates its chain; hostname verification stays
- * with Conversations.
+ * CAs trusted for the XMPP server besides the public ones: ATAK's TAK server truststores, the
+ * Android CA store (user and MDM CAs) and a CA file. Any of them may validate the chain;
+ * Conversations keeps hostname verification. See docs/03.
  */
 public final class TrustSources {
 
@@ -38,7 +32,7 @@ public final class TrustSources {
     private TrustSources() {
     }
 
-    /** @return a trust manager over the enabled sources, or null if none has any CA */
+    /** A trust manager over the enabled sources, or null if none has a CA. */
     public static X509TrustManager build(final XmppSettings settings) {
         final Map<String, X509TrustManager> sources = new LinkedHashMap<>();
         if (settings.useTakTrustStore) {
@@ -58,9 +52,7 @@ public final class TrustSources {
         return composite;
     }
 
-    /**
-     * Changes when the set of trusted CAs does, so the engine only reconnects for a real change.
-     */
+    /** Changes only when the set of trusted CAs does, so the engine reconnects only then. */
     public static String fingerprint(final X509TrustManager trust) {
         if (trust == null) {
             return "";
@@ -74,30 +66,28 @@ public final class TrustSources {
             }
             issuers.sort(null);
             for (final String issuer : issuers) {
-                digest.update(issuer.getBytes());
+                digest.update(issuer.getBytes(StandardCharsets.UTF_8));
             }
             return Arrays.toString(digest.digest());
-        } catch (final Exception e) {
+        } catch (final GeneralSecurityException e) {
+            // unique per trust manager: counts as a change
+            Log.w(TAG, "unable to fingerprint the trusted CAs", e);
             return String.valueOf(System.identityHashCode(trust));
         }
     }
 
-    /** CAs of every TAK server truststore in ATAK (plus its default one), no public CAs. */
+    /** CAs of all TAK server truststores in ATAK, no public CAs. */
     private static X509TrustManager takTrustStore() {
         try {
-            // the String variant rebuilds from ATAK's certificate database on every call, so it
-            // sees truststores imported since startup; null means "all servers"
+            // the String variant re-reads ATAK's database, so it sees new imports; null: all
             return CertificateManager.getInstance().getLocalTrustManager((String) null);
-        } catch (final Exception e) {
+        } catch (final RuntimeException e) {
             Log.e(TAG, "unable to read the TAK server truststores", e);
             return null;
         }
     }
 
-    /**
-     * Android's system and user CA certificates. User CAs include those an MDM installs; apps
-     * don't trust them by default, so they are read from the AndroidCAStore key store directly.
-     */
+    /** System and user CAs; apps don't trust user (and MDM) CAs by default. */
     private static X509TrustManager androidCaStore() {
         try {
             final KeyStore store = KeyStore.getInstance("AndroidCAStore");
@@ -110,7 +100,7 @@ public final class TrustSources {
                     return (X509TrustManager) tm;
                 }
             }
-        } catch (final Exception e) {
+        } catch (final GeneralSecurityException | IOException e) {
             Log.e(TAG, "unable to read the Android CA store", e);
         }
         return null;

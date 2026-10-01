@@ -359,8 +359,7 @@ public class ConversationsActivity extends QrCodeProcessingActivity
         this.binding = DataBindingUtil.setContentView(this, R.layout.activity_conversations);
         Activities.setStatusAndNavigationBarColors(this, binding.getRoot());
         ;
-        // TAKCONVO: not a lambda. ATAK's copy of this interface has no default methods, so
-        // every method needs a body here.
+        // TAKCONVO: not a lambda: ATAK's copy of this interface has no default methods
         this.getSupportFragmentManager()
                 .addOnBackStackChangedListener(
                         new FragmentManager.OnBackStackChangedListener() {

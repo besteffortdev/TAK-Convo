@@ -157,7 +157,9 @@ adb logcat -s TakConvo.Plugin TakConvo.XmppEngine TakConvo.Host "tak convo"
 ```
 
 `TakConvo.Host` logs each embedded activity's creation, resume, pause and stop, and every
-permission request. `ResourcesCompat` "Failed to inflate ColorStateList" warnings are harmless
+permission request. Logs that name users (addresses, callsigns, rooms, the `status:` line
+that `deploy.ps1` waits for) go through `SensitiveLog` and appear in debug builds only; message
+text is never logged ([09](09-code-guidelines.md#logging)). `ResourcesCompat` "Failed to inflate ColorStateList" warnings are harmless
 (ATAK's and the plugin's `R` classes clash on a few AndroidX ids).
 
 ## Driving the UI from a PC

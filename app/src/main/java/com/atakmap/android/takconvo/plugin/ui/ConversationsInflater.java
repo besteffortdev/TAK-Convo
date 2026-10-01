@@ -9,19 +9,15 @@ import android.view.ViewGroup;
 import com.google.android.material.theme.MaterialComponentsViewInflater;
 
 /**
- * Inflates Conversations layouts the way its AppCompatActivity does: plain {@code Button},
- * {@code TextView}, {@code ImageView}, ... tags become their Material/AppCompat versions (Material
- * 3 styling, tinting, {@code app:srcCompat}). A plugin view in an ATAK pane has no
- * AppCompatDelegate to do that, so this installs the same view inflater as a factory.
+ * Inflates Conversations layouts as its AppCompatActivity would, with Material and AppCompat
+ * views for plain tags; a view in an ATAK pane has no AppCompatDelegate to do it.
  */
 public final class ConversationsInflater {
 
     private ConversationsInflater() {
     }
 
-    /**
-     * @param themed a context with the plugin's resources and a Conversations theme
-     */
+    /** {@code themed}: the plugin's resources with a Conversations theme. */
     public static View inflate(final Context themed, final int layout, final ViewGroup root,
             final boolean attachToRoot) {
         final LayoutInflater inflater = LayoutInflater.from(themed).cloneInContext(themed);
@@ -30,7 +26,7 @@ public final class ConversationsInflater {
             @Override
             public View onCreateView(final View parent, final String name, final Context context,
                     final AttributeSet attrs) {
-                // the arguments AppCompatDelegateImpl passes on API 21+
+                // as AppCompatDelegateImpl passes them on API 21+
                 return views.createView(parent, name, context, attrs, false, false, true, false);
             }
 

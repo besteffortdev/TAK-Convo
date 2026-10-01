@@ -20,11 +20,11 @@ import com.atakmap.android.maps.MapView;
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.android.takconvo.plugin.TakConvoPlugin;
 import com.atakmap.android.takconvo.plugin.ui.TakConvoPreferenceFragment;
-import com.atakmap.comms.CommsMapComponent;
-import com.atakmap.comms.CotService;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 import com.atakmap.app.SettingsActivity;
 import com.atakmap.app.preferences.PreferenceControl;
+import com.atakmap.comms.CommsMapComponent;
+import com.atakmap.comms.CotService;
 import com.atakmap.coremap.cot.event.CotDetail;
 import com.atakmap.coremap.cot.event.CotEvent;
 import com.atakmap.coremap.cot.event.CotPoint;
@@ -55,18 +55,18 @@ import java.util.List;
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_CHAT
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_CHAT_BACK
  *
- * # contacts integration; the JID defaults to this device's own (the self chat)
- * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_FAKE_CONTACT [--es jid J] [--es callsign C]
+ * # contacts; the JID defaults to this device's own (the self chat)
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_FAKE_CONTACT \
+ *     [--es jid J] [--es callsign C]
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_REMOVE_FAKE_CONTACT
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_OPEN_CONTACT
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_DUMP_CONTACT
- * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_FAKE_INCOMING [--es from J] --es body B
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_FAKE_INCOMING \
+ *     [--es from J] --es body B
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_ATAK_BROADCAST --es action A
  * </pre>
  *
- * <p>The fake contact is a TAK user SA injected into this ATAK only (ATAK's internal dispatcher:
- * nothing is sent). A fake incoming message is stored locally as if received; nothing is sent
- * either.
+ * <p>The fake contact and fake incoming messages stay on this device; nothing is sent.
  */
 public final class DebugReceiver extends BroadcastReceiver {
 
@@ -89,11 +89,10 @@ public final class DebugReceiver extends BroadcastReceiver {
     public static final String ACTION_FAKE_INCOMING = PREFIX + "DEBUG_FAKE_INCOMING";
     public static final String ACTION_ATAK_BROADCAST = PREFIX + "DEBUG_ATAK_BROADCAST";
 
-    /** the fake TAK user's UID */
     private static final String FAKE_UID = "TAKCONVO-DEBUG-CONTACT";
 
     private final Context context;
-    /** the fake TAK user's XMPP address */
+    /** The fake TAK user's XMPP address. */
     private String fakeJid;
 
     private DebugReceiver(final Context context) {
@@ -120,6 +119,7 @@ public final class DebugReceiver extends BroadcastReceiver {
         filter.addAction(ACTION_FAKE_INCOMING);
         filter.addAction(ACTION_ATAK_BROADCAST);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // exported for adb's shell; registered in debug builds only
             context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
         } else {
             context.registerReceiver(receiver, filter);
@@ -150,7 +150,7 @@ public final class DebugReceiver extends BroadcastReceiver {
         } else if (ACTION_PROVISION.equals(action) && engine != null) {
             engine.provision();
         } else if (ACTION_ADD_TAK_SERVER.equals(action)) {
-            // same calls as ATAK's "add TAK server" dialog; credentials go to ATAK's auth DB
+            // as ATAK's "add TAK server" dialog does
             final String connect = intent.getStringExtra("connect");
             final Bundle data = new Bundle();
             data.putString("description", "TAK Convo test server");
@@ -162,19 +162,19 @@ public final class DebugReceiver extends BroadcastReceiver {
                     intent.getStringExtra("pass"));
             Log.d(TAG, "added TAK server " + connect);
         } else if (ACTION_IMPORT_PREF.equals(action)) {
-            // ATAK's own .pref import (what the import manager / mission packages use)
+            // ATAK's .pref import, as mission packages use it
             final String path = intent.getStringExtra("path");
             final List<String> loaded = PreferenceControl.getInstance(context)
                     .loadSettings(new File(path));
             Log.d(TAG, "imported " + path + ": " + loaded);
         } else if (ACTION_DUMP_SELF_SA.equals(action)) {
-            // the SA this device sends, built by ATAK's private CotMapComponent.getSelfEvent(int)
+            // the SA this device sends, from ATAK's private getSelfEvent(int)
             try {
                 final Method m = CotMapComponent.class.getDeclaredMethod("getSelfEvent",
                         int.class);
                 m.setAccessible(true);
                 Log.d(TAG, "self SA: " + m.invoke(CotMapComponent.getInstance(), 0));
-            } catch (final Exception e) {
+            } catch (final ReflectiveOperationException e) {
                 Log.e(TAG, "unable to build self SA", e);
             }
         } else if (ACTION_SHOW_ACCOUNT.equals(action)) {
@@ -197,7 +197,7 @@ public final class DebugReceiver extends BroadcastReceiver {
             final String callsign = intent.getStringExtra("callsign");
             injectFakeContact(fakeJid, callsign == null ? "XMPP Test" : callsign);
         } else if (ACTION_REMOVE_FAKE_CONTACT.equals(action)) {
-            // from its team group too: removeContactByUuid alone leaves it there, still counted
+            // also from its team group, where removeContactByUuid leaves it
             final Contact contact = Contacts.getInstance().getContactByUuid(FAKE_UID);
             if (contact != null) {
                 Contacts.getInstance().removeContact(contact);
@@ -209,7 +209,7 @@ public final class DebugReceiver extends BroadcastReceiver {
             Contacts.getInstance().updateTotalUnreadCount();
             Log.d(TAG, "removed the fake contact");
         } else if (ACTION_OPEN_CONTACT.equals(action)) {
-            // what tapping the contact's XMPP connector does
+            // as tapping its XMPP connector
             final boolean handled = CotMapComponent.getInstance().getContactConnectorMgr()
                     .initiateContact(XmppConnector.CONNECTOR_TYPE, FAKE_UID,
                             orSelf(fakeJid, engine));
@@ -248,7 +248,7 @@ public final class DebugReceiver extends BroadcastReceiver {
         return engine.getAccount().getJid().asBareJid().toString();
     }
 
-    /** SA of a TAK user advertising an XMPP address, handled as if it came from the network. */
+    /** Dispatches locally the SA of a TAK user advertising an XMPP address. */
     private static void injectFakeContact(final String jid, final String callsign) {
         if (jid == null) {
             Log.w(TAG, "no JID for the fake contact");
@@ -280,7 +280,7 @@ public final class DebugReceiver extends BroadcastReceiver {
         Log.d(TAG, "injected fake contact " + callsign + " with XMPP address " + jid);
     }
 
-    /** A message stored and notified as if it had been received from {@code from}. */
+    /** Stores and notifies a message as if received from {@code from}. */
     private static void fakeIncoming(final XmppEngine engine, final String from,
             final String body) {
         final Conversation conversation = engine.openConversation(from);

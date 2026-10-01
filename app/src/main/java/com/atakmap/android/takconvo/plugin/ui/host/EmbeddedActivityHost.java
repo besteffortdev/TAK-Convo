@@ -58,40 +58,32 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Runs Conversations' own activities inside an ATAK pane.
- *
- * <p>An activity of a plugin can't be started in ATAK's process, so each one is created here the
- * way {@code ActivityUnitTestCase} did: {@link Instrumentation#newActivity} attaches it with a
- * window of its own, and this class calls its lifecycle. That window is never shown. The
- * activity's views are moved out of it into {@link #getView()}, which ATAK shows in a pane.
- *
- * <p>The activities form a back stack like a task's. What an activity asks of the system goes
- * through {@link HostParent}: starting another Conversations activity pushes it here, anything
- * else is started by ATAK's real activity, and finishing pops the stack.
- *
- * <p>All methods must be called on the main thread.
+ * Runs Conversations' activities inside an ATAK pane: created with
+ * {@link Instrumentation#newActivity}, their lifecycle driven here, their views moved into
+ * {@link #getView()}. They form a back stack; {@link HostParent} routes what they ask of the
+ * system. Main thread only. See docs/04.
  */
 public final class EmbeddedActivityHost implements HostParent.Callbacks {
 
     private static final String TAG = "TakConvo.Host";
     private static final String CONVERSATIONS_PACKAGE = "eu.siacs.conversations.";
 
-    /** Things that happen outside the pane's content. */
+    /** Events outside the pane's content. */
     public interface Listener {
-        /** The last activity finished: there is nothing left to show. */
+        /** The last activity finished. */
         void onHostEmpty();
 
-        /** The activity on top finished; the one below it shows again. */
+        /** The top activity finished; the one below shows again. */
         void onTopFinished(Activity finished);
 
-        /** An activity asked for the XMPP account screen, which the plugin provides itself. */
+        /** An activity asked for the account screen, which the plugin provides. */
         void onShowAccount();
 
-        /** An activity asked for Conversations' settings; the plugin's own replace them. */
+        /** An activity asked for Conversations' settings, which the plugin's replace. */
         void onShowSettings();
     }
 
-    /** Conversations activities that work embedded. Others are refused with a toast. */
+    /** Activities that work embedded; others are refused with a toast. */
     private static final Set<String> SUPPORTED = new HashSet<>(Arrays.asList(
             "eu.siacs.conversations.ui.ConversationsActivity",
             "eu.siacs.conversations.ui.StartConversationActivity",
@@ -107,32 +99,29 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             "eu.siacs.conversations.ui.SearchActivity",
             "eu.siacs.conversations.ui.TrustKeysActivity",
             "eu.siacs.conversations.ui.RecordingActivity",
-            // camera preview on a TextureView, which draws in ATAK's window like any view
+            // its camera preview is a TextureView, which draws in ATAK's window
             "eu.siacs.conversations.ui.ScanQrCodeActivity",
             // the fork picks the image without the cropper's activity
             "eu.siacs.conversations.ui.PublishProfilePictureActivity"));
 
-    /**
-     * Dialog-themed activities: shown over the activity below, which stays visible and paused,
-     * as a floating window would leave it.
-     */
+    /** Dialog-themed: shown over the activity below, which stays visible and paused. */
     private static final Set<String> FLOATING = new HashSet<>(Arrays.asList(
             "eu.siacs.conversations.ui.RecordingActivity"));
 
     private static final String SETTINGS_ACTIVITY =
             "eu.siacs.conversations.ui.activity.SettingsActivity";
 
-    /** Started again, these come back to the front instead of being created twice. */
+    /** Brought to the front when started again, not created twice. */
     private static final Set<String> SINGLE_INSTANCE = new HashSet<>(Arrays.asList(
             "eu.siacs.conversations.ui.ConversationsActivity",
             "eu.siacs.conversations.ui.StartConversationActivity"));
 
     private static final class Record {
         final Activity activity;
-        /** who gets the result, or null */
+        /** Who gets the result, or null. */
         final Record caller;
         final int requestCode;
-        /** shown over the activity below instead of hiding it */
+        /** Shown over the activity below instead of hiding it. */
         final boolean floating;
         View content;
         boolean started;
@@ -164,14 +153,13 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     private final FrameLayout container;
     private final List<Record> stack = new ArrayList<>();
     private final AtomicInteger externalRequests = new AtomicInteger();
-    /** follows ATAK's activity once there is an activity here */
+    /** Follows ATAK's activity while there are activities here. */
     private LifecycleEventObserver atakObserver;
     private ActivityCompat.PermissionCompatDelegate previousPermissionDelegate;
 
     /**
-     * An embedded activity can't request permissions itself: Activity.requestPermissions starts
-     * the system's dialog through the ActivityThread it doesn't have. ATAK's activity asks
-     * instead. Conversations requests them through ActivityCompat, which asks this first.
+     * Asks ATAK's activity for permissions: an embedded one has no ActivityThread to show the
+     * system dialog. Conversations requests them through ActivityCompat, which asks this first.
      */
     private final ActivityCompat.PermissionCompatDelegate permissionDelegate =
             new ActivityCompat.PermissionCompatDelegate() {
@@ -213,23 +201,21 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             final Record top = top();
             return top == null ? null : top.activity;
         });
-        // ATAK is dark whatever the device setting is. AppCompat would otherwise follow the
-        // device, and an embedded activity can't be recreated when that changes.
+        // ATAK is always dark, and an embedded activity can't be recreated on a theme change
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
     }
 
-    /** The view to show in the pane. */
     public View getView() {
         return container;
     }
 
-    /** The size the pane is about to get, which selects the activities' resources. */
+    /** Sets the size the pane is about to get, which selects the activities' resources. */
     public void setPaneSize(final int widthPx, final int heightPx) {
         this.paneWidthPx = widthPx;
         this.paneHeightPx = heightPx;
     }
 
-    /** Starts Conversations' main screen, the list of chats, unless something is shown already. */
+    /** Starts the chat list unless something is shown already. */
     public void showMain() {
         if (!stack.isEmpty()) {
             return;
@@ -249,20 +235,16 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         start(null, intent, -1);
     }
 
-    /**
-     * Starts an activity as if the system had, e.g. what a tapped notification aims at. Routed
-     * like one an activity starts: the account screen and settings go to the {@link Listener}.
-     */
+    /** Starts an activity as the system would, e.g. a tapped notification's. */
     public void startActivity(final Intent intent) {
         start(null, intent, -1);
     }
 
-    /** @return true if no activity is shown */
     public boolean isEmpty() {
         return stack.isEmpty();
     }
 
-    /** The pane became visible or hidden; hidden activities are stopped, not destroyed. */
+    /** Hidden activities are stopped, not destroyed. */
     public void setVisible(final boolean visible) {
         if (this.visible == visible) {
             return;
@@ -271,10 +253,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         settleShown();
     }
 
-    /**
-     * @return true if the activity on top used the back press, false if there is nothing left
-     *     to go back to and the pane should close
-     */
+    /** Returns false when there is nothing left to go back to: the pane should close. */
     public boolean onBackPressed() {
         final Record top = top();
         if (top == null) {
@@ -295,7 +274,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         return false;
     }
 
-    /** Destroys every activity. The host can be used again afterwards. */
+    /** Destroys every activity; the host can be used again. */
     public void destroy() {
         handler.removeCallbacksAndMessages(null);
         detachFromAtak();
@@ -311,7 +290,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     @Override
     public void startFromChild(final Activity child, final Intent intent, final int requestCode,
             final Bundle options) {
-        // after the caller's current callback: it often finishes itself right after starting
+        // after the caller's callback, which often finishes it right after
         handler.post(() -> start(find(child), intent, requestCode));
     }
 
@@ -353,7 +332,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         final Record existing = findByClass(name);
         if (existing != null && (SINGLE_INSTANCE.contains(name)
                 || (intent.getFlags() & Intent.FLAG_ACTIVITY_CLEAR_TOP) != 0)) {
-            // like singleTask / CLEAR_TOP: drop what is above it and hand it the intent
+            // like singleTask or CLEAR_TOP
             while (top() != existing) {
                 final Record above = stack.remove(stack.size() - 1);
                 guarded(above, "destroy", () -> destroy(above));
@@ -374,8 +353,8 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         final Record record;
         try {
             record = create(name, intent, caller, requestCode);
-        } catch (final Throwable t) {
-            Log.e(TAG, "unable to create " + name, t);
+        } catch (final Exception | LinkageError e) {
+            Log.e(TAG, "unable to create " + name, e);
             toastNotAvailable();
             if (previous != null) {
                 guarded(previous, "resume", () -> settle(previous));
@@ -387,7 +366,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             guarded(record, "resume", () -> settle(record));
         }
         if (!record.floating) {
-            // what was shown below, including what showed through a floating activity
+            // hide what was shown below, also through a floating activity
             for (int i = stack.indexOf(record) - 1; i >= 0; i--) {
                 final Record below = stack.get(i);
                 if (below.content.getVisibility() == View.GONE) {
@@ -443,18 +422,21 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
                 engine.getApplication(), intent, info, "", parent, className, null);
         activity.setTheme(info.theme);
         final Record record = new Record(activity, caller, requestCode, floating);
-        // on the stack before onCreate, which may already start or finish activities
+        // before onCreate, which may start or finish activities
         stack.add(record);
+        boolean created = false;
         try {
             instrumentation.callActivityOnCreate(activity, null);
             instrumentation.callActivityOnPostCreate(activity, null);
             final View content = takeContent(activity);
             record.content = floating ? floatOver(activity, content) : content;
-        } catch (final Throwable t) {
-            stack.remove(record);
-            throw t;
+            created = true;
+        } finally {
+            if (!created) {
+                stack.remove(record);
+            }
         }
-        // set on the activity's own window, which is never shown; the pane is in ATAK's
+        // carried over from the activity's own window, which is never shown
         if ((activity.getWindow().getAttributes().flags
                 & WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0) {
             record.content.setKeepScreenOn(true);
@@ -464,10 +446,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         return record;
     }
 
-    /**
-     * What a floating window would look like: the content in a dialog's shape over a dimmed
-     * pane. Touches outside it do nothing, as with {@code setFinishOnTouchOutside(false)}.
-     */
+    /** Wraps the content like a dialog over a dimmed pane; touches outside do nothing. */
     private View floatOver(final Activity activity, final View content) {
         final float density = activity.getResources().getDisplayMetrics().density;
         final TypedArray a = activity.obtainStyledAttributes(new int[] {
@@ -490,11 +469,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         return scrim;
     }
 
-    /**
-     * The resources an activity gets: dark, scaled down ({@link UiScale}), and sized like the
-     * pane rather than the screen, so that Conversations picks its phone layouts in a side pane
-     * of a tablet.
-     */
+    /** Dark, scaled ({@link UiScale}) and sized like the pane, not the screen. */
     private Configuration paneConfiguration() {
         final Configuration override = UiScale.override(atak);
         final float density = UiScale.density(atak);
@@ -512,9 +487,8 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     }
 
     /**
-     * Takes the activity's views out of its window: AppCompat's content frame together with the
-     * layout around it that holds action mode bars. The window itself stays unattached, because
-     * a window's decor view reconfigures the view root it is attached to, and that is ATAK's.
+     * Takes the content frame and the layout holding action mode bars out of the activity's
+     * window. The window stays unattached: its decor view would reconfigure ATAK's view root.
      */
     @SuppressLint("RestrictedApi")
     private static View takeContent(final Activity activity) {
@@ -531,7 +505,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             ((ViewGroup) view.getParent()).removeView(view);
         }
         if (view.getBackground() == null) {
-            // what the window would have drawn behind them
+            // what the window would have drawn
             final TypedArray a = activity.obtainStyledAttributes(
                     new int[] {android.R.attr.windowBackground});
             final Drawable background = a.getDrawable(0);
@@ -547,10 +521,9 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     // --- lifecycle ---
 
     /**
-     * Brings a shown activity to the state it would have in a task: the top one resumed while
-     * the pane is visible and ATAK is resumed, paused while ATAK is only started (or, below a
-     * floating one, always), stopped otherwise. Conversations marks what a resumed chat shows
-     * as read and holds back its notifications, so it must not stay resumed behind other apps.
+     * Resumes the top activity while the pane and ATAK are; pauses it while ATAK is only
+     * started, or below a floating one; stops it otherwise. A resumed chat marks its messages
+     * read and holds back notifications, so it must not stay resumed behind other apps.
      */
     private void settle(final Record r) throws Exception {
         final Lifecycle.State atakState = atak instanceof LifecycleOwner
@@ -566,7 +539,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         }
     }
 
-    /** Shows and settles the top activity and, below a floating one, what it floats over. */
+    /** Shows and settles the top activity and what it floats over. */
     private void settleShown() {
         for (int i = stack.size() - 1; i >= 0; i--) {
             final Record r = stack.get(i);
@@ -580,7 +553,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         }
     }
 
-    /** Follows ATAK's activity and takes over the permission requests of the activities here. */
+    /** Follows ATAK's activity and takes over the activities' permission requests. */
     private void attachToAtak() {
         if (atakObserver == null && atak instanceof LifecycleOwner) {
             atakObserver = (source, event) -> settleShown();
@@ -662,11 +635,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         }
     }
 
-    /**
-     * An activity's own Lifecycle follows callbacks the system makes around onStart, onResume
-     * and onStop. Instrumentation doesn't make those, so the events are dispatched here.
-     * Dispatching one that already happened does nothing.
-     */
+    /** Dispatches the Lifecycle events Instrumentation doesn't; repeats are ignored. */
     private static void lifecycle(final Record r, final Lifecycle.Event event) {
         if (r.activity instanceof LifecycleOwner) {
             final Lifecycle lifecycle = ((LifecycleOwner) r.activity).getLifecycle();
@@ -676,12 +645,12 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         }
     }
 
-    /** A failing activity is dropped; it must not take ATAK down. */
+    /** Runs an activity callback; a failing activity must not take ATAK down. */
     private void guarded(final Record record, final String what, final ThrowingRunnable action) {
         try {
             action.run();
-        } catch (final Throwable t) {
-            Log.e(TAG, "unable to " + what + " " + record, t);
+        } catch (final Exception | LinkageError e) {
+            Log.e(TAG, "unable to " + what + " " + record, e);
         }
     }
 
@@ -698,7 +667,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
                 atak.startActivity(intent);
                 return;
             }
-            // ATAK's activity is the only one the system returns results to
+            // the system returns results to ATAK's activity only
             final String key = "takconvo#" + externalRequests.incrementAndGet();
             final ActivityResultLauncher<?>[] launcher = new ActivityResultLauncher<?>[1];
             final ActivityResultLauncher<Intent> l = ((ComponentActivity) atak)
@@ -717,7 +686,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         }
     }
 
-    /** From the plugin's resources: ATAK's context would look the string up in ATAK's. */
+    /** The string comes from the plugin's resources; ATAK's would crash. */
     private void toastNotAvailable() {
         Toast.makeText(atak, plugin.getString(com.atakmap.android.takconvo.plugin.R.string
                 .takconvo_not_available_in_atak), Toast.LENGTH_SHORT).show();
@@ -772,7 +741,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
                 () -> ON_ACTIVITY_RESULT.invoke(to.activity, requestCode, resultCode, data));
     }
 
-    // onPostResume and onActivityResult are protected, but part of the SDK
+    // protected SDK methods
     private static final Method ON_POST_RESUME = method("onPostResume");
     private static final Method ON_ACTIVITY_RESULT =
             method("onActivityResult", int.class, int.class, Intent.class);
@@ -787,13 +756,14 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         }
     }
 
-    /** What the activity passed to setResult(). There is no public getter. */
+    /** What the activity passed to setResult(), which has no public getter. */
     private static int resultCode(final Activity activity) {
         try {
             final Field f = Activity.class.getDeclaredField("mResultCode");
             f.setAccessible(true);
             return f.getInt(activity);
-        } catch (final Exception e) {
+        } catch (final ReflectiveOperationException e) {
+            Log.w(TAG, "unable to read the result code of " + activity, e);
             return Activity.RESULT_CANCELED;
         }
     }
@@ -803,7 +773,8 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             final Field f = Activity.class.getDeclaredField("mResultData");
             f.setAccessible(true);
             return (Intent) f.get(activity);
-        } catch (final Exception e) {
+        } catch (final ReflectiveOperationException e) {
+            Log.w(TAG, "unable to read the result data of " + activity, e);
             return null;
         }
     }

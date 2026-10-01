@@ -7,15 +7,16 @@ import android.content.res.Resources;
 import android.os.Bundle;
 import android.view.Window;
 
+import com.atakmap.coremap.log.Log;
+
 /**
- * The "parent activity" of every embedded Conversations activity.
- *
- * <p>Android still routes what a child activity can't do by itself through its parent, as it did
- * for ActivityGroup: starting an activity, finishing, requesting an orientation. That is where
- * the host takes those over. This object is never attached or shown; it only answers the calls
- * {@link Activity} makes on a parent.
+ * The parent of every embedded activity. Android routes what a child activity can't do itself
+ * through its parent (starting, finishing, orientation), so the host takes those over here.
+ * Never attached or shown.
  */
 final class HostParent extends Activity {
+
+    private static final String TAG = "TakConvo.Host";
 
     interface Callbacks {
         void startFromChild(Activity child, Intent intent, int requestCode, Bundle options);
@@ -33,13 +34,13 @@ final class HostParent extends Activity {
         this.callbacks = callbacks;
     }
 
-    /** A child's window uses this one as its container, so its dialogs get ATAK's window token. */
+    /** Gives a child's dialogs ATAK's window token. */
     @Override
     public Window getWindow() {
         return atak.getWindow();
     }
 
-    /** A child's theme starts as a copy of its parent's: nothing, so only its own style applies. */
+    /** Empty, so a child's theme is only its own style. */
     @Override
     public Resources.Theme getTheme() {
         return emptyTheme;
@@ -64,24 +65,24 @@ final class HostParent extends Activity {
 
     @Override
     public void finishActivityFromChild(final Activity child, final int requestCode) {
-        // nothing of ours is identified by a request code alone
+        // nothing here is identified by a request code alone
     }
 
     @Override
     public void startIntentSenderFromChild(final Activity child, final IntentSender intent,
             final int requestCode, final Intent fillInIntent, final int flagsMask,
             final int flagsValues, final int extraFlags) {
-        // not supported inside ATAK
+        Log.w(TAG, "intent senders are not supported embedded: " + child);
     }
 
     @Override
     public void startIntentSenderFromChild(final Activity child, final IntentSender intent,
             final int requestCode, final Intent fillInIntent, final int flagsMask,
             final int flagsValues, final int extraFlags, final Bundle options) {
-        // not supported inside ATAK
+        Log.w(TAG, "intent senders are not supported embedded: " + child);
     }
 
-    /** The orientation is ATAK's to decide. */
+    /** ATAK decides the orientation. */
     @Override
     public void setRequestedOrientation(final int requestedOrientation) {
     }

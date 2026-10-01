@@ -29,23 +29,25 @@ import java.io.File;
 import java.util.List;
 
 /**
- * TAK Convo's page under ATAK's Tool Preferences. It edits the same ATAK preferences a
- * {@code .pref} file provisions ({@link XmppSettings}); the engine re-provisions on change.
+ * The plugin's page under ATAK's Tool Preferences, over the preferences a {@code .pref} file
+ * provisions ({@link XmppSettings}).
  */
 public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
 
-    /** Key of the page in ToolsPreferenceFragment, also used to open it directly. */
+    /** The page's key in ToolsPreferenceFragment. */
     public static final String TOOL_KEY = "takconvo_preferences";
-    /** Sent (AtakBroadcast) to show the account pane on the map. */
-    public static final String ACTION_SHOW_ACCOUNT = "com.atakmap.android.takconvo.SHOW_ACCOUNT";
+    /** AtakBroadcast that shows the account pane. */
+    public static final String ACTION_SHOW_ACCOUNT =
+            "com.atakmap.android.takconvo.SHOW_ACCOUNT";
 
     private static final String KEY_ACCOUNT = "takconvo_account";
     private static final String KEY_TRUSTED_CA_PICKER = "takconvo_trusted_ca_picker";
     private static final String KEY_IMPORT = "takconvo_import_pref";
 
+    // the plugin context, which lives as long as the plugin, for fragment re-creation
     private static Context staticPluginContext;
 
-    /** For fragment re-creation; only valid after the 1-arg constructor ran once. */
+    /** For fragment re-creation, after the other constructor ran once. */
     public TakConvoPreferenceFragment() {
         super(staticPluginContext, R.xml.takconvo_preferences);
     }
@@ -58,12 +60,12 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
 
     @Override
     public String getSubTitle() {
-        return getSubTitle("Tool Preferences", pluginContext.getString(R.string.takconvo_prefs_title));
+        return getSubTitle("Tool Preferences",
+                pluginContext.getString(R.string.takconvo_prefs_title));
     }
 
     @Override
     public void onCreate(final Bundle savedInstanceState) {
-        // the check boxes fail on booleans that a .pref file stored as strings
         XmppSettings.normalize(prefs());
         super.onCreate(savedInstanceState);
 
@@ -117,7 +119,7 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
         reload();
     }
 
-    /** Shows the stored values, e.g. after a .pref import changed them underneath. */
+    /** Shows the stored values, e.g. after a .pref import. */
     private void reload() {
         final SharedPreferences prefs = prefs();
         for (final String key : new String[] {XmppSettings.KEY_ENABLED,
@@ -149,7 +151,7 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
         showChannelDiscovery(discovery, channelServer());
     }
 
-    /** The choice as the list's summary; the server field only matters for "another server". */
+    /** Shows the choice; the server field is enabled for "another server" only. */
     private void showChannelDiscovery(final XmppSettings.ChannelDiscovery discovery,
             final String server) {
         final boolean empty = server == null || server.trim().isEmpty();
@@ -183,7 +185,7 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
         return value == null ? "" : value;
     }
 
-    /** An XMPP address that a server or a group chat service can have: no user, no resource. */
+    /** A server or group chat service address: no user, no resource. */
     private static boolean validServer(final String value) {
         try {
             final Jid jid = Jid.ofUserInput(value);
@@ -271,8 +273,7 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
                         if (file == null) {
                             return;
                         }
-                        // ATAK's own importer, the one the import manager and mission
-                        // packages use
+                        // ATAK's importer, as mission packages use it
                         final List<String> keys = PreferenceControl.getInstance(getActivity())
                                 .loadSettings(file);
                         final int count = keys == null ? 0 : keys.size();

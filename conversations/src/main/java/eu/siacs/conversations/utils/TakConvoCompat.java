@@ -6,12 +6,9 @@ import android.content.Context;
 import android.content.Intent;
 
 /**
- * TAKCONVO: what the fork needs to run inside ATAK: constants from Android SDK 37, and the hooks
- * the TAK Convo plugin sets when it embeds Conversations. Outside ATAK none of the hooks is set
- * and every helper does what upstream does.
- *
- * <p>The plugin compiles against SDK 36 because that is the newest one AGP 8.13 supports, and the
- * ATAK takdev plugin needs AGP 8.
+ * TAKCONVO: SDK 37 constants (the build is on SDK 36, the newest AGP 8 supports) and the hooks
+ * the TAK Convo plugin sets inside ATAK. Unset outside ATAK, where every helper does what
+ * upstream does.
  */
 public final class TakConvoCompat {
 
@@ -22,31 +19,18 @@ public final class TakConvoCompat {
     public static final String ACCESS_LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK";
 
     /**
-     * True when Conversations runs embedded inside the ATAK process (the TAK Convo plugin) rather
-     * than as its own app. There is then no real Android Service or Application: calls that need
-     * one (foreground service, stopSelf, component toggling, telecom integration) are skipped.
+     * Running inside ATAK: there is no real Service or Application, so foreground service,
+     * stopSelf, component toggling and telecom are skipped.
      */
     public static volatile boolean EMBEDDED = false;
 
-    /**
-     * Additional trust anchors supplied by the plugin (e.g. a CA delivered in a mission package),
-     * consulted by MemorizingTrustManager after the system CAs and before failing. Hostname
-     * verification is unaffected.
-     */
+    /** CAs the plugin adds, checked after the system's; hostname verification is unchanged. */
     public static volatile javax.net.ssl.X509TrustManager EXTRA_TRUST_MANAGER = null;
 
-    /**
-     * Where "Discover channels" looks when it looks at XMPP servers (its LOCAL_SERVER method):
-     * a server, or one of its group chat services, set in the plugin's settings. Null for the
-     * group chat services of the account's own server, as upstream.
-     */
+    /** Where "Discover channels" looks on XMPP servers; null for the account's server. */
     public static volatile eu.siacs.conversations.xmpp.Jid CHANNEL_DISCOVERY_SERVER = null;
 
-    /**
-     * Makes the PendingIntents Conversations hands to the system (notification taps and actions,
-     * alarms). Embedded, their targets are Conversations components that don't exist in ATAK's
-     * package, so the plugin redirects them to ones that do.
-     */
+    /** Makes the PendingIntents, whose Conversations targets ATAK's package doesn't have. */
     public interface PendingIntentFactory {
         PendingIntent getActivity(Context context, int requestCode, Intent intent, int flags);
 
@@ -57,25 +41,17 @@ public final class TakConvoCompat {
 
     public static volatile PendingIntentFactory PENDING_INTENTS = null;
 
-    /**
-     * Adjusts a notification before it is posted. Embedded, it is posted as ATAK's, so its
-     * resource icons would be looked up in ATAK's package.
-     */
+    /** Adjusts a notification posted as ATAK's, e.g. its resource icons. */
     public interface NotificationFilter {
-        /**
-         * @return the notification to post, or null to not post it (NotificationService.notify
-         *     then fails and logs, which it catches)
-         */
+        /** The notification to post, or null to drop it (notify() then logs the failure). */
         Notification filter(Notification notification);
     }
 
     public static volatile NotificationFilter NOTIFICATIONS = null;
 
     /**
-     * Told what XmppConnectionService tells its UI listeners. Registering as one of those
-     * listeners would make Conversations believe it is on screen (see
-     * XmppConnectionService.checkListeners): chats would be marked active and notifications
-     * silenced. Called on the service's threads.
+     * What XmppConnectionService tells its UI listeners, without being one: a listener makes
+     * Conversations think it is on screen. Called on the service's threads.
      */
     public interface Observer {
         void onAccountsChanged();
@@ -84,7 +60,7 @@ public final class TakConvoCompat {
 
         void onRosterChanged();
 
-        /** the unread count upstream would show on the launcher icon */
+        /** The count upstream would show on the launcher icon. */
         void onUnreadCountChanged(int count);
     }
 

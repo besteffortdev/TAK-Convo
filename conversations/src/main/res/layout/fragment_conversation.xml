@@ -68,9 +68,8 @@
                 app:textColor="?colorOnTertiaryContainer"
                 tools:ignore="RtlCompat" />
 
-            <!-- TAKCONVO: a more compact input row for an ATAK side pane: less padding
-                 (6dp, 8sp, 12dp), a 20dp attach icon without the button's minimum size, and
-                 a 24dp send icon (32dp) -->
+            <!-- TAKCONVO: compact for a side pane; upstream: 6dp, 8sp, 12dp padding, a
+                 minimum-size attach button, a 32dp send icon -->
             <RelativeLayout
                 android:id="@+id/message_input_box"
                 android:layout_width="match_parent"
@@ -219,8 +218,7 @@
                     tools:text="@string/leave" />
             </RelativeLayout>
 
-            <!-- TAKCONVO: one row that scrolls sideways instead of a grid. An ATAK side pane
-                 is too narrow for more than two choices per row, and too low for their rows. -->
+            <!-- TAKCONVO: one scrolling row instead of a grid, too big for a side pane -->
             <HorizontalScrollView
                 android:id="@+id/attachment_choices_scroll"
                 android:layout_width="match_parent"

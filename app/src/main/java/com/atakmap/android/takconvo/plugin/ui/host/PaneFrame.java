@@ -13,18 +13,14 @@ import android.view.WindowInsets;
 import android.widget.FrameLayout;
 
 /**
- * The pane's content: the views of the embedded activities.
- *
- * <p>It sits inside ATAK's window, and what views ask of their window arrives here on its way
- * to ATAK's, which would handle it with ATAK's resources and callbacks. A context menu is
- * handed to the embedded activity's own window instead, whose callback is that activity. An
- * action mode stays with ATAK's window, which is the one on screen, but its menu is inflated
- * with the resources of the view that started it.
+ * The pane's content. What views ask of their window would reach ATAK's, with ATAK's resources
+ * and callbacks: context menus go to the top activity's own window instead, and action modes
+ * inflate their menus with the starting view's resources. See docs/04.
  */
 final class PaneFrame extends FrameLayout {
 
     interface Top {
-        /** the activity on top of the pane, or null */
+        /** The top activity, or null. */
         Activity activity();
     }
 
@@ -36,7 +32,7 @@ final class PaneFrame extends FrameLayout {
         setClickable(true);
     }
 
-    /** Clear of the system bars already: insets must not pad Conversations' layouts again. */
+    /** Already clear of the system bars: no padding for them again. */
     @Override
     public WindowInsets dispatchApplyWindowInsets(final WindowInsets insets) {
         return insets;
@@ -71,7 +67,7 @@ final class PaneFrame extends FrameLayout {
                 new InflatingCallback(originalView.getContext(), callback), type);
     }
 
-    /** The decor view of the top activity's window. It is never attached to a screen. */
+    /** The top activity's decor view, never attached. */
     private ViewGroup topDecor() {
         final Activity activity = top.activity();
         if (activity == null || activity.getWindow() == null) {
@@ -81,7 +77,7 @@ final class PaneFrame extends FrameLayout {
         return decor instanceof ViewGroup ? (ViewGroup) decor : null;
     }
 
-    /** Hands the callback an action mode whose menu inflater uses the given resources. */
+    /** Passes the callback an {@link InflatingActionMode}. */
     private static final class InflatingCallback extends ActionMode.Callback2 {
 
         private final Context context;
@@ -131,7 +127,7 @@ final class PaneFrame extends FrameLayout {
         }
     }
 
-    /** The action mode ATAK's window made, with the resources of another context. */
+    /** ATAK's action mode with another context's resources. */
     private static final class InflatingActionMode extends ActionMode {
 
         final ActionMode mode;

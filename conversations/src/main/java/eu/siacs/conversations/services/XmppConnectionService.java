@@ -1311,9 +1311,7 @@ public class XmppConnectionService extends Service {
 
     private void toggleForegroundService(final boolean force) {
         if (TakConvoCompat.EMBEDDED) {
-            // TAKCONVO: not a real Service (startForeground is final and would NPE); ATAK's own
-            // foreground service keeps the process alive. Earlier versions posted the foreground
-            // notification anyway.
+            // TAKCONVO: not a real Service (startForeground would NPE); ATAK's keeps the process
             mNotificationService.cancel(NotificationService.FOREGROUND_NOTIFICATION_ID);
             return;
         }

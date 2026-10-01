@@ -188,9 +188,8 @@ public class PublishProfilePictureActivity extends XmppActivity
         super.onSaveInstanceState(outState);
     }
 
-    // TAKCONVO: the cropper's activity can't run inside ATAK (its Crop button is in the window's
-    // action bar, and an embedded activity's window isn't shown). The image is picked as it is:
-    // the preview and the published avatar are its center square, as cropCenterSquare makes them.
+    // TAKCONVO: the cropper can't run in ATAK (its button is in the hidden window's action bar);
+    // the picked image is used as is, center-cropped by cropCenterSquare
     private final ActivityResultLauncher<String> pickImage =
             registerForActivityResult(
                     new androidx.activity.result.contract.ActivityResultContracts.GetContent(),

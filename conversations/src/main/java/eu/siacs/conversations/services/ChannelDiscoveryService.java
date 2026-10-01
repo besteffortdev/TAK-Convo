@@ -257,9 +257,8 @@ public class ChannelDiscoveryService {
     }
 
     /**
-     * TAKCONVO: the rooms of a group chat service, or of a server named in the plugin's
-     * settings. A server's items are its services, not rooms: their items are the rooms. Rooms
-     * have a local part, services don't.
+     * TAKCONVO: the rooms of a group chat service, or of a server's services. Rooms have a local
+     * part, services don't.
      */
     private ListenableFuture<Collection<Room>> discoverRoomsOf(
             final XmppConnection connection, final Jid target) {

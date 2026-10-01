@@ -4,7 +4,9 @@ import com.atakmap.coremap.log.Log;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
@@ -21,7 +23,7 @@ public final class TrustedCa {
 
     private TrustedCa() {}
 
-    /** @return a trust manager for the certificates in {@code path}, or null if unusable */
+    /** A trust manager for the certificates in {@code path}, or null if unusable. */
     public static X509TrustManager load(final String path) {
         if (path == null) {
             return null;
@@ -53,7 +55,7 @@ public final class TrustedCa {
                     return (X509TrustManager) tm;
                 }
             }
-        } catch (final Exception e) {
+        } catch (final IOException | GeneralSecurityException | SecurityException e) {
             Log.e(TAG, "unable to load trusted CA " + path, e);
         }
         return null;

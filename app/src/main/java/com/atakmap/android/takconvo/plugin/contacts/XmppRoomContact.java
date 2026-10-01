@@ -7,9 +7,8 @@ import com.atakmap.android.contact.IndividualContact;
 import com.atakmap.android.contact.XmppConnector;
 
 /**
- * An XMPP group chat at the top of ATAK's contact list, next to ATAK's own "All Chat Rooms".
- * Its only connector is an XMPP connector for the room's address, which {@link XmppContacts}
- * handles: tapping the contact opens the group chat, and the connector carries its unread count.
+ * An XMPP group chat in ATAK's contact list, with one XMPP connector that {@link XmppContacts}
+ * handles (open, unread count).
  */
 final class XmppRoomContact extends IndividualContact {
 
@@ -20,7 +19,7 @@ final class XmppRoomContact extends IndividualContact {
     XmppRoomContact(final String name, final String address) {
         super(name, UID_PREFIX + address);
         this.address = address;
-        // ATAK's chat room icon, as for its own "All Chat Rooms"
+        // ATAK's chat room icon
         getExtras().putBoolean("fakeGroup", true);
         addConnector(new XmppConnector(address));
     }

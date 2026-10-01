@@ -207,10 +207,8 @@ public class FileBackend {
     private static final String SHAREABLE_DIRECTORY = "shared";
 
     /**
-     * TAKCONVO: inside ATAK there is no provider of our own, only ATAK's, which serves external
-     * storage. A file that is not there, e.g. a private attachment, is served from a copy in
-     * ATAK's external cache, which other apps can only read through the provider. The copy is
-     * kept while it is current, so that the same file always gets the same URI.
+     * TAKCONVO: ATAK's provider serves external storage only, so a private file is served from a
+     * copy in ATAK's external cache, kept while current so its URI stays the same.
      */
     private static File shareableFile(final Context context, final File file) {
         final File external = Environment.getExternalStorageDirectory();
@@ -1662,10 +1660,7 @@ public class FileBackend {
             }
         }
 
-        /**
-         * TAKCONVO: embedded, the camera app writes its picture through ATAK's provider, which
-         * only serves external storage.
-         */
+        /** TAKCONVO: the camera writes through ATAK's provider, external storage only. */
         private File cameraRoot() {
             if (TakConvoCompat.EMBEDDED) {
                 final File external = context.getExternalCacheDir();

@@ -1,4 +1,3 @@
-
 package com.atakmap.android.takconvo.plugin.xmpp;
 
 import android.app.Application;
@@ -27,29 +26,18 @@ import java.util.Set;
 import java.util.WeakHashMap;
 
 /**
- * The Context Conversations runs on inside the ATAK process.
- *
- * <ul>
- *   <li>Process identity, system services, permissions: ATAK's (the base context). Anything else
- *       fails, because the plugin package does not own this process.</li>
- *   <li>Resources, assets, class loader, theme: the plugin APK's, where Conversations' code and
- *       resources live.</li>
- *   <li>Storage (preferences, databases, files, dirs): ATAK's data directory, but under a
- *       {@code takconvo} prefix so nothing collides with ATAK's own.</li>
- *   <li>{@code startService}/{@code bindService} aimed at XmppConnectionService are routed to
- *       the in-process engine instead of the Android service manager.</li>
- * </ul>
- *
- * <p>The engine runs on the root instance. Conversations' activities run on contexts derived
- * from it with {@link #forUi}, which share its application, storage and service routing.
+ * The Context Conversations runs on: ATAK's identity and system services, the plugin APK's
+ * code and resources, storage in ATAK's data directory under a {@code takconvo} prefix, and
+ * XmppConnectionService routed to the in-process engine. Activities get contexts from
+ * {@link #forUi}. See docs/02.
  */
 final class EmbeddedContext extends ContextWrapper {
 
     private static final String PREFIX = "takconvo_";
     private static final String DIR = "takconvo";
-    /** {@code Context.AUTOFILL_MANAGER_SERVICE}, which the SDK hides */
+    /** Context.AUTOFILL_MANAGER_SERVICE, hidden in the SDK. */
     private static final String AUTOFILL_SERVICE = "autofill";
-    /** {@code Context.CONTENT_CAPTURE_MANAGER_SERVICE}, which the SDK hides */
+    /** Context.CONTENT_CAPTURE_MANAGER_SERVICE, hidden in the SDK. */
     private static final String CONTENT_CAPTURE_SERVICE = "content_capture";
 
     /** Routes service intents to the in-process XmppConnectionService. */
@@ -61,13 +49,13 @@ final class EmbeddedContext extends ContextWrapper {
         IBinder bind(Intent intent);
     }
 
-    /** the plugin's own context: never a configuration context of it */
+    /** The plugin's own context, never a configuration context. */
     private final Context pluginRoot;
-    /** where resources come from: {@link #pluginRoot}, or a configuration context of it */
+    /** Where resources come from: {@link #pluginRoot} or a configuration context of it. */
     private final Context plugin;
-    /** null on the root instance */
+    /** Null on the root instance. */
     private final EmbeddedContext root;
-    /** the configuration override of a UI context, null on the root instance */
+    /** A UI context's configuration override; null on the root instance. */
     private final Configuration uiOverride;
     private Resources.Theme uiTheme;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -94,15 +82,8 @@ final class EmbeddedContext extends ContextWrapper {
     }
 
     /**
-     * A context for a Conversations activity.
-     *
-     * <p>Its base is a context of its own rather than ATAK's activity: attaching an activity
-     * stores that activity's autofill and content capture state in the base context, which must
-     * not be ATAK's.
-     *
-     * @param display the display ATAK is shown on
-     * @param override what differs from the device configuration, e.g. night mode and the size
-     *     of the pane
+     * A context for a Conversations activity, on a base of its own: attaching an activity
+     * stores its autofill state in the base, which must not be ATAK's activity.
      */
     Context forUi(final Display display, final Configuration override) {
         final EmbeddedContext r = root();
@@ -149,7 +130,7 @@ final class EmbeddedContext extends ContextWrapper {
         if (root == null) {
             return plugin.getTheme();
         }
-        // an activity starts from an empty theme, not from the plugin's ATAK one
+        // an activity starts from an empty theme, not the plugin's
         if (uiTheme == null) {
             uiTheme = getResources().newTheme();
         }
@@ -179,9 +160,9 @@ final class EmbeddedContext extends ContextWrapper {
 
     @Override
     public Object getSystemService(final String name) {
-        // An embedded activity has no token the system knows. Autofill and content capture
-        // sessions started for it would be rejected by the system server.
-        if (root != null && (AUTOFILL_SERVICE.equals(name) || CONTENT_CAPTURE_SERVICE.equals(name))) {
+        // the system rejects these sessions: an embedded activity has no token it knows
+        if (root != null
+                && (AUTOFILL_SERVICE.equals(name) || CONTENT_CAPTURE_SERVICE.equals(name))) {
             return null;
         }
         return super.getSystemService(name);
@@ -297,7 +278,7 @@ final class EmbeddedContext extends ContextWrapper {
         return dir;
     }
 
-    // --- the XmppConnectionService is an object in this process, not an Android service ---
+    // --- XmppConnectionService is an object here, not an Android service ---
 
     @Override
     public ComponentName startService(final Intent service) {
@@ -329,7 +310,8 @@ final class EmbeddedContext extends ContextWrapper {
     }
 
     @Override
-    public boolean bindService(final Intent service, final ServiceConnection conn, final int flags) {
+    public boolean bindService(final Intent service, final ServiceConnection conn,
+            final int flags) {
         final ServiceRouter r = root().router;
         if (r != null && r.handles(service)) {
             final Set<ServiceConnection> bound = root().boundConnections;

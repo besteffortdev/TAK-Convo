@@ -76,9 +76,8 @@ public class Conversations extends Application {
     }
 
     /**
-     * TAKCONVO: embedded (in-ATAK) replacement for {@link #onCreate()}. It deliberately skips
-     * installing Conscrypt as the process-wide security provider, the global uncaught exception
-     * handler and the AppCompat night-mode setting, all of which would change ATAK itself.
+     * TAKCONVO: {@link #onCreate()} inside ATAK, without what would change ATAK itself: the
+     * Conscrypt provider, the uncaught exception handler and the night-mode setting.
      */
     protected void onCreateEmbedded() {
         CONTEXT = this.getApplicationContext();

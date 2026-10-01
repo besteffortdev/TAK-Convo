@@ -16,37 +16,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * XMPP account settings, read from ATAK's shared preferences so they can be provisioned with a
- * {@code .pref} file (or a mission package containing one) and edited in the plugin's tool
- * preferences. By default the TAK server's username and password are reused for XMPP.
- *
- * <pre>
- * takconvo_xmpp_enabled               connect at all (Boolean, default true)
- * takconvo_xmpp_domain                XMPP domain, e.g. xmpp.example.org
- * takconvo_xmpp_host                  host to connect to, if not resolvable from the domain
- * takconvo_xmpp_port                  port for takconvo_xmpp_host (default 5222)
- * takconvo_xmpp_use_tak_credentials   reuse the TAK server username/password (Boolean, default true)
- * takconvo_xmpp_username              suggested username for the XMPP login screen
- * takconvo_xmpp_use_tak_truststore    trust the CAs of the TAK server truststores (Boolean, default true)
- * takconvo_xmpp_use_android_ca_store  trust the device's CA store, including user and MDM
- *                                     installed CAs (Boolean, default false)
- * takconvo_xmpp_trusted_ca            path to a PEM/DER CA certificate to trust for XMPP TLS
- * takconvo_xmpp_channel_discovery     where "Discover channels" looks: xmpp_server (the group
- *                                     chat services of the account's server, default), server
- *                                     (takconvo_xmpp_channel_server) or public (the public
- *                                     directory search.jabber.network)
- * takconvo_xmpp_channel_server        for "server": a server (example.org) or one of its group
- *                                     chat services (conference.example.org)
- * takconvo_xmpp_use_callsign          the ATAK callsign is the XMPP nickname, for contacts and in
- *                                     group chats (Boolean, default true)
- * takconvo_notification_sound         message notifications make a sound (Boolean, default true)
- * takconvo_notification_vibrate       message notifications vibrate (Boolean, default true)
- * </pre>
- *
- * <p>Public CAs are always trusted, see {@link TrustSources} for the others.
- *
- * <p>Credentials entered on the login screen are kept in ATAK's encrypted credential store
- * ({@link #CREDENTIALS_TYPE}), never in the preferences.
+ * XMPP settings from ATAK's preferences, so a {@code .pref} file can provision them; the keys
+ * are described in provisioning/takconvo-template.pref. A login entered in the plugin goes to
+ * ATAK's encrypted credential store ({@link #CREDENTIALS_TYPE}), never to the preferences.
  */
 public final class XmppSettings {
 
@@ -64,10 +36,10 @@ public final class XmppSettings {
     public static final String KEY_CHANNEL_DISCOVERY = "takconvo_xmpp_channel_discovery";
     public static final String KEY_CHANNEL_SERVER = "takconvo_xmpp_channel_server";
     public static final String KEY_USE_CALLSIGN = "takconvo_xmpp_use_callsign";
-    // not takconvo_xmpp_*: changing them doesn't need provisioning
+    // not takconvo_xmpp_*: no provisioning on change
     public static final String KEY_NOTIFICATION_SOUND = "takconvo_notification_sound";
     public static final String KEY_NOTIFICATION_VIBRATE = "takconvo_notification_vibrate";
-    /** ATAK's own preference: this device's callsign */
+    /** ATAK's preference for this device's callsign. */
     public static final String KEY_ATAK_CALLSIGN = "locationCallsign";
 
     public static final String KEY_PREFIX = "takconvo_xmpp_";
@@ -77,24 +49,23 @@ public final class XmppSettings {
 
     public static final int DEFAULT_PORT = 5222;
 
-    /** Where the credentials came from. */
     public enum CredentialSource {
         TAK_SERVER,
-        /** entered on the XMPP login screen */
+        /** Entered on the XMPP login screen. */
         LOGIN,
         NONE
     }
 
-    /** Where Conversations' "Discover channels" looks. */
+    /** Where "Discover channels" looks. */
     public enum ChannelDiscovery {
-        /** the group chat services of the account's own server */
+        /** The account's server. */
         XMPP_SERVER("xmpp_server"),
-        /** {@link #channelServer}: a server, or one of its group chat services */
+        /** {@link #channelServer}. */
         SERVER("server"),
-        /** the public directory search.jabber.network */
+        /** search.jabber.network. */
         PUBLIC("public");
 
-        /** the preference value */
+        /** The preference value. */
         public final String value;
 
         ChannelDiscovery(final String value) {
@@ -131,12 +102,12 @@ public final class XmppSettings {
     public final boolean useAndroidCaStore;
     public final boolean usesTakCredentials;
     public final CredentialSource credentialSource;
-    /** the TAK server the credentials belong to, for {@link CredentialSource#TAK_SERVER} */
+    /** The TAK server the credentials belong to, or null. */
     public final String credentialOrigin;
-    /** provisioned username suggestion for the login screen, may be null */
+    /** Username suggested on the login screen, or null. */
     public final String suggestedUsername;
     public final ChannelDiscovery channelDiscovery;
-    /** for {@link ChannelDiscovery#SERVER}, may be null */
+    /** For {@link ChannelDiscovery#SERVER}, or null. */
     public final String channelServer;
 
     private XmppSettings(
@@ -186,9 +157,8 @@ public final class XmppSettings {
                 trimToNull(getString(prefs, KEY_CHANNEL_SERVER)));
 
         if (useTak) {
-            // no fallback to the XMPP login: at ATAK startup the TAK server credentials are
-            // often not available yet, and silently switching identities would provision the
-            // wrong account
+            // no fallback to the XMPP login: the TAK credentials often come later, and
+            // switching identities would provision the wrong account
             final TakCredentials tak = findTakCredentials();
             if (tak != null) {
                 return new XmppSettings(enabled, domain, host, port, tak.username, tak.password,
@@ -211,7 +181,6 @@ public final class XmppSettings {
                 false, CredentialSource.NONE, null, suggested, channels);
     }
 
-    /** Where "Discover channels" looks. */
     private static final class Channels {
         final ChannelDiscovery discovery;
         final String server;
@@ -222,7 +191,7 @@ public final class XmppSettings {
         }
     }
 
-    /** Which CA sources to trust, see {@link TrustSources}. */
+    /** See {@link TrustSources}. */
     private static final class Trust {
         final boolean takTrustStore;
         final boolean androidCaStore;
@@ -235,7 +204,7 @@ public final class XmppSettings {
         }
     }
 
-    /** Stores the XMPP login (username or full JID) in ATAK's credential store. */
+    /** Stores the XMPP login (username or JID) in ATAK's credential store. */
     public static void saveLogin(final String username, final String password) {
         AtakAuthenticationDatabase.saveCredentials(CREDENTIALS_TYPE, username, password, false);
     }
@@ -244,14 +213,13 @@ public final class XmppSettings {
         AtakAuthenticationDatabase.delete(CREDENTIALS_TYPE, CREDENTIALS_TYPE);
     }
 
-    /** @return the username of the stored XMPP login, or null */
+    /** The stored XMPP login's username, or null. */
     public static String getLoginUsername() {
         final AtakAuthenticationCredentials login =
                 AtakAuthenticationDatabase.getCredentials(CREDENTIALS_TYPE);
         return login == null ? null : trimToNull(login.username);
     }
 
-    /** Whether the ATAK callsign is to be the XMPP nickname. */
     public static boolean usesCallsign(final SharedPreferences prefs) {
         return parseBoolean(getString(prefs, KEY_USE_CALLSIGN), true);
     }
@@ -269,10 +237,7 @@ public final class XmppSettings {
         return parseBoolean(getString(prefs, KEY_NOTIFICATION_VIBRATE), true);
     }
 
-    /**
-     * Stores boolean values as Booleans. {@code .pref} files may carry them as strings, and the
-     * check boxes of the settings screen fail on those.
-     */
+    /** Stores .pref string booleans as Booleans, which the settings' check boxes need. */
     public static void normalize(final SharedPreferences prefs) {
         final SharedPreferences.Editor editor = prefs.edit();
         boolean changed = false;
@@ -295,7 +260,7 @@ public final class XmppSettings {
         }
     }
 
-    /** @return null if an account can be provisioned, otherwise why not */
+    /** Why no account can be provisioned, or null. */
     public Problem problem() {
         if (!enabled) {
             return Problem.DISABLED;
@@ -309,7 +274,7 @@ public final class XmppSettings {
         return null;
     }
 
-    /** Bare JID: the username as-is if it already contains a domain, otherwise user@domain. */
+    /** The username if it has a domain, otherwise username@domain. */
     public String jid() {
         if (username == null) {
             return null;
@@ -364,7 +329,7 @@ public final class XmppSettings {
         final NetConnectString ncs = NetConnectString.fromString(connectString);
         final String host = ncs != null ? ncs.getHost() : null;
         if (host != null) {
-            // ATAK keeps the password in its encrypted credential store, keyed by host
+            // ATAK's encrypted credential store, keyed by host
             final AtakAuthenticationCredentials stored = AtakAuthenticationDatabase
                     .getCredentials(AtakAuthenticationCredentials.TYPE_COT_SERVICE, host);
             if (stored != null && !TextUtils.isEmpty(stored.username)
@@ -391,7 +356,7 @@ public final class XmppSettings {
         }
     }
 
-    // --- .pref values arrive as strings, but may also be typed ---
+    // --- .pref values are strings or typed ---
 
     private static String getString(final SharedPreferences prefs, final String key) {
         final Object value = prefs.getAll().get(key);
@@ -420,6 +385,7 @@ public final class XmppSettings {
         return t.isEmpty() ? null : t;
     }
 
+    /** Without the password. */
     @Override
     public String toString() {
         return "XmppSettings{enabled=" + enabled + ", jid=" + jid() + ", host=" + host

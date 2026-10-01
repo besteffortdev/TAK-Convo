@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- TAKCONVO: Conversations runs inside the ATAK process, so none of its activities, services or
-     receivers are declared here. See upstream/AndroidManifest.*.xml for the originals. -->
+<!-- TAKCONVO: no components: they run inside ATAK's process. Originals: upstream/ -->
 <manifest xmlns:tools="http://schemas.android.com/tools">
 
     <!-- as upstream: heifwriter (minSdk 28) is only used behind SDK_INT checks -->

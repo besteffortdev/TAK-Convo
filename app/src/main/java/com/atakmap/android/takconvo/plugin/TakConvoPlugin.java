@@ -1,4 +1,3 @@
-
 package com.atakmap.android.takconvo.plugin;
 
 import android.app.Activity;
@@ -58,9 +57,9 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
 
     private static final String TAG = "TakConvo.Plugin";
 
-    /** Sent (AtakBroadcast) to show the chat pane on the map. */
+    /** AtakBroadcast that shows the chat pane. */
     public static final String ACTION_SHOW_CHAT = "com.atakmap.android.takconvo.SHOW_CHAT";
-    /** Sent (AtakBroadcast) as if the back button was pressed on the chat pane. */
+    /** AtakBroadcast that acts as back on the chat pane. */
     public static final String ACTION_CHAT_BACK = "com.atakmap.android.takconvo.CHAT_BACK";
 
     IServiceController serviceController;
@@ -80,14 +79,11 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     private TextView logView;
     private final Set<String> loggedMessages = new HashSet<>();
     private String lastStatus;
-    /** the account the chat pane's screens belong to (its uuid), or null */
+    /** Uuid of the account the chat pane's screens belong to. */
     private String chatAccount;
-    /**
-     * The account pane shows instead of the chats, for lack of an account or because the user
-     * is signing in: once the account is online, the chats replace it.
-     */
+    /** The account pane stands in for the chats until the account is online. */
     private boolean showChatWhenOnline;
-    /** The profile picture screen was opened from the account pane, and goes back to it. */
+    /** The profile picture screen returns to the account pane. */
     private boolean profilePictureFromAccount;
     private final StringBuilder log = new StringBuilder();
 
@@ -123,12 +119,9 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             pluginContext.setTheme(R.style.ATAKPluginTheme);
         }
 
-        // obtain the UI service
         uiService = serviceController.getService(IHostUIService.class);
 
-        // create the button and set the identifier to be well known
-        // if you fail to do this, the toolbar configuration will never
-        // be able to find it again after the user moves the icon.
+        // a fixed identifier lets ATAK find the button again after the user moves it
         toolbarItem = new ToolbarItem.Builder(
                 pluginContext.getString(R.string.app_name),
                 MarshalManager.marshal(
@@ -148,19 +141,19 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     @Override
     public void onStart() {
         final Context atakContext = MapView.getMapView().getContext();
+        // never take ATAK down with us; LinkageError: a library ATAK provides doesn't match
         try {
             engine = XmppEngine.start(atakContext, pluginContext);
             engine.addListener(this);
-        } catch (final Throwable t) {
-            // never take ATAK down with us
-            Log.e(TAG, "unable to start the XMPP engine", t);
+        } catch (final RuntimeException | LinkageError e) {
+            Log.e(TAG, "unable to start the XMPP engine", e);
         }
         if (engine != null) {
             try {
                 contacts = new XmppContacts(pluginContext, atakContext, engine, this::openChat);
                 contacts.start();
-            } catch (final Throwable t) {
-                Log.e(TAG, "unable to join ATAK's contacts", t);
+            } catch (final RuntimeException | LinkageError e) {
+                Log.e(TAG, "unable to join ATAK's contacts", e);
                 contacts = null;
             }
         }
@@ -184,11 +177,9 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
                 "Open a TAK Convo notification's chat (ATAK sends it when one is tapped)");
         AtakBroadcast.getInstance().registerReceiver(showReceiver, filter);
 
-        // the plugin is starting, add the button to the toolbar
-        if (uiService == null)
-            return;
-
-        uiService.addToolbarItem(toolbarItem);
+        if (uiService != null) {
+            uiService.addToolbarItem(toolbarItem);
+        }
     }
 
     @Override
@@ -221,21 +212,18 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
         try {
             XmppEngine.shutdown();
-        } catch (final Throwable t) {
-            Log.e(TAG, "unable to stop the XMPP engine", t);
+        } catch (final RuntimeException | LinkageError e) {
+            Log.e(TAG, "unable to stop the XMPP engine", e);
         }
 
-        // the plugin is stopping, remove the button from the toolbar
-        if (uiService == null)
-            return;
-
-        uiService.removeToolbarItem(toolbarItem);
+        if (uiService != null) {
+            uiService.removeToolbarItem(toolbarItem);
+        }
     }
 
     /**
-     * Conversations' speech bubble, for ATAK's tool menu and settings, which paint tool icons in
-     * one color (the colored launcher icon would show as a plain square). A bitmap: the vector
-     * is drawn here rather than left to ATAK's marshaling.
+     * Conversations' speech bubble, drawn to a bitmap. ATAK paints tool icons in one color, so
+     * the colored launcher icon would show as a square.
      */
     private static Drawable toolIcon(final Context pluginContext) {
         final Drawable vector = pluginContext.getResources().getDrawable(R.drawable.ic_takconvo,
@@ -247,7 +235,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         return new BitmapDrawable(pluginContext.getResources(), bitmap);
     }
 
-    /** Conversations' chats. Without an account to chat with, the account screen instead. */
+    /** Shows the chats, or the account pane if there is no account. */
     private void showChat() {
         final EmbeddedActivityHost host = openChatPane();
         if (host != null) {
@@ -255,7 +243,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
     }
 
-    /** The chat pane on what a tapped notification aims at. */
+    /** Shows what a tapped notification points to. */
     private void showChat(final Intent activity) {
         final EmbeddedActivityHost host = openChatPane();
         if (host != null) {
@@ -267,7 +255,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
     }
 
-    /** The chat with an XMPP address, e.g. a TAK user's from ATAK's contacts. */
+    /** Opens the chat with an XMPP address, e.g. from ATAK's contacts. */
     private void openChat(final String address) {
         final EmbeddedActivityHost host = openChatPane();
         if (host == null) {
@@ -281,11 +269,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
     }
 
-    /**
-     * Shows the chat pane, created on first use.
-     *
-     * @return its host, or null if there is no account to chat with (the account pane shows)
-     */
+    /** Shows the chat pane; returns null and shows the account pane if there is no account. */
     private EmbeddedActivityHost openChatPane() {
         if (engine == null) {
             return null;
@@ -306,12 +290,12 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     }
 
     /**
-     * Closes the chat pane and destroys its screens, e.g. once their account is gone. ATAK would
-     * otherwise bring the pane back, with the old chats, when the account pane over it closes.
+     * Closes the chat pane and destroys its screens once their account is gone; otherwise ATAK
+     * shows the old chats again when the account pane closes.
      */
     private void closeChatPane() {
         if (chatDropDown != null && !chatDropDown.isClosed()) {
-            // also when it is hidden on ATAK's drop-down stack
+            // also when hidden on ATAK's drop-down stack
             chatDropDown.closeDropDown();
         }
         if (chatHost != null && !chatHost.isEmpty()) {
@@ -331,7 +315,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     public void onTopFinished(final Activity finished) {
         if (profilePictureFromAccount && finished instanceof PublishProfilePictureActivity) {
             profilePictureFromAccount = false;
-            // back to the account pane under it; the chats stay as they were, for next time
+            // back to the account pane; the chats are kept for next time
             if (chatDropDown != null) {
                 chatDropDown.closeDropDown();
             }
@@ -348,7 +332,6 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         SettingsActivity.start(TakConvoPreferenceFragment.TOOL_KEY, null);
     }
 
-    /** Conversations' account screen: login, or the status of the provisioned account. */
     private void showAccountPane() {
         if (uiService == null || engine == null) {
             return;
@@ -357,8 +340,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             accountView = new AccountView(pluginContext, MapView.getMapView().getContext(),
                     engine, this);
             engine.addListener(accountView);
-            // the same size as the chat pane, which it stands in for. Retained: ATAK would
-            // otherwise close it when the chat pane opens over it (the profile picture screen)
+            // retained: ATAK would close it when the chat pane opens over it
             accountPane = new PaneBuilder(accountView.getView())
                     .setMetaValue(Pane.RELATIVE_LOCATION, Pane.Location.Default)
                     .setMetaValue(Pane.PREFERRED_WIDTH_RATIO, ChatDropDown.PANE_FRACTION)
@@ -382,11 +364,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         showChatWhenOnline = true;
     }
 
-    /**
-     * In the chat pane, over the account pane, which ATAK keeps under it (it is retained). Once
-     * the picture is published or the user goes back, the chat pane closes on whatever chats
-     * were open in it, and the account pane shows again.
-     */
+    /** Opens the profile picture screen in the chat pane, over the account pane. */
     @Override
     public void editProfilePicture() {
         final Account account = engine == null ? null : engine.getAccount();
@@ -402,7 +380,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         profilePictureFromAccount = true;
     }
 
-    /** The account came online while the account pane stood in for the chats: swap them. */
+    /** Replaces the account pane with the chats once the account is online. */
     private void showChatIfSignedIn(final Account account) {
         if (!showChatWhenOnline || account == null || !account.isOnlineAndConnected()) {
             return;
@@ -414,7 +392,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
     }
 
-    // --- spike UI: send a plain message and log traffic (debug builds) ---
+    // --- test pane (debug builds): send a plain message, list the traffic ---
 
     @Override
     public void showTestMessagePane() {
@@ -424,7 +402,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         if (testPane == null) {
             final View view = PluginLayoutInflater.inflate(pluginContext,
                     R.layout.main_layout, null);
-            bindSpikeView(view);
+            bindTestView(view);
             testPane = new PaneBuilder(view)
                     .setMetaValue(Pane.RELATIVE_LOCATION, Pane.Location.Default)
                     .setMetaValue(Pane.PREFERRED_WIDTH_RATIO, 0.5D)
@@ -437,7 +415,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         onXmppStateChanged();
     }
 
-    private void bindSpikeView(final View view) {
+    private void bindTestView(final View view) {
         statusView = view.findViewById(R.id.takconvo_status);
         logView = view.findViewById(R.id.takconvo_log);
         final EditText to = view.findViewById(R.id.takconvo_to);
@@ -475,13 +453,12 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         final String status = describe(engine);
         if (!status.equals(lastStatus)) {
             lastStatus = status;
-            Log.d(TAG, "status: " + status.replace('\n', ' '));
+            // tools/deploy.ps1 waits for "status: ONLINE"
+            SensitiveLog.d(TAG, "status: " + status.replace('\n', ' '));
         }
-        collectMessages(engine);
-        if (statusView != null) {
+        if (testPane != null) {
+            collectMessages(engine);
             statusView.setText(status);
-        }
-        if (logView != null) {
             logView.setText(log);
         }
     }
@@ -505,6 +482,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         return sb.toString();
     }
 
+    /** Adds each chat's latest message to the test pane, not to logcat. */
     private void collectMessages(final XmppEngine engine) {
         final SimpleDateFormat time = new SimpleDateFormat("HH:mm:ss", Locale.US);
         for (final Conversation conversation : engine.getConversations()) {
@@ -514,11 +492,9 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
                 continue;
             }
             final boolean incoming = latest.getStatus() == Message.STATUS_RECEIVED;
-            final String line = time.format(new Date(latest.getTimeSent()))
+            log.insert(0, time.format(new Date(latest.getTimeSent()))
                     + (incoming ? "  <- " : "  -> ")
-                    + conversation.getAddress().asBareJid() + ": " + latest.getBody();
-            Log.d(TAG, "message " + line);
-            log.insert(0, line + "\n");
+                    + conversation.getAddress().asBareJid() + ": " + latest.getBody() + "\n");
         }
     }
 }

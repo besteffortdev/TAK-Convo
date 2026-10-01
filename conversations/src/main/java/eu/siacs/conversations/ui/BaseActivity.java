@@ -11,10 +11,7 @@ import eu.siacs.conversations.utils.TakConvoCompat;
 public abstract class BaseActivity extends AppCompatActivity {
     private Boolean isDynamicColors;
 
-    /**
-     * TAKCONVO: embedded in ATAK, the activity's views are shown in an ATAK pane instead of the
-     * activity's own window, which is never attached. This is the root of those views.
-     */
+    /** TAKCONVO: the root of the views shown in an ATAK pane instead of the window. */
     public View embeddedContent;
 
     // TAKCONVO: the views are no longer below the window's decor view

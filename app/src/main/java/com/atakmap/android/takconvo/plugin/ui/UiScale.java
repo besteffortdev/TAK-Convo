@@ -11,7 +11,7 @@ import android.util.DisplayMetrics;
  */
 public final class UiScale {
 
-    public static final float FACTOR = 0.8f;
+    public static final float FACTOR = 0.9f;
 
     private UiScale() {
     }

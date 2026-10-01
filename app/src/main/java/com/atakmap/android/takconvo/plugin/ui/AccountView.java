@@ -2,6 +2,7 @@ package com.atakmap.android.takconvo.plugin.ui;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.res.Configuration;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -20,7 +21,9 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import com.atakmap.android.maps.MapView;
 import com.atakmap.android.preference.AtakPreferences;
+import com.atakmap.android.takconvo.plugin.ui.host.ChatDropDown;
 import com.atakmap.android.takconvo.plugin.BuildConfig;
 import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
@@ -62,6 +65,9 @@ public final class AccountView implements XmppEngine.Listener {
 
         /** The user signed in: once the account is online, the chats are what to show. */
         void onSignInStarted();
+
+        /** Conversations' screen to pick and publish the account's profile picture. */
+        void editProfilePicture();
     }
 
     /** Shown, masked, in the disabled password field when a password is stored. */
@@ -112,11 +118,21 @@ public final class AccountView implements XmppEngine.Listener {
 
     public AccountView(final Context pluginContext, final Context atakActivity,
             final XmppEngine engine, final Host host) {
-        // Conversations' resources, scaled down like its screens in the chat pane
+        // Conversations' resources, scaled down and sized for the pane like its screens in the
+        // chat pane: otherwise its wide-screen layouts (a larger avatar) are picked
         final Display display = ((WindowManager) atakActivity
                 .getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
-        this.ui = new ContextThemeWrapper(
-                engine.newUiContext(display, UiScale.override(atakActivity)),
+        final Configuration override = UiScale.override(atakActivity);
+        final MapView mapView = MapView.getMapView();
+        if (mapView != null) {
+            final int[] pane = ChatDropDown.estimatePaneSize(mapView);
+            final float density = UiScale.density(atakActivity);
+            override.screenWidthDp = Math.round(pane[0] / density);
+            override.screenHeightDp = Math.round(pane[1] / density);
+            override.smallestScreenWidthDp =
+                    Math.min(override.screenWidthDp, override.screenHeightDp);
+        }
+        this.ui = new ContextThemeWrapper(engine.newUiContext(display, override),
                 R.style.Theme_Conversations3_Dark);
         this.dialogContext = atakActivity;
         this.engine = engine;
@@ -127,6 +143,15 @@ public final class AccountView implements XmppEngine.Listener {
         toolbar = root.findViewById(R.id.toolbar);
         editor = root.findViewById(R.id.editor);
         avatar = root.findViewById(R.id.avater);
+        // as in Conversations' account screen; publishing needs the account online
+        avatar.setContentDescription(ui.getString(
+                com.atakmap.android.takconvo.plugin.R.string.takconvo_change_profile_picture));
+        avatar.setOnClickListener(v -> {
+            final Account account = engine.getAccount();
+            if (account != null && account.isOnlineAndConnected()) {
+                host.editProfilePicture();
+            }
+        });
         jidLayout = root.findViewById(R.id.account_jid_layout);
         jid = root.findViewById(R.id.account_jid);
         passwordLayout = root.findViewById(R.id.account_password_layout);
@@ -209,6 +234,11 @@ public final class AccountView implements XmppEngine.Listener {
         };
         jid.addTextChangedListener(watcher);
         password.addTextChangedListener(watcher);
+        // refresh() fills them. ATAK restores a pane's view state when it shows again after
+        // another pane (its drop-downs are fragments), and that restored text would count as
+        // an edit; nor does the password belong in saved state
+        jid.setSaveEnabled(false);
+        password.setSaveEnabled(false);
         save.setText(R.string.log_in);
         save.setOnClickListener(v -> signIn());
         cancel.setText(R.string.log_out);

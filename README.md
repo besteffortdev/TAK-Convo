@@ -28,12 +28,13 @@ Galaxy S22+ with 5.5.1.8):
 |---|---|
 | engine in-process, provisioning from `.pref`, TAK credentials or XMPP login | calls (audio/video): switched off, not advertised |
 | trust from TAK truststores / Android CA store / CA file | share or show a location (should become ATAK map integration) |
-| account pane, tool preferences, `.pref` import | QR codes, profile pictures, backups |
-| chat pane: chat list, chats, group chats, start chat, channel details, search; channel discovery on your XMPP server (setting) | TAK callsigns as the names of XMPP contacts |
+| account pane, tool preferences, `.pref` import; QR codes: show and scan; profile picture (from the account pane) | backups |
+| chat pane: chat list, chats, group chats, start chat, channel details, search; channel discovery on your XMPP server (setting) | TAK callsigns as the names of other users' XMPP contacts |
+| your ATAK callsign is your XMPP nickname, for contacts and in group chats, and follows it (setting) | |
 | sending/receiving with OMEMO, reactions, context menus, text selection | re-selecting resources when the pane is resized or the device rotated |
 | attachments: pick, upload, open with another app, camera; voice messages | some Conversations screens are allowed but untested (see docs/04) |
 | ATAK contacts: XMPP connector opens the chat, unread counts on contacts and buttons; group chats listed with the users | XMPP presence dots on contacts: implemented, untested with a real second user |
-| notifications: sound when the pane is closed, tap opens the chat, reply, mark as read | |
+| notifications: sound when the pane is closed, tap opens the chat, reply, mark as read; sound and vibration settings | |
 
 Release ATAK (e.g. Play Store ATAK-CAN 5.8) loads only plugins signed by TAK.gov, and its API
 is obfuscated, so a plugin for it must be built with that version's SDK and mapping. Until the
@@ -160,7 +161,11 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
    WebRTC stays at 129.
 8. **ATAK drop-downs with `ignoreBackButton`** are kept on ATAK's stack under other drop-downs,
    but back never closes them: `onBackButtonPressed()` is called and the close is refused. The
-   pane closes itself when Conversations has nothing left to go back to.
+   pane closes itself when Conversations has nothing left to go back to. A hidden drop-down
+   comes back on top with `showDropDown` (`unhideDropDown` unhides the top one only). Other
+   drop-downs it opens over are closed unless retained: the account pane has `Pane.RETAIN`.
+   ATAK restores a drop-down's view state when it shows again, and an `EditText`'s restored
+   text fires its text watchers.
 9. **`adb install -r` makes ATAK forget to load the plugin** (`shouldLoad-<package>` is reset,
    Android 16). **Killing ATAK within 10 s of start** leaves `pluginSafeMode` set and ATAK asks
    whether to load plugins. `tools/deploy.ps1` handles both.
@@ -186,8 +191,8 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
     a chat left "resumed" behind other apps is marked read and its notifications are held back.
 16. **Autofill and content capture must be hidden** from embedded activities: the system server
     rejects sessions for activities it didn't create.
-17. **Size resources for the pane, not the screen.** A half-screen pane is about 350 dp wide on a
-    phone. Conversations' attachment grid didn't fit and became a scrolling row.
+17. **Size resources for the pane, not the screen.** The pane (40 % of the map) is about 325 dp
+    wide on a phone. Conversations' attachment grid didn't fit and became a scrolling row.
 18. **No `recreate()`**: AppCompat's night-mode switch would recreate the activity; the plugin
     fixes dark mode instead, as ATAK is always dark.
 19. **Plugin views outside an AppCompat activity lose Material styling**:
@@ -207,7 +212,7 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
     call proposal, and the contact's phone rings, before it opens the call screen. Calls are
     hidden, not advertised and not accepted, reusing upstream's "no calls over Tor" paths.
 24. **A phone app's UI is oversized in a side pane.** A lower `densityDpi` in the embedded
-    screens' configuration (0.8 × ATAK's) scales all of Conversations' dp and sp at once; only
+    screens' configuration (0.9 × ATAK's) scales all of Conversations' dp and sp at once; only
     the few sizes still out of proportion (avatars, attachment buttons, the input row) were
     changed in the fork.
 
@@ -251,13 +256,17 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
     shows ATAK's chat-room icon with the `fakeGroup` extra. It sits in the root group unless
     `getParentUID()` is overridden, as ATAK's own TADIL-J contacts do. The XMPP group chats are
     listed that way, at the top of the list with the users.
+35. **ATAK paints tool icons in one color, from their alpha.** A colored icon shows as a plain
+    square in the tool menu. The plugin's app icon (Plugin Manager) is Conversations' launcher
+    icon; its tool icon is Conversations' speech bubble (`drawable/ic_takconvo`, from the
+    monochrome launcher icon), drawn to a bitmap for the `ToolbarItem`.
 
 **Maintenance**
 
-35. **Every change to Conversations is marked and documented**
+36. **Every change to Conversations is marked and documented**
     ([docs/05](docs/05-conversations-fork.md)), and `tools/fork-diff.sh` regenerates the exact
     diff against upstream; the doc has the procedure to move to a newer release.
-36. **Upstream Conversations has paths longer than 260 characters**: clone it with
+37. **Upstream Conversations has paths longer than 260 characters**: clone it with
     `core.longpaths=true` on Windows or files silently go missing.
 
 ## Repository layout
@@ -291,7 +300,8 @@ and notifications.
 
 `conversations/` is Conversations by Daniel Gultsch and contributors, GPLv3
 ([conversations/LICENSE](conversations/LICENSE)). The plugin APK includes it and is distributed
-under the GPLv3. The plugin skeleton comes from the ATAK-CIV SDK's plugin template.
+under the GPLv3. The plugin's icons are Conversations' launcher icons. The plugin skeleton
+comes from the ATAK-CIV SDK's plugin template.
 
 ## Contact
 

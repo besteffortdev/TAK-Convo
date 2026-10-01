@@ -138,7 +138,7 @@ button.
 
 | Tested on a device | Allowed, not yet tested |
 |---|---|
-| `ConversationsActivity`, `StartConversationActivity`, `ConferenceDetailsActivity`, `SearchActivity`, `RecordingActivity` (floating) | `ContactDetailsActivity`, `TrustKeysActivity`, `AddReactionActivity` (the full emoji picker; quick reactions are a dialog and work), `MucUsersActivity`, `ChooseContactActivity`, `ChannelDiscoveryActivity`, `EditHistoryActivity`, `MediaBrowserActivity`, `BlocklistActivity` |
+| `ConversationsActivity`, `StartConversationActivity`, `ConferenceDetailsActivity`, `SearchActivity`, `RecordingActivity` (floating), `ScanQrCodeActivity`, `PublishProfilePictureActivity` (picking without the cropper, see [05](05-conversations-fork.md#e-activities-shown-in-an-atak-pane)) | `ContactDetailsActivity`, `TrustKeysActivity`, `AddReactionActivity` (the full emoji picker; quick reactions are a dialog and work), `MucUsersActivity`, `ChooseContactActivity`, `ChannelDiscoveryActivity`, `EditHistoryActivity`, `MediaBrowserActivity`, `BlocklistActivity` |
 
 A failure in `onCreate` is caught (toast, `RESULT_CANCELED`); a failure later, e.g. in a click
 handler, would still crash ATAK, so test an activity before relying on it.
@@ -158,6 +158,17 @@ the chat pane and destroys its activities. Logging out happens in the account pa
 the chat pane, which ATAK keeps on its drop-down stack (`DropDownManager.closeDropDown` also
 removes a hidden one). Without this, closing the account pane brought the old chats back, and
 back went through them one by one.
+
+### QR codes
+
+"Show QR Code" (the chat list's QR menu, contact and channel details) is a dialog, which works
+as any other. "Scan QR Code" starts `ScanQrCodeActivity`, which runs in the pane as is: it
+opens the back camera with the old `Camera` API (ATAK holds `CAMERA`), shows the preview on a
+`TextureView` (drawn in ATAK's window like any view), decodes frames with ZXing, vibrates
+(ATAK holds `VIBRATE`) and returns the text. The chat list's `onQrCodeScanned` then starts
+what it starts upstream: `StartConversationActivity` for a contact or channel address, the
+account pane for the own account. Back, closing the pane or leaving ATAK pauses it and
+releases the camera.
 
 ### Floating activities
 
@@ -253,6 +264,48 @@ another drop-down opens over it (e.g. the account pane), and brings it back afte
 catch: with that flag ATAK calls `onBackButtonPressed()` but **never closes** the drop-down on
 its own. So `goBack()` closes it explicitly: `closeDropDown()` passes the flag and does close.
 
+## Showing the pane from elsewhere
+
+```text
+ChatDropDown.show():
+    if open and visible: return
+    host.setPaneSize(estimatePaneSize(mapView))
+    showDropDown(view, 0.4, FULL_HEIGHT, FULL_WIDTH, 0.4, ignoreBackButton = true, this)
+```
+
+`show()` is also how the plugin reaches a pane that is open but **hidden under another
+drop-down**: the account pane opened from a chat's menu, whose avatar then opens the profile
+picture screen in the chat pane. `showDropDown` handles that case: ATAK takes the hidden
+drop-down off its stack ("removing a drop down that was not visible, but on the stack") and
+shows it on top. On the way, the host's activities are only stopped. `unhideDropDown()` doesn't
+work there: it unhides whatever is on top of ATAK's stack, the account pane, not this
+drop-down. The pane stayed hidden until back closed the account pane, and only then did the
+profile picture screen show.
+
+The drop-down shown over another one keeps it on the stack only if it is **retained**
+(`ignoreBackButton` or retain). Otherwise ATAK closes it ("not retaining the drop down on the
+stack, closing"). So the account pane is built with `Pane.RETAIN = true`. Opened from it, the
+profile picture screen returns to it:
+
+```text
+TakConvoPlugin.editProfilePicture():          # the account pane's avatar, when online
+    host = openChatPane()                     # over the account pane, which stays under it
+    host.startActivity(PublishProfilePictureActivity, EXTRA_ACCOUNT = own bare JID)
+    profilePictureFromAccount = true
+
+onTopFinished(activity):                      # EmbeddedActivityHost.Listener, after finish()
+    if profilePictureFromAccount and activity is PublishProfilePictureActivity:
+        profilePictureFromAccount = false
+        chatDropDown.closeDropDown()          # the account pane shows again; the chats only
+                                              # stop and are there next time
+```
+
+When the account pane shows again, ATAK's drop-down fragment restores the views' saved
+state. The `EditText`s re-set their text, which fired the text watchers: the pane counted
+that as an edit and showed a disabled "Log in". `AccountView` turns state saving off for
+the address and password fields. `refresh()` fills them anyway, and a password has no place
+in saved state.
+
 ## Views that talk to their window: `PaneFrame`
 
 The pane's root, `PaneFrame`, is in ATAK's window. Some requests a view makes of its window
@@ -320,7 +373,7 @@ request for `READ_CONTACTS` (undeclared by ATAK → denied) together with `CAMER
 ```text
 paneConfiguration():
     uiMode = NIGHT_YES                                   # ATAK is always dark
-    densityDpi = ATAK's densityDpi × UiScale.FACTOR (0.8)
+    densityDpi = ATAK's densityDpi × UiScale.FACTOR (0.9)
     if pane size is known:
         screenWidthDp, screenHeightDp = pane size / scaled density
         smallestScreenWidthDp = min(...); orientation from the pane's shape
@@ -328,16 +381,19 @@ paneConfiguration():
 
 Conversations is designed for a whole phone screen, and next to ATAK's denser UI its screens
 looked oversized in a side pane. A lower density scales every dp and sp of its resources
-alike: text, icons, touch targets. The pane also gets more dp (a 350 dp pane becomes 437 dp),
-which selects Conversations' `w384dp` resources.
+alike: text, icons, touch targets. 0.8 turned out a bit small; 0.9 it is.
 
-Resources are chosen for the **pane's** size, not the screen's, so a half-screen pane on a
-tablet gets Conversations' phone layouts. On a 480 dpi phone in landscape a half-width pane is
-about 350 × 330 dp at ATAK's density. The first activity is created before the pane is laid
-out, so `ChatDropDown` estimates the size: half (or all) of the **map view**, which ATAK
-divides between the map and the pane. The display's size was too large: it counts the system
-bars, and before the 0.8 scale it put a 350 dp pane in Conversations' `w384dp` bucket, where a
-voice message's player was wider than its bubble. The host also sets `AppCompatDelegate.setDefaultNightMode(MODE_NIGHT_YES)`,
+The pane takes 40 % of the map (`ChatDropDown.PANE_FRACTION`: its width in landscape, its
+height in portrait), and so does the account pane. Resources are chosen for the **pane's**
+size, not the screen's, so a side pane on a tablet gets Conversations' phone layouts. On the
+480 dpi S23 in landscape the pane is about 325 dp wide at the scaled density. The first
+activity is created before the pane is laid out, so `ChatDropDown.estimatePaneSize` estimates
+the size: 40 % (or all) of ATAK's **content area** (`android.R.id.content`), which ATAK divides
+between the map and its panes. The map view would do while no pane is open, but another open
+pane (the account pane) narrows it. The display's
+size was too large: it counts the system bars, and it once put a 350 dp pane in Conversations'
+`w384dp` bucket, where a voice message's player was wider than its bubble. The host also sets
+`AppCompatDelegate.setDefaultNightMode(MODE_NIGHT_YES)`,
 because AppCompat would otherwise follow the device and an embedded activity can't
 `recreate()`. That setting is process-wide: it would also affect another AppCompat plugin in
 ATAK.
@@ -379,13 +435,13 @@ through the provider's grant.
 | `ConversationsActivity.onBackendConnected` skips start-up prompts | crash reports, battery optimisation and permissions are ATAK's business |
 | `requestPermissions` → `ActivityCompat.requestPermissions` | see "Runtime permissions" |
 | attachment choices in one scrolling row | the pane is too narrow and low for the grid |
-| smaller avatars (chat list 44 dp, messages 36 dp) and attachment choices, a compact message field | in proportion with the pane, on top of the 0.8 scale |
+| smaller avatars (chat list 44 dp, messages 36 dp) and attachment choices, a compact message field | in proportion with the pane, on top of the 0.9 scale |
 | `FileBackend` provider and camera | see "Files handed to other apps" |
 | call buttons hidden, calls neither advertised nor accepted | `RtpSessionActivity` can't run embedded, see [05](05-conversations-fork.md#h-no-calls-inside-atak) |
 
 ## Not available yet
 
 Started from Conversations' UI, these show "Not available inside ATAK": share/show location,
-QR code scanning, profile pictures, Conversations' own settings (replaced by the plugin's),
-backup import. Calls (`RtpSessionActivity`) are switched off rather than refused: the call
+Conversations' own settings (replaced by the plugin's), backup import. Library activities
+aren't hosted either: the image cropper's `CropImageActivity` is avoided by the fork instead. Calls (`RtpSessionActivity`) are switched off rather than refused: the call
 button would already have made the contact's device ring.

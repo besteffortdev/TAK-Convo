@@ -12,8 +12,8 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-09-30 (evening) it is **30 modified files, 1 added file, 2 removed manifests**
-(94 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
+As of 2026-09-30 (evening) it is **31 modified files, 1 added file, 2 removed manifests**
+(95 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
 comment: `grep -rn TAKCONVO conversations/src`. When codeberg is unreachable,
 `UPSTREAM_DIR=<a checkout of the tag> tools/fork-diff.sh` compares with a local clone.
 
@@ -153,6 +153,7 @@ Conversations' activities run hosted by the plugin, their views moved into an AT
 | `res/values/dimens.xml` | `bubble_avatar_size` 48 → 36 dp (the avatar next to messages, and a bubble's minimum height), `avatar_on_conversation_overview` 56 → 44 dp. |
 | `res/layout/item_conversation.xml` | The chat list avatar is `@dimen/avatar_on_conversation_overview` (the size its image is loaded at) instead of a fixed 56 dp. |
 | `res/layout/item_media_choice.xml` | Attachment choices: 76 dp wide instead of 108, 28 dp icons with 12 dp padding instead of 40 and 16. |
+| `java/eu/siacs/conversations/ui/PublishProfilePictureActivity.java` | When embedded, `pickAvatar()` picks the image with `GetContent("image/*")` instead of the cropper's `CropImageActivity`, whose Crop button is in the window's action bar (an embedded activity's window isn't shown). The preview and the published avatar are the image's center square (`cropCenterSquare`), as before. |
 
 ### F. Files handed to other apps
 
@@ -221,9 +222,9 @@ Conversations APIs the plugin (`app/`) uses directly:
 |---|---|
 | `xmpp/EmbeddedConversations` | extends `Conversations`; `attachBaseContext`, `onCreateEmbedded()` |
 | `xmpp/EmbeddedXmppService` | extends `XmppConnectionService`; `attachBaseContext` |
-| `xmpp/XmppEngine` | `XmppConnectionService`: `onCreate`, `onStartCommand(null, 0, 0)`, `onBind`, `onTaskRemoved`, `onDestroy`, `getAccounts`, `findAccountByJid`, `createAccount`, `updateAccount`, `reconnectAccountInBackground`, `findOrCreateConversation`, `sendMessage`, `getConversations`. `TakConvoCompat` hooks (sections G and I). `AppSettings.CHANNEL_DISCOVERY_METHOD`, `ChannelDiscoveryService.Method`. `Account` (constructor, `setResource`, `setPassword`, `setHostname`, `setPort`, `setOption`/`isOptionSet(OPTION_DISABLED)`, `isOnlineAndConnected`). `AppSettings.SHOW_CONNECTION_OPTIONS`, `BuildConfig.APP_NAME`, `CryptoHelper.random`, `Jid.ofUserInput`, `FileBackend.deleteShareableCopies` |
+| `xmpp/XmppEngine` | `XmppConnectionService`: `onCreate`, `onStartCommand(null, 0, 0)`, `onBind`, `onTaskRemoved`, `onDestroy`, `getAccounts`, `findAccountByJid`, `createAccount`, `updateAccount`, `reconnectAccountInBackground`, `findOrCreateConversation`, `sendMessage`, `getConversations`. `TakConvoCompat` hooks (sections G and I). `AppSettings.CHANNEL_DISCOVERY_METHOD`, `ChannelDiscoveryService.Method`. For the callsign: `Account.getDisplayName`/`setDisplayName`, `databaseBackend.updateAccount`, `publishDisplayName`, `checkMucRequiresRename()`, `Conversation.getBookmark`/`getMucOptions`, `MucOptions.online`/`getActualNick`, `MultiUserChatManager.checkMucRequiresRename(conversation)`, `BookmarkManager.create`, `ImmutableBookmark.builder().from(..).nick(..)`. `Account` (constructor, `setResource`, `setPassword`, `setHostname`, `setPort`, `setOption`/`isOptionSet(OPTION_DISABLED)`, `isOnlineAndConnected`). `AppSettings.SHOW_CONNECTION_OPTIONS`, `BuildConfig.APP_NAME`, `CryptoHelper.random`, `Jid.ofUserInput`, `FileBackend.deleteShareableCopies` |
 | `xmpp/EmbeddedPendingIntents` | `TakConvoCompat.PendingIntentFactory`; the `eu.siacs.conversations.` package prefix of the components it redirects; `SystemEventReceiver` being a `BroadcastReceiver` with a no-argument constructor, `XmppConnectionService` a `Service` |
-| `xmpp/EmbeddedNotifications` | `TakConvoCompat.NotificationFilter`; style `Theme.Conversations3` (the icons' tints) |
+| `xmpp/EmbeddedNotifications` | `TakConvoCompat.NotificationFilter`; style `Theme.Conversations3` (the icons' tints); the channel id `messages` and the channel group `chats` |
 | `contacts/XmppContacts` | `Conversation`: `getAccount`, `getMode`/`MODE_SINGLE`/`MODE_MULTI`, `getAddress`, `getName`, `unreadCount`, `getMucOptions().online()`. `Account.getRoster().getContacts()`, `Contact.getOption(Contact.Options.TO)`, `getShownStatus()`, `Presence.Availability` |
 | `debug/DebugReceiver` | `Message(conversation, body, ENCRYPTION_NONE, STATUS_RECEIVED)`, `markUnread`, `Conversation.add`, `XmppConnectionService.createMessageAsync`, `getNotificationService().push`, `updateConversationUi` |
 | `ui/AccountView` | layout `activity_edit_account` and its view ids (`toolbar`, `editor`, `avater`, `account_jid(_layout)`, `account_password(_layout)` and that they share a parent, `save_button`, `cancel_button`, `stats`, `account_main_layout`, and the ids it hides), string `account_status_connecting`, `Account.State` and `getReadableId()`, style `Theme.Conversations3.Dark`, `AxolotlService`, `UIHelper`, `XmppConnection` and its managers (`Blocking`, `Carbons`, `ClientStateIndication`, `ExternalServiceDiscovery`, `HttpUpload`, `MessageArchive`, `Pep`, `Roster`) |

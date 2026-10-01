@@ -201,6 +201,27 @@ A bitmap works whatever package posts it. A resource icon of the plugin package
 (`Icon.createWithResource(pluginPackage, id)`) would need the system UI to load another
 package's resources, which isn't guaranteed.
 
+### Sound and vibration
+
+Since Android 8 a notification's sound and vibration are its **channel's**, and once a channel
+exists only the user can change them (Conversations' own sound and vibration settings only
+apply before Android 8). Conversations' `messages` channel has both. The plugin's settings
+(`takconvo_notification_sound`, `takconvo_notification_vibrate`) choose the channel instead:
+
+```text
+EmbeddedNotifications.filter(n):     # also:
+    if n.channel == "messages" and not (sound and vibrate):
+        b.setChannelId("takconvo_messages" + ("_sound" if sound) + ("_vibrate" if vibrate))
+        # created on first use, in Conversations' "chats" group, importance high (still a
+        # heads-up notification): with the default notification sound or none, Conversations'
+        # vibration pattern or none. Names: "Messages, without vibration", "..., without
+        # sound", "..., without sound or vibration"
+```
+
+With both on, messages stay in Conversations' channel, with whatever the user set for it in
+Android's settings. Tested on the S23 (5.8): vibration off → `takconvo_messages_sound`, sound
+on, vibration off, importance 4.
+
 ### What remains ATAK's
 
 - Samsung (and some other skins) show the posting app's name and icon on a notification:

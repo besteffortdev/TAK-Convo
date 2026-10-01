@@ -26,6 +26,9 @@ import manager) provisions them, and they appear under
 | `takconvo_xmpp_trusted_ca` | String | — | path of a PEM/DER CA file to trust |
 | `takconvo_xmpp_channel_discovery` | String | `xmpp_server` | where "Discover channels" looks: `xmpp_server` (the group chat services of the account's server), `server` (the next key) or `public` (the public directory search.jabber.network) |
 | `takconvo_xmpp_channel_server` | String | — | for `server`: a server (`example.org`) or one of its group chat services (`conference.example.org`) |
+| `takconvo_xmpp_use_callsign` | Boolean | `true` | the ATAK callsign is the XMPP nickname (see below) |
+| `takconvo_notification_sound` | Boolean | `true` | message notifications play the notification sound |
+| `takconvo_notification_vibrate` | Boolean | `true` | message notifications vibrate (see [08](08-contacts-and-notifications.md#sound-and-vibration)) |
 
 Upstream Conversations defaults to the public directory, which asks before sending a search to
 it. Inside ATAK the default is the account's own server: on an organisation's network the
@@ -154,6 +157,30 @@ applyTrust():
 The trust manager is installed **before** `service.onStartCommand()`, because the service
 connects stored accounts right away.
 
+## The callsign as nickname
+
+With `takconvo_xmpp_use_callsign` on (the default), the ATAK callsign (ATAK's
+`locationCallsign` preference) is the account's XMPP nickname:
+
+```text
+XmppEngine.syncCallsign():        # each engine change (e.g. the account came online), and
+                                  # each change of locationCallsign; only while online
+    if account.displayName != callsign:
+        account.displayName = callsign; save
+        publishDisplayName(account)   # User Nickname (XEP-0172): what contacts' clients show
+        checkMucRequiresRename()      # group chats whose nickname is the display name
+    for each group chat of the account:
+        if its bookmark has another nickname (once per room and callsign):
+            BookmarkManager.create(bookmark with nick = callsign)
+            # the server echoes the bookmark; Conversations renames itself in the room then
+        if joined under another nickname (once per room and callsign):
+            MultiUserChatManager.checkMucRequiresRename(room)
+            # a room joined right after connecting, before the display name changed
+```
+
+Changing the callsign in ATAK renames the user everywhere within a fraction of a second. "Once
+per room and callsign": a nickname the room refuses (taken) isn't retried on every change.
+
 ## The account pane
 
 `AccountView` shows Conversations' own `activity_edit_account` layout in an ATAK pane, in
@@ -161,7 +188,12 @@ connects stored accounts right away.
 the account's address, server features, and login/logout in login mode. Parts that don't apply
 to a provisioned account (registration, port fields, push, OMEMO regeneration...) are hidden.
 It uses the same scaled-down UI context as the chat pane (`UiScale`, see
-[04](04-chat-pane-activity-host.md#configuration-and-theme)).
+[04](04-chat-pane-activity-host.md#configuration-and-theme)), sized for the pane: 40 % of the
+map, like the chat pane, which selects Conversations' narrow layouts. Tapping the avatar
+(online) opens Conversations' `PublishProfilePictureActivity` in the chat pane over it, to pick
+and publish a profile picture. The account pane stays under it (it is retained), and shows
+again once the picture is published or the user goes back
+([04](04-chat-pane-activity-host.md#showing-the-pane-from-elsewhere)).
 
 ```text
 refresh():

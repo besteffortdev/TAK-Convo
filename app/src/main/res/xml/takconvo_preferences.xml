@@ -21,6 +21,26 @@
         android:key="takconvo_account"
         android:title="@string/takconvo_pref_account" />
 
+    <com.atakmap.android.gui.PanCheckBoxPreference
+        android:defaultValue="true"
+        android:key="takconvo_xmpp_use_callsign"
+        android:summary="@string/takconvo_pref_use_callsign_summary"
+        android:title="@string/takconvo_pref_use_callsign" />
+
+    <PreferenceCategory android:title="@string/takconvo_pref_cat_notifications" />
+
+    <com.atakmap.android.gui.PanCheckBoxPreference
+        android:defaultValue="true"
+        android:key="takconvo_notification_sound"
+        android:summary="@string/takconvo_pref_notification_sound_summary"
+        android:title="@string/takconvo_pref_notification_sound" />
+
+    <com.atakmap.android.gui.PanCheckBoxPreference
+        android:defaultValue="true"
+        android:key="takconvo_notification_vibrate"
+        android:summary="@string/takconvo_pref_notification_vibrate_summary"
+        android:title="@string/takconvo_pref_notification_vibrate" />
+
     <PreferenceCategory android:title="@string/takconvo_pref_cat_server" />
 
     <com.atakmap.android.gui.PanEditTextPreference

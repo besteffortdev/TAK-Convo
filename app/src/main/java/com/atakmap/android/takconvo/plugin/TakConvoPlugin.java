@@ -3,8 +3,13 @@ package com.atakmap.android.takconvo.plugin;
 
 import android.app.Activity;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -29,6 +34,8 @@ import com.atakmap.coremap.log.Log;
 import eu.siacs.conversations.entities.Account;
 import eu.siacs.conversations.entities.Conversation;
 import eu.siacs.conversations.entities.Message;
+import eu.siacs.conversations.ui.PublishProfilePictureActivity;
+import eu.siacs.conversations.ui.XmppActivity;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -80,6 +87,8 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
      * is signing in: once the account is online, the chats replace it.
      */
     private boolean showChatWhenOnline;
+    /** The profile picture screen was opened from the account pane, and goes back to it. */
+    private boolean profilePictureFromAccount;
     private final StringBuilder log = new StringBuilder();
 
     private final BroadcastReceiver showReceiver = new BroadcastReceiver() {
@@ -123,8 +132,8 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         toolbarItem = new ToolbarItem.Builder(
                 pluginContext.getString(R.string.app_name),
                 MarshalManager.marshal(
-                        pluginContext.getResources().getDrawable(R.drawable.ic_launcher),
-                        android.graphics.drawable.Drawable.class,
+                        toolIcon(pluginContext),
+                        Drawable.class,
                         gov.tak.api.commons.graphics.Bitmap.class))
                 .setListener(new ToolbarItemAdapter() {
                     @Override
@@ -163,7 +172,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
                 pluginContext.getString(R.string.takconvo_prefs_title),
                 pluginContext.getString(R.string.takconvo_prefs_summary),
                 TakConvoPreferenceFragment.TOOL_KEY,
-                pluginContext.getResources().getDrawable(R.drawable.ic_launcher),
+                toolIcon(pluginContext),
                 new TakConvoPreferenceFragment(pluginContext)));
         final AtakBroadcast.DocumentedIntentFilter filter =
                 new AtakBroadcast.DocumentedIntentFilter();
@@ -221,6 +230,21 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             return;
 
         uiService.removeToolbarItem(toolbarItem);
+    }
+
+    /**
+     * Conversations' speech bubble, for ATAK's tool menu and settings, which paint tool icons in
+     * one color (the colored launcher icon would show as a plain square). A bitmap: the vector
+     * is drawn here rather than left to ATAK's marshaling.
+     */
+    private static Drawable toolIcon(final Context pluginContext) {
+        final Drawable vector = pluginContext.getResources().getDrawable(R.drawable.ic_takconvo,
+                pluginContext.getTheme());
+        final Bitmap bitmap = Bitmap.createBitmap(vector.getIntrinsicWidth(),
+                vector.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+        vector.setBounds(0, 0, bitmap.getWidth(), bitmap.getHeight());
+        vector.draw(new Canvas(bitmap));
+        return new BitmapDrawable(pluginContext.getResources(), bitmap);
     }
 
     /** Conversations' chats. Without an account to chat with, the account screen instead. */
@@ -297,8 +321,20 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
 
     @Override
     public void onHostEmpty() {
+        profilePictureFromAccount = false;
         if (chatDropDown != null) {
             chatDropDown.closeDropDown();
+        }
+    }
+
+    @Override
+    public void onTopFinished(final Activity finished) {
+        if (profilePictureFromAccount && finished instanceof PublishProfilePictureActivity) {
+            profilePictureFromAccount = false;
+            // back to the account pane under it; the chats stay as they were, for next time
+            if (chatDropDown != null) {
+                chatDropDown.closeDropDown();
+            }
         }
     }
 
@@ -321,10 +357,13 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             accountView = new AccountView(pluginContext, MapView.getMapView().getContext(),
                     engine, this);
             engine.addListener(accountView);
+            // the same size as the chat pane, which it stands in for. Retained: ATAK would
+            // otherwise close it when the chat pane opens over it (the profile picture screen)
             accountPane = new PaneBuilder(accountView.getView())
                     .setMetaValue(Pane.RELATIVE_LOCATION, Pane.Location.Default)
-                    .setMetaValue(Pane.PREFERRED_WIDTH_RATIO, 0.5D)
-                    .setMetaValue(Pane.PREFERRED_HEIGHT_RATIO, 0.6D)
+                    .setMetaValue(Pane.PREFERRED_WIDTH_RATIO, ChatDropDown.PANE_FRACTION)
+                    .setMetaValue(Pane.PREFERRED_HEIGHT_RATIO, ChatDropDown.PANE_FRACTION)
+                    .setMetaValue(Pane.RETAIN, true)
                     .build();
         }
         if (!uiService.isPaneVisible(accountPane)) {
@@ -341,6 +380,26 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     @Override
     public void onSignInStarted() {
         showChatWhenOnline = true;
+    }
+
+    /**
+     * In the chat pane, over the account pane, which ATAK keeps under it (it is retained). Once
+     * the picture is published or the user goes back, the chat pane closes on whatever chats
+     * were open in it, and the account pane shows again.
+     */
+    @Override
+    public void editProfilePicture() {
+        final Account account = engine == null ? null : engine.getAccount();
+        final EmbeddedActivityHost host = account == null ? null : openChatPane();
+        if (host == null) {
+            return;
+        }
+        final Intent intent = new Intent();
+        intent.setComponent(new ComponentName(MapView.getMapView().getContext().getPackageName(),
+                PublishProfilePictureActivity.class.getName()));
+        intent.putExtra(XmppActivity.EXTRA_ACCOUNT, account.getJid().asBareJid().toString());
+        host.startActivity(intent);
+        profilePictureFromAccount = true;
     }
 
     /** The account came online while the account pane stood in for the chats: swap them. */

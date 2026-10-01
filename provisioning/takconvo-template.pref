@@ -21,6 +21,9 @@
                                         the account's server), server or public
                                         (search.jabber.network)
      takconvo_xmpp_channel_server       for "server": example.org or conference.example.org
+     takconvo_xmpp_use_callsign         true (default): the ATAK callsign is the XMPP nickname
+     takconvo_notification_sound        false: message notifications make no sound
+     takconvo_notification_vibrate      false: message notifications don't vibrate
 
      Booleans must use class java.lang.Boolean, as ATAK's own .pref exports do. -->
 <preferences>

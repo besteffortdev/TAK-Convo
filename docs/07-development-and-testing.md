@@ -198,14 +198,25 @@ After an upstream merge, a dependency change or a change to the host:
    landscape the keyboard leaves the pane visible. Signing in to a server that fails shows a
    spinner, then the error, which stays up during background retries (Reconnect does the same).
    Once a sign-in (or the account the pane was waiting for) is online, the chat list replaces
-   the account pane: XMPP off, open TAK Convo (account pane), XMPP on.
+   the account pane: XMPP off, open TAK Convo (account pane), XMPP on. With the chats open,
+   Manage accounts, then the avatar: the profile picture screen shows at once (`DropDownManager`
+   logs "retaining the drop down on the stack" for the account pane); tapping its image opens
+   the system photo picker. Cancel brings back the account pane, with no "Log in" button, and
+   back closes it. The chats are still there next time.
+   Changing the ATAK callsign (`DEBUG_SET_PREF --es key locationCallsign --es value X`, then
+   back) logs `nickname ... -> callsign X` and, in `tak convo`, `published User Nick` and a
+   group chat `setSelf(.../X)`. Notifications › Vibration off, then `DEBUG_FAKE_INCOMING`: the
+   notification is in channel `takconvo_messages_sound` (`dumpsys notification`).
 4. Chat pane from the toolbar: chat list; open a chat; send to yourself; the message is
    delivered (double tick) and encrypted (shield).
 5. Back: chat → list → pane closes. Reopen: same state. With a chat open, log out (or turn
    XMPP off: `DEBUG_SET_PREF --es key takconvo_xmpp_enabled --es value false`, then `true`):
    one back closes the account pane and the old chat doesn't come back.
 6. Home, then back to ATAK: `TakConvo.Host` logs pausing/stopping, then resuming.
-7. Start chat → Add contact dialog; group chat → channel details → back. Start chat →
+7. Start chat → Add contact dialog; group chat → channel details → back. Chat list › QR icon:
+   Show QR Code shows the address; Scan QR Code shows the camera in the pane (`dumpsys
+   media.camera`: ATAK in PREVIEW), scanning another device's code opens that contact, and back
+   releases the camera. Start chat →
    Discover channels lists the XMPP server's channels, without the public directory's privacy
    prompt. With `takconvo_xmpp_channel_discovery` = `server` and `takconvo_xmpp_channel_server`
    = the server's domain, it lists the same channels. ATAK's Contacts lists the open group

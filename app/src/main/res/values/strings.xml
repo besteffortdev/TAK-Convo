@@ -26,7 +26,18 @@
     <string name="takconvo_notice_no_tak_credentials">No TAK server credentials are available. Add a TAK server with a username and password (Settings › Network Preferences › TAK Servers), or sign in with an XMPP account.</string>
     <string name="takconvo_notice_no_domain">No XMPP server is configured. Import a TAK Convo .pref file (it can come in a mission package), set the XMPP domain in the settings, or sign in with a full XMPP address.</string>
     <string name="takconvo_notice_invalid_jid">Your TAK server username is not a valid XMPP address. Sign in with an XMPP account instead.</string>
-    <string name="takconvo_use_xmpp_login">Use an XMPP account</string>    <string name="takconvo_notice_untrusted">The XMPP server\'s certificate isn\'t trusted. By default TAK Convo trusts the certificate authorities of your TAK server connections: connect to your TAK server, or trust the device\'s CA store or a CA certificate file in the settings.</string>
+    <string name="takconvo_use_xmpp_login">Use an XMPP account</string>
+    <string name="takconvo_pref_use_callsign">Use the ATAK callsign as nickname</string>
+    <string name="takconvo_pref_use_callsign_summary">Your XMPP nickname, shown to your contacts and in group chats, follows your ATAK callsign</string>
+    <string name="takconvo_pref_cat_notifications">Notifications</string>
+    <string name="takconvo_pref_notification_sound">Sound</string>
+    <string name="takconvo_pref_notification_sound_summary">New messages play the notification sound</string>
+    <string name="takconvo_pref_notification_vibrate">Vibration</string>
+    <string name="takconvo_pref_notification_vibrate_summary">New messages vibrate</string>
+    <string name="takconvo_channel_messages_no_vibration">Messages, without vibration</string>
+    <string name="takconvo_channel_messages_no_sound">Messages, without sound</string>
+    <string name="takconvo_channel_messages_silent">Messages, without sound or vibration</string>
+    <string name="takconvo_change_profile_picture">Change your profile picture</string>    <string name="takconvo_notice_untrusted">The XMPP server\'s certificate isn\'t trusted. By default TAK Convo trusts the certificate authorities of your TAK server connections: connect to your TAK server, or trust the device\'s CA store or a CA certificate file in the settings.</string>
     <string name="takconvo_open_settings">Settings</string>
     <string name="takconvo_sign_out_confirm">Sign out of %1$s? Its chat history stays on this device.</string>
 

@@ -121,7 +121,9 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
     private void reload() {
         final SharedPreferences prefs = prefs();
         for (final String key : new String[] {XmppSettings.KEY_ENABLED,
-                XmppSettings.KEY_USE_TAK_CREDENTIALS, XmppSettings.KEY_USE_TAK_TRUSTSTORE}) {
+                XmppSettings.KEY_USE_TAK_CREDENTIALS, XmppSettings.KEY_USE_TAK_TRUSTSTORE,
+                XmppSettings.KEY_USE_CALLSIGN, XmppSettings.KEY_NOTIFICATION_SOUND,
+                XmppSettings.KEY_NOTIFICATION_VIBRATE}) {
             ((CheckBoxPreference) findPreference(key)).setChecked(prefs.getBoolean(key, true));
         }
         ((CheckBoxPreference) findPreference(XmppSettings.KEY_USE_ANDROID_CA_STORE))

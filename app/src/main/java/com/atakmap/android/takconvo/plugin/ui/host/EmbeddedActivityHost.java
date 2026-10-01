@@ -81,6 +81,9 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         /** The last activity finished: there is nothing left to show. */
         void onHostEmpty();
 
+        /** The activity on top finished; the one below it shows again. */
+        void onTopFinished(Activity finished);
+
         /** An activity asked for the XMPP account screen, which the plugin provides itself. */
         void onShowAccount();
 
@@ -103,7 +106,11 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             "eu.siacs.conversations.ui.BlocklistActivity",
             "eu.siacs.conversations.ui.SearchActivity",
             "eu.siacs.conversations.ui.TrustKeysActivity",
-            "eu.siacs.conversations.ui.RecordingActivity"));
+            "eu.siacs.conversations.ui.RecordingActivity",
+            // camera preview on a TextureView, which draws in ATAK's window like any view
+            "eu.siacs.conversations.ui.ScanQrCodeActivity",
+            // the fork picks the image without the cropper's activity
+            "eu.siacs.conversations.ui.PublishProfilePictureActivity"));
 
     /**
      * Dialog-themed activities: shown over the activity below, which stays visible and paused,
@@ -410,6 +417,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             return;
         }
         settleShown();
+        listener.onTopFinished(record.activity);
     }
 
     private Record create(final String className, final Intent intent, final Record caller,

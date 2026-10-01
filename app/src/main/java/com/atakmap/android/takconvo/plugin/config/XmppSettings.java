@@ -37,6 +37,10 @@ import java.util.List;
  *                                     directory search.jabber.network)
  * takconvo_xmpp_channel_server        for "server": a server (example.org) or one of its group
  *                                     chat services (conference.example.org)
+ * takconvo_xmpp_use_callsign          the ATAK callsign is the XMPP nickname, for contacts and in
+ *                                     group chats (Boolean, default true)
+ * takconvo_notification_sound         message notifications make a sound (Boolean, default true)
+ * takconvo_notification_vibrate       message notifications vibrate (Boolean, default true)
  * </pre>
  *
  * <p>Public CAs are always trusted, see {@link TrustSources} for the others.
@@ -59,6 +63,12 @@ public final class XmppSettings {
     public static final String KEY_USE_ANDROID_CA_STORE = "takconvo_xmpp_use_android_ca_store";
     public static final String KEY_CHANNEL_DISCOVERY = "takconvo_xmpp_channel_discovery";
     public static final String KEY_CHANNEL_SERVER = "takconvo_xmpp_channel_server";
+    public static final String KEY_USE_CALLSIGN = "takconvo_xmpp_use_callsign";
+    // not takconvo_xmpp_*: changing them doesn't need provisioning
+    public static final String KEY_NOTIFICATION_SOUND = "takconvo_notification_sound";
+    public static final String KEY_NOTIFICATION_VIBRATE = "takconvo_notification_vibrate";
+    /** ATAK's own preference: this device's callsign */
+    public static final String KEY_ATAK_CALLSIGN = "locationCallsign";
 
     public static final String KEY_PREFIX = "takconvo_xmpp_";
 
@@ -241,6 +251,24 @@ public final class XmppSettings {
         return login == null ? null : trimToNull(login.username);
     }
 
+    /** Whether the ATAK callsign is to be the XMPP nickname. */
+    public static boolean usesCallsign(final SharedPreferences prefs) {
+        return parseBoolean(getString(prefs, KEY_USE_CALLSIGN), true);
+    }
+
+    /** This device's ATAK callsign, or null. */
+    public static String atakCallsign(final SharedPreferences prefs) {
+        return trimToNull(getString(prefs, KEY_ATAK_CALLSIGN));
+    }
+
+    public static boolean notificationSound(final SharedPreferences prefs) {
+        return parseBoolean(getString(prefs, KEY_NOTIFICATION_SOUND), true);
+    }
+
+    public static boolean notificationVibrate(final SharedPreferences prefs) {
+        return parseBoolean(getString(prefs, KEY_NOTIFICATION_VIBRATE), true);
+    }
+
     /**
      * Stores boolean values as Booleans. {@code .pref} files may carry them as strings, and the
      * check boxes of the settings screen fail on those.
@@ -249,7 +277,8 @@ public final class XmppSettings {
         final SharedPreferences.Editor editor = prefs.edit();
         boolean changed = false;
         for (final String key : new String[] {KEY_ENABLED, KEY_USE_TAK_CREDENTIALS,
-                KEY_USE_TAK_TRUSTSTORE, KEY_USE_ANDROID_CA_STORE}) {
+                KEY_USE_TAK_TRUSTSTORE, KEY_USE_ANDROID_CA_STORE, KEY_USE_CALLSIGN,
+                KEY_NOTIFICATION_SOUND, KEY_NOTIFICATION_VIBRATE}) {
             final Object value = prefs.getAll().get(key);
             if (value != null && !(value instanceof Boolean)) {
                 editor.putBoolean(key, Boolean.parseBoolean(String.valueOf(value).trim()));

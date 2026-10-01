@@ -1,25 +1,48 @@
-// Libraries that ATAK 5.5.1.8 already ships at runtime.
+// Libraries that ATAK already ships at runtime, for the ATAK version the build is for
+// (rootProject.ATAK_MINOR, see the root build.gradle).
 //
 // Plugin classes are loaded parent-first, so ATAK's copy of any of these classes always wins.
 // Every module therefore compiles against ATAK's exact versions, and the plugin APK does not
-// package them. Versions were read from META-INF/*.version and the dex of the SDK's atak.apk.
+// package them. Versions were read from META-INF/*.version and the dex of each SDK's atak.apk.
 
 // key is "group" (all modules), "group:module" (exact) or "group:prefix*"
-ext.atakProvidedVersions = [
-        'androidx.activity'                     : '1.8.1',
-        'androidx.core:core'                    : '1.15.0',
-        'androidx.core:core-ktx'                : '1.15.0',
-        'androidx.core:core-viewtree'           : '1.0.0',
-        'androidx.exifinterface'                : '1.4.1',
-        'androidx.fragment'                     : '1.8.7',
-        'androidx.lifecycle'                    : '2.9.0',
-        'androidx.savedstate'                   : '1.3.0',
-        'androidx.startup'                      : '1.1.1',
-        'androidx.tracing'                      : '1.2.0',
-        'androidx.profileinstaller'             : '1.4.0',
-        'com.squareup.okhttp3'                  : '4.11.0',
-        'org.jetbrains.kotlinx:kotlinx-coroutines-*' : '1.7.3',
+def atakVersions = [
+        '5.6': [
+                'androidx.activity'                     : '1.8.1',
+                'androidx.core:core'                    : '1.17.0',
+                'androidx.core:core-ktx'                : '1.17.0',
+                'androidx.core:core-viewtree'           : '1.0.0',
+                'androidx.exifinterface'                : '1.4.1',
+                'androidx.fragment'                     : '1.8.9',
+                'androidx.lifecycle'                    : '2.9.4',
+                'androidx.savedstate'                   : '1.3.1',
+                'androidx.startup'                      : '1.1.1',
+                'androidx.tracing'                      : '1.2.0',
+                'androidx.profileinstaller'             : '1.4.0',
+                'com.squareup.okhttp3'                  : '4.11.0',
+                'org.jetbrains.kotlinx:kotlinx-coroutines-*' : '1.8.1',
+        ],
+        '5.8': [
+                'androidx.activity'                     : '1.8.1',
+                'androidx.core:core'                    : '1.17.0',
+                'androidx.core:core-ktx'                : '1.17.0',
+                'androidx.core:core-viewtree'           : '1.0.0',
+                'androidx.exifinterface'                : '1.4.2',
+                'androidx.fragment'                     : '1.8.9',
+                'androidx.lifecycle'                    : '2.10.0',
+                'androidx.savedstate'                   : '1.4.0',
+                'androidx.startup'                      : '1.1.1',
+                'androidx.tracing'                      : '1.2.0',
+                'androidx.profileinstaller'             : '1.4.0',
+                'com.squareup.okhttp3'                  : '4.11.0',
+                'org.jetbrains.kotlinx:kotlinx-coroutines-*' : '1.9.0',
+        ],
 ]
+ext.atakProvidedVersions = atakVersions[rootProject.ATAK_MINOR]
+if (atakProvidedVersions == null) {
+    throw new GradleException("gradle/atak-runtime.gradle has no library versions for ATAK "
+            + rootProject.ATAK_MINOR + ': read them from that SDK\'s atak.apk (see docs/06)')
+}
 
 // group:module pairs excluded from the plugin APK (still on the compile classpath)
 ext.atakProvidedModules = [

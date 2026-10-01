@@ -45,6 +45,21 @@
         android:singleLine="true"
         android:title="@string/takconvo_pref_port" />
 
+    <com.atakmap.android.gui.PanListPreference
+        android:defaultValue="xmpp_server"
+        android:dialogTitle="@string/takconvo_pref_channel_discovery"
+        android:entries="@array/takconvo_channel_discovery_entries"
+        android:entryValues="@array/takconvo_channel_discovery_values"
+        android:key="takconvo_xmpp_channel_discovery"
+        android:title="@string/takconvo_pref_channel_discovery" />
+
+    <com.atakmap.android.gui.PanEditTextPreference
+        android:dialogTitle="@string/takconvo_pref_channel_server"
+        android:inputType="textUri|textNoSuggestions"
+        android:key="takconvo_xmpp_channel_server"
+        android:singleLine="true"
+        android:title="@string/takconvo_pref_channel_server" />
+
     <PreferenceCategory android:title="@string/takconvo_pref_cat_trust" />
 
     <com.atakmap.android.gui.PanCheckBoxPreference

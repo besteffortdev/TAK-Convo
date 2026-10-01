@@ -25,6 +25,7 @@ import im.conversations.android.xmpp.model.stanza.Presence;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.Map;
 
@@ -36,6 +37,9 @@ import java.util.Map;
  * one, registered ahead of it, opens the chat in TAK Convo instead, and gives the connector the
  * chat's unread count and the address's XMPP presence. ATAK adds those unread counts to the
  * contact's row and to its Contacts button, like GeoChat's.
+ *
+ * <p>The open XMPP group chats are contacts too, at the top of the list ({@link
+ * XmppRoomContact}), so that ATAK's contact list has both the users and the group chats.
  *
  * <p>It also shows Conversations' total unread count on the plugin's toolbar button.
  *
@@ -70,10 +74,15 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
                     handler.post(() -> updateToolbar(engine.getUnreadCount()));
                 }
             };
-    /** unread messages of the 1:1 chats with each bare JID (lower case) */
+    /** unread messages of the chats with each bare JID (lower case), 1:1 and group chats */
     private volatile Map<String, Integer> unread = Collections.emptyMap();
-    /** presence of each bare JID whose presence we are subscribed to */
+    /**
+     * presence of each bare JID whose presence we are subscribed to, and of each group chat
+     * (joined or not)
+     */
     private volatile Map<String, Contact.UpdateStatus> presence = Collections.emptyMap();
+    /** the group chats' contacts, by bare JID (lower case); main thread */
+    private final Map<String, XmppRoomContact> rooms = new HashMap<>();
     private boolean started;
 
     public XmppContacts(final Context plugin, final Context atak, final XmppEngine engine,
@@ -117,6 +126,7 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
         }
         unread = Collections.emptyMap();
         presence = Collections.emptyMap();
+        syncRooms(Collections.emptyMap());
         updateToolbar(0);
         updateContacts();
     }
@@ -135,17 +145,27 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
         }
         final Map<String, Integer> newUnread = new HashMap<>();
         final Map<String, Contact.UpdateStatus> newPresence = new HashMap<>();
+        /* the open group chats: address to name */
+        final Map<String, String> openRooms = new HashMap<>();
         final Account account = engine.getAccount();
         if (account != null) {
             try {
                 for (final Conversation conversation : engine.getConversations()) {
-                    if (conversation.getAccount() != account
-                            || conversation.getMode() != Conversation.MODE_SINGLE) {
+                    if (conversation.getAccount() != account) {
+                        continue;
+                    }
+                    final String key = key(conversation.getAddress());
+                    if (conversation.getMode() == Conversation.MODE_MULTI) {
+                        openRooms.put(conversation.getAddress().asBareJid().toString(),
+                                String.valueOf(conversation.getName()));
+                        newPresence.put(key, conversation.getMucOptions().online()
+                                ? Contact.UpdateStatus.CURRENT : Contact.UpdateStatus.DEAD);
+                    } else if (conversation.getMode() != Conversation.MODE_SINGLE) {
                         continue;
                     }
                     final int count = conversation.unreadCount();
                     if (count > 0) {
-                        newUnread.put(key(conversation.getAddress()), count);
+                        newUnread.put(key, count);
                     }
                 }
                 for (final eu.siacs.conversations.entities.Contact contact :
@@ -164,11 +184,56 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
         final boolean changed = !newUnread.equals(unread) || !newPresence.equals(presence);
         unread = newUnread;
         presence = newPresence;
-        if (changed) {
-            Log.d(TAG, "unread " + newUnread + ", presence of " + newPresence.size());
+        final boolean roomsChanged = syncRooms(openRooms);
+        if (changed || roomsChanged) {
+            Log.d(TAG, "unread " + newUnread + ", presence of " + newPresence.size()
+                    + ", group chats " + rooms.size());
             updateContacts();
         }
         updateToolbar(engine.getUnreadCount());
+    }
+
+    /**
+     * Makes the group chat contacts, at the top of ATAK's contact list, those of the open group
+     * chats.
+     *
+     * @param open the open group chats: address to name
+     * @return whether any contact was added, removed or renamed
+     */
+    private boolean syncRooms(final Map<String, String> open) {
+        final Contacts contacts = Contacts.getInstance();
+        if (contacts == null) {
+            return false;
+        }
+        boolean changed = false;
+        final Map<String, String> byKey = new HashMap<>();
+        for (final Map.Entry<String, String> room : open.entrySet()) {
+            byKey.put(room.getKey().toLowerCase(Locale.ROOT), room.getKey());
+        }
+        for (final Iterator<Map.Entry<String, XmppRoomContact>> i = rooms.entrySet().iterator();
+                i.hasNext(); ) {
+            final Map.Entry<String, XmppRoomContact> room = i.next();
+            if (!byKey.containsKey(room.getKey())) {
+                contacts.removeContact(room.getValue());
+                i.remove();
+                changed = true;
+            }
+        }
+        for (final Map.Entry<String, String> room : byKey.entrySet()) {
+            final String address = room.getValue();
+            final String name = open.get(address);
+            final XmppRoomContact existing = rooms.get(room.getKey());
+            if (existing == null) {
+                final XmppRoomContact contact = new XmppRoomContact(name, address);
+                rooms.put(room.getKey(), contact);
+                contacts.addContact(contacts.getRootGroup(), contact);
+                changed = true;
+            } else if (!name.equals(existing.getName())) {
+                existing.setName(name);
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     /** ATAK recounts its contacts' unread messages and redraws their rows. */

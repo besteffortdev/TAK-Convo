@@ -17,6 +17,10 @@
      takconvo_xmpp_use_android_ca_store true: the device CA store, including CAs the user
                                         imported or an MDM installed (default false)
      takconvo_xmpp_trusted_ca           a CA certificate file (PEM or DER)
+     takconvo_xmpp_channel_discovery    where "Discover channels" looks: xmpp_server (default,
+                                        the account's server), server or public
+                                        (search.jabber.network)
+     takconvo_xmpp_channel_server       for "server": example.org or conference.example.org
 
      Booleans must use class java.lang.Boolean, as ATAK's own .pref exports do. -->
 <preferences>

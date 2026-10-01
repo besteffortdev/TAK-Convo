@@ -152,6 +152,13 @@ list, if nothing is shown), `showConversation(uuid)` (a TAK user's XMPP connecto
 routed to the account pane like any other start, and the plugin closes the chat pane again if
 nothing ended up in it (`isEmpty()`).
 
+The chats shown belong to one account. When the engine's account changes or goes away (logging
+out, XMPP turned off, another account provisioned), `TakConvoPlugin.onXmppStateChanged` closes
+the chat pane and destroys its activities. Logging out happens in the account pane, opened over
+the chat pane, which ATAK keeps on its drop-down stack (`DropDownManager.closeDropDown` also
+removes a hidden one). Without this, closing the account pane brought the old chats back, and
+back went through them one by one.
+
 ### Floating activities
 
 A dialog-themed activity (`windowIsFloating`) would float over the activity that started it,

@@ -28,6 +28,7 @@ import eu.siacs.conversations.entities.Account;
 import eu.siacs.conversations.entities.Conversation;
 import eu.siacs.conversations.entities.Message;
 import eu.siacs.conversations.persistance.FileBackend;
+import eu.siacs.conversations.services.ChannelDiscoveryService;
 import eu.siacs.conversations.services.XmppConnectionService;
 import eu.siacs.conversations.utils.CryptoHelper;
 import eu.siacs.conversations.utils.TakConvoCompat;
@@ -250,6 +251,7 @@ public final class XmppEngine {
         TakConvoCompat.OBSERVER = null;
         TakConvoCompat.NOTIFICATIONS = null;
         TakConvoCompat.PENDING_INTENTS = null;
+        TakConvoCompat.CHANNEL_DISCOVERY_SERVER = null;
         pendingIntents.unregister();
         listeners.clear();
     }
@@ -268,6 +270,7 @@ public final class XmppEngine {
         XmppSettings.normalize(AtakPreferences.getInstance(atakContext).getSharedPrefs());
         settings = XmppSettings.load(atakContext);
         final boolean trustChanged = applyTrust();
+        applyChannelDiscovery();
         Log.d(TAG, "provisioning " + settings);
 
         lastProblem = settings.problem();
@@ -347,6 +350,32 @@ public final class XmppEngine {
         final boolean changed = trustFingerprint != null && !trustFingerprint.equals(fingerprint);
         trustFingerprint = fingerprint;
         return changed;
+    }
+
+    /**
+     * Where "Discover channels" looks: Conversations' own setting (the public directory or XMPP
+     * servers), and the fork's hook for a server other than the account's. A server that isn't
+     * a valid address falls back to the account's.
+     */
+    private void applyChannelDiscovery() {
+        Jid server = null;
+        if (settings.channelDiscovery == XmppSettings.ChannelDiscovery.SERVER
+                && settings.channelServer != null) {
+            try {
+                server = Jid.ofUserInput(settings.channelServer);
+            } catch (final IllegalArgumentException e) {
+                Log.w(TAG, "invalid channel discovery server " + settings.channelServer);
+            }
+        }
+        TakConvoCompat.CHANNEL_DISCOVERY_SERVER = server;
+        final String method = settings.channelDiscovery == XmppSettings.ChannelDiscovery.PUBLIC
+                ? ChannelDiscoveryService.Method.JABBER_NETWORK.name()
+                : ChannelDiscoveryService.Method.LOCAL_SERVER.name();
+        // the file PreferenceManager.getDefaultSharedPreferences uses; EmbeddedContext prefixes it
+        context.getSharedPreferences(context.getPackageName() + "_preferences",
+                        Context.MODE_PRIVATE).edit()
+                .putString(AppSettings.CHANNEL_DISCOVERY_METHOD, method)
+                .apply();
     }
 
     private void unprovision() {

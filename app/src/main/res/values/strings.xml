@@ -26,8 +26,7 @@
     <string name="takconvo_notice_no_tak_credentials">No TAK server credentials are available. Add a TAK server with a username and password (Settings › Network Preferences › TAK Servers), or sign in with an XMPP account.</string>
     <string name="takconvo_notice_no_domain">No XMPP server is configured. Import a TAK Convo .pref file (it can come in a mission package), set the XMPP domain in the settings, or sign in with a full XMPP address.</string>
     <string name="takconvo_notice_invalid_jid">Your TAK server username is not a valid XMPP address. Sign in with an XMPP account instead.</string>
-    <string name="takconvo_use_xmpp_login">Use an XMPP account</string>
-    <string name="takconvo_notice_untrusted">The XMPP server\'s certificate isn\'t trusted. By default TAK Convo trusts the certificate authorities of your TAK server connections: connect to your TAK server, or trust the device\'s CA store or a CA certificate file in the settings.</string>
+    <string name="takconvo_use_xmpp_login">Use an XMPP account</string>    <string name="takconvo_notice_untrusted">The XMPP server\'s certificate isn\'t trusted. By default TAK Convo trusts the certificate authorities of your TAK server connections: connect to your TAK server, or trust the device\'s CA store or a CA certificate file in the settings.</string>
     <string name="takconvo_open_settings">Settings</string>
     <string name="takconvo_sign_out_confirm">Sign out of %1$s? Its chat history stays on this device.</string>
 
@@ -53,6 +52,15 @@
     <string name="takconvo_pref_host">Custom host</string>
     <string name="takconvo_pref_host_summary">Connect to this host instead of looking the domain up in DNS (leave empty normally)</string>
     <string name="takconvo_pref_port">Port</string>
+    <string name="takconvo_pref_channel_discovery">Discover channels on</string>
+    <string name="takconvo_pref_channel_discovery_xmpp_server">Your XMPP server</string>
+    <string name="takconvo_pref_channel_discovery_server">Another server</string>
+    <string name="takconvo_pref_channel_discovery_public">Public directory (search.jabber.network)</string>
+    <string name="takconvo_pref_channel_discovery_xmpp_server_summary">Your XMPP server: the channels of its group chat services</string>
+    <string name="takconvo_pref_channel_discovery_public_summary">The public directory search.jabber.network: public channels of the whole XMPP network. Your searches are sent to it.</string>
+    <string name="takconvo_pref_channel_server">Server for channel discovery</string>
+    <string name="takconvo_pref_channel_server_summary">A server (example.org) or its group chat service (conference.example.org)</string>
+    <string name="takconvo_pref_channel_server_invalid">Not a valid server address: %1$s</string>
     <string name="takconvo_pref_cat_trust">Server certificate</string>
     <string name="takconvo_pref_use_tak_truststore">Use TAK server truststore</string>
     <string name="takconvo_pref_use_tak_truststore_summary">Trust the certificate authorities of your TAK server connections (the truststores imported in ATAK). Public CAs are always trusted.</string>

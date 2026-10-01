@@ -9,21 +9,25 @@ Files: `gradle/atak-runtime.gradle`, `tools/AtakLinkCheck.java`, `tools/atak-lin
 
 ATAK loads a plugin's classes with a class loader whose parent is ATAK's. Class loading
 delegates to the parent first, so for every class that exists in both, **ATAK's copy is the one
-used**, whatever the plugin packaged. ATAK 5.5.1.8 ships, among others:
+used**, whatever the plugin packaged. ATAK ships, among others:
 
-| Library | ATAK's version |
-|---|---|
-| `androidx.activity` | 1.8.1 |
-| `androidx.core:core`, `core-ktx` | 1.15.0 |
-| `androidx.fragment` | 1.8.7 |
-| `androidx.lifecycle` | 2.9.0 |
-| `androidx.savedstate` | 1.3.0 |
-| `androidx.exifinterface` | 1.4.1 |
-| `androidx.startup` 1.1.1, `tracing` 1.2.0, `profileinstaller` 1.4.0 | |
-| `com.squareup.okhttp3` | 4.11.0 |
-| `org.jetbrains.kotlinx:kotlinx-coroutines-*` | 1.7.3 |
+| Library | ATAK 5.6.0.24 | ATAK 5.8.0.5 |
+|---|---|---|
+| `androidx.activity` | 1.8.1 | 1.8.1 |
+| `androidx.core:core`, `core-ktx` | 1.17.0 | 1.17.0 |
+| `androidx.fragment` | 1.8.9 | 1.8.9 |
+| `androidx.lifecycle` | 2.9.4 | 2.10.0 |
+| `androidx.savedstate` | 1.3.1 | 1.4.0 |
+| `androidx.exifinterface` | 1.4.1 | 1.4.2 |
+| `androidx.startup` 1.1.1, `tracing` 1.2.0, `profileinstaller` 1.4.0 | same | same |
+| `com.squareup.okhttp3` | 4.11.0 | 4.11.0 |
+| `org.jetbrains.kotlinx:kotlinx-coroutines-*` | 1.8.1 | 1.9.0 |
 
-`gradle/atak-runtime.gradle` (applied by both `app/` and `conversations/`):
+(5.8 also ships `androidx.browser` 1.8.0, which the plugin doesn't use. ATAK 5.5.1.8 had
+core 1.15.0, fragment 1.8.7, lifecycle 2.9.0, savedstate 1.3.0 and coroutines 1.7.3.)
+
+`gradle/atak-runtime.gradle` (applied by both `app/` and `conversations/`) has a version table
+per ATAK version and uses the one the build is for (`rootProject.ATAK_MINOR`):
 
 ```text
 for every configuration:
@@ -32,8 +36,8 @@ excludeAtakProvidedFromRuntime(project):
     remove atakProvidedModules from the *RuntimeClasspath           # don't package dead copies
 ```
 
-The versions were read from `META-INF/*.version` and the dex of the SDK's `atak.apk`. They must
-be updated for another ATAK version.
+The versions were read from `META-INF/*.version` and the dex of each SDK's `atak.apk`. A new
+ATAK version needs its own table; the build stops without one.
 
 Consequences for the fork: OkHttp is held at 4.11.0 (upstream uses 5.x, whose API ATAK's copy
 lacks), and several AndroidX and Material versions are held back
@@ -81,7 +85,7 @@ None of this shows at compile time. `tools/AtakLinkCheck.java` reads both APKs' 
 reports what would fail to link:
 
 ```bash
-java tools/AtakLinkCheck.java <sdk>/atak.apk app/build/outputs/apk/civ/debug/<plugin>.apk [-v]
+java tools/AtakLinkCheck.java <ATAK SDK of the build>/atak.apk app/build/outputs/apk/civ/debug/<plugin>.apk [-v]
 ```
 
 ```text
@@ -136,8 +140,9 @@ Constants that only exist in SDK 37 (`Build.VERSION_CODES.CINNAMON_BUN`,
 
 - **Release ATAK loads only TAK.gov-signed plugins.** The Play Store ATAK-CAN 5.8 logs
   `signature mismatch` and refuses the plugin, whatever `plugin-api` it declares. Development
-  uses the SDK's developer `atak.apk` (ATAK-CIV 5.5.1.8), which skips the check.
-- `plugin-api` in the manifest is `com.atakmap.app@<ATAK_VERSION>.<FLAVOR>`; the build declares
-  5.5.0, or another version with `-PatakVersion=x.y.z`.
-- The SDK is used offline (`takdev.plugin` + `sdk.path` in `local.properties`):
-  `artifacts.tak.gov` sits behind an Appgate SDP gateway.
+  uses the SDKs' developer `atak.apk` (5.6.0.24, 5.8.0.5), which skips the check.
+- `plugin-api` in the manifest is `com.atakmap.app@<ATAK_VERSION>.<FLAVOR>`: the build declares
+  5.8.0 by default, 5.6.0 with `-PatakVersion=5.6.0`.
+- The SDKs are used offline (`atak.sdk.5.6` / `atak.sdk.5.8` in `local.properties`, see
+  [07](07-development-and-testing.md#setup)): `artifacts.tak.gov` sits behind an Appgate SDP
+  gateway.

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- takconvo_xmpp_channel_discovery, see XmppSettings.ChannelDiscovery -->
+    <string-array name="takconvo_channel_discovery_entries">
+        <item>@string/takconvo_pref_channel_discovery_xmpp_server</item>
+        <item>@string/takconvo_pref_channel_discovery_server</item>
+        <item>@string/takconvo_pref_channel_discovery_public</item>
+    </string-array>
+    <string-array name="takconvo_channel_discovery_values" translatable="false">
+        <item>xmpp_server</item>
+        <item>server</item>
+        <item>public</item>
+    </string-array>
+</resources>

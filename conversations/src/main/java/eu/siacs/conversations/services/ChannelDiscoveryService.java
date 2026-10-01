@@ -192,7 +192,7 @@ public class ChannelDiscoveryService {
                 Futures.successfulAsList(
                         Collections2.transform(
                                 localMucService.entrySet(),
-                                e -> discoverRooms(e.getValue(), e.getKey())));
+                                e -> discoverRoomsOf(e.getValue(), e.getKey()))); // TAKCONVO
         final var roomsFuture =
                 Futures.transform(
                         roomsRoomsFuture,
@@ -256,6 +256,50 @@ public class ChannelDiscoveryService {
                 MoreExecutors.directExecutor());
     }
 
+    /**
+     * TAKCONVO: the rooms of a group chat service, or of a server named in the plugin's
+     * settings. A server's items are its services, not rooms: their items are the rooms. Rooms
+     * have a local part, services don't.
+     */
+    private ListenableFuture<Collection<Room>> discoverRoomsOf(
+            final XmppConnection connection, final Jid target) {
+        return Futures.transformAsync(
+                discoverRooms(connection, target),
+                found -> {
+                    final List<Room> rooms = new ArrayList<>();
+                    final List<ListenableFuture<Collection<Room>>> services = new ArrayList<>();
+                    for (final Room room : found) {
+                        final Jid address = room.getRoom();
+                        if (address == null) {
+                            continue;
+                        }
+                        if (address.getLocal() != null) {
+                            rooms.add(room);
+                        } else if (target.getLocal() == null && !address.equals(target)) {
+                            services.add(discoverRooms(connection, address));
+                        }
+                    }
+                    return Futures.transform(
+                            Futures.successfulAsList(services),
+                            nested -> {
+                                for (final Collection<Room> inner : nested) {
+                                    if (inner == null) {
+                                        continue;
+                                    }
+                                    for (final Room room : inner) {
+                                        final Jid address = room.getRoom();
+                                        if (address != null && address.getLocal() != null) {
+                                            rooms.add(room);
+                                        }
+                                    }
+                                }
+                                return rooms;
+                            },
+                            MoreExecutors.directExecutor());
+                },
+                MoreExecutors.directExecutor());
+    }
+
     private ListenableFuture<Room> discoverRoom(final XmppConnection connection, final Jid room) {
         final var request = new Iq(Iq.Type.GET);
         request.addExtension(new InfoQuery());
@@ -302,8 +346,14 @@ public class ChannelDiscoveryService {
     private Map<Jid, XmppConnection> getLocalMucServices() {
         final ImmutableMap.Builder<Jid, XmppConnection> localMucServices =
                 new ImmutableMap.Builder<>();
+        // TAKCONVO: the server named in the plugin's settings instead, asked by the first account
+        final Jid server = eu.siacs.conversations.utils.TakConvoCompat.CHANNEL_DISCOVERY_SERVER;
         for (final var account : service.getAccounts()) {
             final var connection = account.getXmppConnection();
+            if (server != null && connection != null && account.isEnabled()) {
+                localMucServices.put(server, connection);
+                return localMucServices.buildKeepingLast();
+            }
             if (connection != null && account.isEnabled()) {
                 for (final var mucService :
                         connection.getManager(MultiUserChatManager.class).getServices()) {
@@ -317,7 +367,11 @@ public class ChannelDiscoveryService {
     }
 
     private static String key(Method method, String query) {
-        return String.format("%s\00%s", method, query);
+        // TAKCONVO: the results depend on the server the plugin's settings name
+        return String.format(
+                "%s\00%s\00%s",
+                method, eu.siacs.conversations.utils.TakConvoCompat.CHANNEL_DISCOVERY_SERVER,
+                query);
     }
 
     private static void logError(final Response response) {

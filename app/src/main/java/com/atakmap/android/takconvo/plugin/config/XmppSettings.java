@@ -31,6 +31,12 @@ import java.util.List;
  * takconvo_xmpp_use_android_ca_store  trust the device's CA store, including user and MDM
  *                                     installed CAs (Boolean, default false)
  * takconvo_xmpp_trusted_ca            path to a PEM/DER CA certificate to trust for XMPP TLS
+ * takconvo_xmpp_channel_discovery     where "Discover channels" looks: xmpp_server (the group
+ *                                     chat services of the account's server, default), server
+ *                                     (takconvo_xmpp_channel_server) or public (the public
+ *                                     directory search.jabber.network)
+ * takconvo_xmpp_channel_server        for "server": a server (example.org) or one of its group
+ *                                     chat services (conference.example.org)
  * </pre>
  *
  * <p>Public CAs are always trusted, see {@link TrustSources} for the others.
@@ -51,6 +57,8 @@ public final class XmppSettings {
     public static final String KEY_TRUSTED_CA = "takconvo_xmpp_trusted_ca";
     public static final String KEY_USE_TAK_TRUSTSTORE = "takconvo_xmpp_use_tak_truststore";
     public static final String KEY_USE_ANDROID_CA_STORE = "takconvo_xmpp_use_android_ca_store";
+    public static final String KEY_CHANNEL_DISCOVERY = "takconvo_xmpp_channel_discovery";
+    public static final String KEY_CHANNEL_SERVER = "takconvo_xmpp_channel_server";
 
     public static final String KEY_PREFIX = "takconvo_xmpp_";
 
@@ -65,6 +73,32 @@ public final class XmppSettings {
         /** entered on the XMPP login screen */
         LOGIN,
         NONE
+    }
+
+    /** Where Conversations' "Discover channels" looks. */
+    public enum ChannelDiscovery {
+        /** the group chat services of the account's own server */
+        XMPP_SERVER("xmpp_server"),
+        /** {@link #channelServer}: a server, or one of its group chat services */
+        SERVER("server"),
+        /** the public directory search.jabber.network */
+        PUBLIC("public");
+
+        /** the preference value */
+        public final String value;
+
+        ChannelDiscovery(final String value) {
+            this.value = value;
+        }
+
+        public static ChannelDiscovery parse(final String value) {
+            for (final ChannelDiscovery c : values()) {
+                if (c.value.equalsIgnoreCase(value == null ? "" : value.trim())) {
+                    return c;
+                }
+            }
+            return XMPP_SERVER;
+        }
     }
 
     /** Why no account can be provisioned. */
@@ -91,6 +125,9 @@ public final class XmppSettings {
     public final String credentialOrigin;
     /** provisioned username suggestion for the login screen, may be null */
     public final String suggestedUsername;
+    public final ChannelDiscovery channelDiscovery;
+    /** for {@link ChannelDiscovery#SERVER}, may be null */
+    public final String channelServer;
 
     private XmppSettings(
             final boolean enabled,
@@ -103,7 +140,8 @@ public final class XmppSettings {
             final boolean usesTakCredentials,
             final CredentialSource credentialSource,
             final String credentialOrigin,
-            final String suggestedUsername) {
+            final String suggestedUsername,
+            final Channels channels) {
         this.enabled = enabled;
         this.domain = domain;
         this.host = host;
@@ -117,6 +155,8 @@ public final class XmppSettings {
         this.credentialSource = credentialSource;
         this.credentialOrigin = credentialOrigin;
         this.suggestedUsername = suggestedUsername;
+        this.channelDiscovery = channels.discovery;
+        this.channelServer = channels.server;
     }
 
     public static XmppSettings load(final Context atakContext) {
@@ -131,6 +171,9 @@ public final class XmppSettings {
                 trimToNull(getString(prefs, KEY_TRUSTED_CA)));
         final boolean useTak = parseBoolean(getString(prefs, KEY_USE_TAK_CREDENTIALS), true);
         final String suggested = trimToNull(getString(prefs, KEY_USERNAME));
+        final Channels channels = new Channels(
+                ChannelDiscovery.parse(getString(prefs, KEY_CHANNEL_DISCOVERY)),
+                trimToNull(getString(prefs, KEY_CHANNEL_SERVER)));
 
         if (useTak) {
             // no fallback to the XMPP login: at ATAK startup the TAK server credentials are
@@ -139,21 +182,34 @@ public final class XmppSettings {
             final TakCredentials tak = findTakCredentials();
             if (tak != null) {
                 return new XmppSettings(enabled, domain, host, port, tak.username, tak.password,
-                        trust, true, CredentialSource.TAK_SERVER, tak.server, suggested);
+                        trust, true, CredentialSource.TAK_SERVER, tak.server, suggested,
+                        channels);
             }
             Log.d(TAG, "no TAK server credentials available yet");
             return new XmppSettings(enabled, domain, host, port, null, null, trust,
-                    true, CredentialSource.NONE, null, suggested);
+                    true, CredentialSource.NONE, null, suggested, channels);
         }
         final AtakAuthenticationCredentials login =
                 AtakAuthenticationDatabase.getCredentials(CREDENTIALS_TYPE);
         if (login != null && !TextUtils.isEmpty(login.username)
                 && !TextUtils.isEmpty(login.password)) {
             return new XmppSettings(enabled, domain, host, port, login.username.trim(),
-                    login.password, trust, false, CredentialSource.LOGIN, null, suggested);
+                    login.password, trust, false, CredentialSource.LOGIN, null, suggested,
+                    channels);
         }
         return new XmppSettings(enabled, domain, host, port, null, null, trust,
-                false, CredentialSource.NONE, null, suggested);
+                false, CredentialSource.NONE, null, suggested, channels);
+    }
+
+    /** Where "Discover channels" looks. */
+    private static final class Channels {
+        final ChannelDiscovery discovery;
+        final String server;
+
+        Channels(final ChannelDiscovery discovery, final String server) {
+            this.discovery = discovery;
+            this.server = server;
+        }
     }
 
     /** Which CA sources to trust, see {@link TrustSources}. */
@@ -342,6 +398,8 @@ public final class XmppSettings {
                 + (credentialOrigin != null ? " (" + credentialOrigin + ")" : "")
                 + ", trust=" + (useTakTrustStore ? "tak " : "")
                 + (useAndroidCaStore ? "android " : "")
-                + (trustedCaPath != null ? trustedCaPath : "") + "}";
+                + (trustedCaPath != null ? trustedCaPath : "")
+                + ", channels=" + channelDiscovery.value
+                + (channelDiscovery == ChannelDiscovery.SERVER ? " " + channelServer : "") + "}";
     }
 }

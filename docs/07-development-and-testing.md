@@ -6,17 +6,24 @@
 |---|---|
 | JDK 21 | Temurin 21 for Gradle (`JAVA_HOME`); AGP 8.13 / Gradle 8.14.3 |
 | Android SDK | platform 36, build-tools 35 (`dexdump`, `aapt2` are handy) |
-| ATAK-CIV SDK 5.5.1.8 | from the TAK-Product-Center GitHub release: `main.jar`, `atak-gradle-takdev.jar`, the developer `atak.apk`, the keystore |
-| A device or emulator with the SDK's **developer** `atak.apk` | release ATAK refuses plugins not signed by TAK.gov |
+| ATAK SDK 5.6 and 5.8 | the ATAK-CAN 5.6.0.24 and 5.8.0.5 SDKs: `main.jar`, `atak-gradle-takdev.jar`, the developer `atak.apk`, the keystore |
+| A device with that version's **developer** `atak.apk` | release ATAK refuses plugins not signed by TAK.gov, see below |
 
-`local.properties` (not committed):
+The plugin is built for ATAK **5.6** and **5.8**, one APK per version, each against its own
+SDK. `local.properties` (not committed) names them:
 
 ```properties
 sdk.dir=<Android SDK>
-takdev.plugin=C:\\dev\\atak-sdk\\ATAK-CIV-5.5.1.8-SDK\\atak-gradle-takdev.jar
-sdk.path=C:\\dev\\atak-sdk\\ATAK-CIV-5.5.1.8-SDK
+atak.sdk.5.6=C:\\...\\ATAK-CAN-5.6.0.24-SDK
+atak.sdk.5.8=C:\\...\\ATAK-CAN-5.8.0.5-SDK
 # takrepo.url / takrepo.user / takrepo.password switch to tak.gov's Maven repository instead
 ```
+
+The root `build.gradle` picks the SDK for `-PatakVersion` and sets `sdk.path` for the takdev
+plugin, and the takdev plugin is that SDK's `atak-gradle-takdev.jar`. Don't set `sdk.path` in
+`local.properties`: takdev reads it from there before the build's value, and the build stops
+with a message if it finds it. `gradle/atak-runtime.gradle` has the versions of the libraries
+each ATAK version ships (see [06](06-atak-runtime-and-classloading.md)).
 
 Write Gradle files without a byte-order mark: PowerShell's `Set-Content -Encoding utf8` adds
 one, and `settings.gradle` then fails to parse.
@@ -24,25 +31,36 @@ one, and `settings.gradle` then fails to parse.
 ## Build
 
 ```bash
-./gradlew assembleCivDebug --offline       # app/build/outputs/apk/civ/debug/ATAK-Plugin-takconvo-*.apk
-./gradlew assembleCivDebug --offline -PatakVersion=5.8.0   # declare another plugin-api
-java tools/AtakLinkCheck.java <sdk.path>/atak.apk app/build/outputs/apk/civ/debug/<apk>
+./gradlew assembleCivDebug --offline                       # ATAK 5.8 (the default)
+./gradlew assembleCivDebug --offline -PatakVersion=5.6.0   # ATAK 5.6
+# app/build/outputs/apk/civ/debug/ATAK-Plugin-takconvo-<version>-<git>-<atak version>-civ-debug.apk
+java tools/AtakLinkCheck.java <atak.sdk.5.x>/atak.apk app/build/outputs/apk/civ/debug/<apk>
 ```
 
 In PowerShell, quote the property: `.\gradlew.bat assembleCivDebug --offline
-"-PatakVersion=5.8.0"`. Unquoted, PowerShell splits the argument at the first dot and Gradle
-looks for a task named `.8.0`. Each build replaces the APK of the other version in the output
-directory.
+"-PatakVersion=5.6.0"`. Unquoted, PowerShell splits the argument at the first dot and Gradle
+looks for a task named `.6.0`. Each build replaces the APK of the other version in the output
+directory. The first build for a version, or after a library change, has to run without
+`--offline` so that Gradle can download the libraries.
+
+The two APKs differ only in the `plugin-api` they declare (`com.atakmap.app@5.6.0.CIV`,
+`...@5.8.0.CIV`) and in the library versions they were compiled against. Both link-check with
+no finding against their SDK's `atak.apk`. The developer ATAKs of these SDKs, unlike the Play
+Store builds, aren't obfuscated.
 
 `AtakLinkCheck` must report no finding before an APK goes on a device (see
 [06](06-atak-runtime-and-classloading.md)).
 
-### Other ATAK versions and release ATAK
+### Developer ATAK on a test device, and release ATAK
 
-The plugin loads in the SDK's **developer** ATAK (build type `sdk`), whatever its
-`plugin-api`. Since 4.10 ATAK also accepts a plugin built for an older API than its own. A
-**release** ATAK (Play Store, or an organisation's loadout) won't load it, and building with
-`-PatakVersion` doesn't change that:
+The plugin loads in the SDK's **developer** ATAK (build type `sdk`). The developer `atak.apk`
+of the 5.5.1.8, 5.6.0.24 and 5.8.0.5 SDKs are all signed with the same SDK key
+(`O=WinTec Arrowmaker`), so one installs over another with `adb install -r`, keeping ATAK's
+data and the plugin's (account, OMEMO keys, history). Mind the version codes: 5.6.0.24's
+(1789391081) is higher than 5.8.0.5's (1789342433), so going from 5.6 to 5.8 is a downgrade
+(`-r -d`). Since 4.10, ATAK also accepts a plugin built for an older API than its own.
+
+A **release** ATAK (Play Store, or an organisation's loadout) won't load the plugin:
 
 - **Signature.** `AtakPluginRegistry.verifySignature` only accepts plugins signed with ATAK's
   own key, a TAK.gov key (`ACCEPTABLE_KEY_LIST`) or an App Transparency signature. It logs
@@ -54,23 +72,24 @@ The plugin loads in the SDK's **developer** ATAK (build type `sdk`), whatever it
   which ATAK 5.8 bundles, with Okio renamed (`okio.ByteString` is `atak.core.e2`). ATAK's copy
   shadows the plugin's.
 
-A release build for a given ATAK has to be made with that version's SDK. The template's
-`release` build type applies the SDK's ProGuard mapping (`-applymapping`) and moves the
-plugin's classes, OkHttp included, into `atakplugin.takconvo` (`-repackageclasses`). It then
-has to be signed by TAK.gov, for example through its third-party plugin pipeline. Until then,
-a test device needs the developer ATAK. Only 5.5.1.8 is public (GitHub
-`TAK-Product-Center/atak-civ`), and installing it replaces a release ATAK, whose app data goes
+A release build for a given ATAK has to apply that release's ProGuard mapping
+(`-applymapping`), which the 5.6 and 5.8 SDKs don't include (takdev: "no mapping file could be
+established"), and moves the plugin's classes, OkHttp included, into `atakplugin.takconvo`
+(`-repackageclasses`). It then has to be signed by TAK.gov, for example through its
+third-party plugin pipeline. Until then, a test device needs the developer ATAK; installing it
+over a release ATAK takes an uninstall first (another signing key), and ATAK's app data goes
 with it (`/sdcard/atak` stays).
 
 ## Install and run
 
 ```powershell
-tools\deploy.ps1 -Serial <adb serial> [-NoBuild] [-SkipLinkCheck]
+tools\deploy.ps1 -Serial <adb serial> [-AtakVersion 5.8.0|5.6.0] [-NoBuild] [-SkipLinkCheck]
 ```
 
-builds, link-checks, installs, and restarts ATAK with the plugin loaded. It exists because of two
-ATAK behaviours, both handled by editing ATAK's preferences while ATAK is stopped
-(`run-as com.atakmap.app.civ`, a debuggable developer build):
+builds for that ATAK version (default 5.8.0), link-checks against its SDK's `atak.apk`,
+installs, and restarts ATAK with the plugin loaded. It refuses a device whose ATAK is another
+version. It exists because of two ATAK behaviours, both handled by editing ATAK's preferences
+while ATAK is stopped (`run-as com.atakmap.app.civ`, a debuggable developer build):
 
 - **`adb install -r` of a plugin makes ATAK clear `shouldLoad-<plugin package>`** (Android 16),
   so the reinstalled plugin stays unloaded. The script sets it back to `true`.
@@ -102,7 +121,7 @@ Debug builds register `DebugReceiver` (exported, debug only):
 
 | Action (`com.atakmap.android.takconvo.` + ...) | Extras | Does |
 |---|---|---|
-| `DEBUG_SET_PREF` | `key`, `value` | sets an ATAK preference (string) |
+| `DEBUG_SET_PREF` | `key`, `value` | sets an ATAK preference (string); removes it without `value` |
 | `DEBUG_IMPORT_PREF` | `path` | imports a `.pref` file with ATAK's importer |
 | `DEBUG_PROVISION` | | runs `XmppEngine.provision()` |
 | `DEBUG_ADD_TAK_SERVER` | `connect` (`host:port:ssl`), `user`, `pass` | adds a TAK server connection the way ATAK's dialog does |
@@ -178,11 +197,19 @@ After an upstream merge, a dependency change or a change to the host:
    credentials only the notice shows, and "Use an XMPP account" brings the fields. In
    landscape the keyboard leaves the pane visible. Signing in to a server that fails shows a
    spinner, then the error, which stays up during background retries (Reconnect does the same).
+   Once a sign-in (or the account the pane was waiting for) is online, the chat list replaces
+   the account pane: XMPP off, open TAK Convo (account pane), XMPP on.
 4. Chat pane from the toolbar: chat list; open a chat; send to yourself; the message is
    delivered (double tick) and encrypted (shield).
-5. Back: chat → list → pane closes. Reopen: same state.
+5. Back: chat → list → pane closes. Reopen: same state. With a chat open, log out (or turn
+   XMPP off: `DEBUG_SET_PREF --es key takconvo_xmpp_enabled --es value false`, then `true`):
+   one back closes the account pane and the old chat doesn't come back.
 6. Home, then back to ATAK: `TakConvo.Host` logs pausing/stopping, then resuming.
-7. Start chat → Add contact dialog; group chat → channel details → back.
+7. Start chat → Add contact dialog; group chat → channel details → back. Start chat →
+   Discover channels lists the XMPP server's channels, without the public directory's privacy
+   prompt. With `takconvo_xmpp_channel_discovery` = `server` and `takconvo_xmpp_channel_server`
+   = the server's domain, it lists the same channels. ATAK's Contacts lists the open group
+   chats at the top, with the chat room icon; tapping one opens it.
 8. Overflow menus: search messages; Settings opens the plugin's preferences; Manage accounts
    opens the account pane.
 9. Long-press a message: context menu, add a reaction.

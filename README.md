@@ -20,24 +20,25 @@ user's TAK identity.
 
 ## Status
 
-2026-09-30. Working on a Samsung Galaxy S23 (Android 16) with the ATAK-CIV 5.5.1.8 developer
-build, against an Openfire server:
+2026-09-30. Built for ATAK 5.6 and 5.8. Working on a Samsung Galaxy S23 (Android 16) with the
+ATAK 5.8.0.5 developer build, against an Openfire server (until the move to 5.6/5.8, also on a
+Galaxy S22+ with 5.5.1.8):
 
 | Works | Not yet |
 |---|---|
 | engine in-process, provisioning from `.pref`, TAK credentials or XMPP login | calls (audio/video): switched off, not advertised |
 | trust from TAK truststores / Android CA store / CA file | share or show a location (should become ATAK map integration) |
 | account pane, tool preferences, `.pref` import | QR codes, profile pictures, backups |
-| chat pane: chat list, chats, group chats, start chat, channel details, search | TAK callsigns as the names of XMPP contacts |
+| chat pane: chat list, chats, group chats, start chat, channel details, search; channel discovery on your XMPP server (setting) | TAK callsigns as the names of XMPP contacts |
 | sending/receiving with OMEMO, reactions, context menus, text selection | re-selecting resources when the pane is resized or the device rotated |
 | attachments: pick, upload, open with another app, camera; voice messages | some Conversations screens are allowed but untested (see docs/04) |
-| ATAK contacts: XMPP connector opens the chat, unread counts on contacts and buttons | XMPP presence dots on contacts: implemented, untested with a real second user |
+| ATAK contacts: XMPP connector opens the chat, unread counts on contacts and buttons; group chats listed with the users | XMPP presence dots on contacts: implemented, untested with a real second user |
 | notifications: sound when the pane is closed, tap opens the chat, reply, mark as read | |
 
 Release ATAK (e.g. Play Store ATAK-CAN 5.8) loads only plugins signed by TAK.gov, and its API
 is obfuscated, so a plugin for it must be built with that version's SDK and mapping. Until the
 plugin goes through TAK.gov signing, it runs on the SDK's developer ATAK (see
-[docs/07](docs/07-development-and-testing.md#other-atak-versions-and-release-atak)).
+[docs/07](docs/07-development-and-testing.md#developer-atak-on-a-test-device-and-release-atak)).
 
 ## How it works
 
@@ -55,7 +56,7 @@ providers can run. TAK Convo gives Conversations what it expects anyway:
   chats and reports unread counts and presence. Conversations' notifications are posted as
   ATAK's; their taps, actions and alarms are redirected to ATAK's activity and to a receiver in
   ATAK's process, and their icons drawn as bitmaps.
-- **Fork**: 24 upstream files changed and one added, all marked `TAKCONVO`: no Android service,
+- **Fork**: 30 upstream files changed and one added, all marked `TAKCONVO`: no Android service,
   hooks for trust, compatibility with the libraries ATAK loads, activities in a pane, files
   through ATAK's FileProvider, PendingIntents and notifications that work as ATAK's.
 
@@ -77,9 +78,9 @@ Details in [docs/](docs/README.md).
 **Equipment.** Android 6.0+ (minSdk 23). Tested on a Samsung Galaxy S23 (Android 16) and an
 Android 14 emulator.
 
-**ATAK.** ATAK-CIV 5.5.x developer build (the SDK's `atak.apk`). Built against the ATAK-CIV
-5.5.1.8 SDK; `-PatakVersion=` declares another `plugin-api`, but the library versions in
-`gradle/atak-runtime.gradle` must match the ATAK version it runs on.
+**ATAK.** ATAK 5.6 or 5.8, developer build (the SDK's `atak.apk`). One APK per version, each
+built against that version's SDK (ATAK-CAN 5.6.0.24, 5.8.0.5) and the library versions that
+ATAK ships (`gradle/atak-runtime.gradle`).
 
 **XMPP server.** Any standards-compliant server. Tested with Openfire (LDAP-backed, SASL PLAIN,
 STARTTLS, certificate from an internal CA). Conversations uses MUC, HTTP upload (XEP-0363) and
@@ -114,14 +115,16 @@ and [docs/03](docs/03-provisioning-and-trust.md).
 ## Build and install
 
 ```bash
-./gradlew assembleCivDebug --offline
-java tools/AtakLinkCheck.java <ATAK SDK>/atak.apk app/build/outputs/apk/civ/debug/<apk>
+./gradlew assembleCivDebug --offline                       # for ATAK 5.8
+./gradlew assembleCivDebug --offline -PatakVersion=5.6.0   # for ATAK 5.6
+java tools/AtakLinkCheck.java <that ATAK SDK>/atak.apk app/build/outputs/apk/civ/debug/<apk>
 adb install -r app/build/outputs/apk/civ/debug/<apk>
 ```
 
-or, on Windows, `tools\deploy.ps1 -Serial <adb serial>`, which also re-enables the plugin in
-ATAK after the reinstall and restarts ATAK. See [docs/07](docs/07-development-and-testing.md)
-for the setup (`local.properties`, offline SDK) and the test checklist.
+or, on Windows, `tools\deploy.ps1 -Serial <adb serial> [-AtakVersion 5.6.0]`, which also
+re-enables the plugin in ATAK after the reinstall and restarts ATAK. See
+[docs/07](docs/07-development-and-testing.md) for the setup (`local.properties` with the two
+SDKs) and the test checklist.
 
 ## Findings
 
@@ -134,8 +137,9 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
    also ProGuard-obfuscated (`AtakBroadcast.getInstance()` is `a()`): release plugins are built
    with the SDK's mapping of that exact version. Use the SDK's developer `atak.apk` until the
    plugin goes through TAK.gov signing.
-2. **`artifacts.tak.gov` is behind an Appgate SDP gateway.** The build uses the public
-   ATAK-CIV SDK offline (`takdev.plugin` + `sdk.path`).
+2. **`artifacts.tak.gov` is behind an Appgate SDP gateway.** The build uses the ATAK SDKs
+   offline (`atak.sdk.5.6`, `atak.sdk.5.8`). Each ATAK version ships its own AndroidX and
+   coroutines versions, which the plugin must compile against: one APK per ATAK version.
 3. **A plugin's components never run.** Activities, services, receivers and providers in the
    plugin's manifest are dead: the code runs in ATAK's process, under ATAK's identity. Everything
    Conversations gets from Android had to be supplied by hand ([docs/02](docs/02-embedded-engine.md),
@@ -242,13 +246,18 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
     and Chat button badges. A plugin's toolbar button is a `NavButtonModel` found by the
     `ToolbarItem`'s identifier, which carries a badge count
     ([docs/08](docs/08-contacts-and-notifications.md)).
+34. **A plugin can add its own contacts.** An `IndividualContact` with no map item opens its
+    default connector when tapped, takes its unread count from the connector's handler, and
+    shows ATAK's chat-room icon with the `fakeGroup` extra. It sits in the root group unless
+    `getParentUID()` is overridden, as ATAK's own TADIL-J contacts do. The XMPP group chats are
+    listed that way, at the top of the list with the users.
 
 **Maintenance**
 
-34. **Every change to Conversations is marked and documented**
+35. **Every change to Conversations is marked and documented**
     ([docs/05](docs/05-conversations-fork.md)), and `tools/fork-diff.sh` regenerates the exact
     diff against upstream; the doc has the procedure to move to a newer release.
-35. **Upstream Conversations has paths longer than 260 characters**: clone it with
+36. **Upstream Conversations has paths longer than 260 characters**: clone it with
     `core.longpaths=true` on Windows or files silently go missing.
 
 ## Repository layout

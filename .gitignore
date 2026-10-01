@@ -8,3 +8,5 @@ build/
 .externalNativeBuild
 .cxx
 app/proguard-gradle-repackage.txt
+# written by the ATAK SDK's takdev Gradle plugin, different for each SDK
+.takdev/

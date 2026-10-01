@@ -4,13 +4,15 @@ TAK Convo joins ATAK's contacts the way GeoChat does:
 
 - a TAK user who advertises an XMPP address gets an **XMPP connector** in ATAK's contact list.
   Tapping it opens the chat with that address in TAK Convo's pane;
+- the open **XMPP group chats** are contacts too, at the top of ATAK's contact list next to
+  "All Chat Rooms", so that it has both the users and the group chats, as with TAK Chat;
 - the connector shows that chat's **unread count**, which ATAK adds to the contact's row and to
   its Contacts and Chat buttons. It also shows the address's **XMPP presence**;
 - the **TAK Convo toolbar button** shows Conversations' total unread count;
 - Conversations' own **notifications** work inside ATAK: tapping one brings ATAK to the front
   and opens the chat, and the Reply and Mark as read actions work.
 
-Classes: `plugin/contacts/XmppContacts`, `plugin/xmpp/EmbeddedPendingIntents`,
+Classes: `plugin/contacts/XmppContacts`, `XmppRoomContact`, `plugin/xmpp/EmbeddedPendingIntents`,
 `plugin/xmpp/EmbeddedNotifications`, `TakConvoPlugin` (`openChat`, `showChat(Intent)`).
 Fork changes: [05](05-conversations-fork.md), section G.
 
@@ -60,11 +62,13 @@ onXmppStateChanged():                            # coalesced by XmppEngine, see 
 refresh():                                       # main thread
     account = engine.account                     # the provisioned one only
     unread   = { key(c.address) -> c.unreadCount()
-                 for c in conversations if c.account == account and c is 1:1 and unread > 0 }
+                 for c in open conversations of account, 1:1 and group chats, if unread > 0 }
     presence = { key(contact.address) -> status(contact.shownStatus)
                  for contact in account.roster if we're subscribed to its presence (TO) }
-    if either snapshot changed: Contacts.updateTotalUnreadCount()
-    updateToolbar(engine.unreadCount)            # Conversations' own total, MUCs included
+             + { key(room.address) -> joined ? CURRENT : DEAD  for each open group chat }
+    syncRooms({ room.address -> room.name for each open group chat })
+    if a snapshot or a room contact changed: Contacts.updateTotalUnreadCount()
+    updateToolbar(engine.unreadCount)            # Conversations' own total
 
 key(jid) = bare JID, lower case                  # advertised addresses may differ in case
 
@@ -100,8 +104,34 @@ TakConvoPlugin.openChat(address):
     host.showConversation(conversation.uuid)
 ```
 
-Only 1:1 chats map to contacts: a channel has no TAK user. XMPP users who aren't TAK users
-never appear in ATAK's contacts; they are in Conversations' own chat list.
+XMPP users who aren't TAK users don't appear in ATAK's contacts; they are in Conversations'
+own chat list.
+
+### Group chats
+
+A group chat has no TAK user, so the plugin adds a contact of its own for each open one
+(private group chats and channels alike), the way ATAK adds its TADIL-J contacts:
+
+```text
+XmppRoomContact(name, address) extends IndividualContact:
+    uid = "takconvo.room:" + address
+    connectors = { XmppConnector(address) }     # handled above: tap opens it, unread, presence
+    extras.fakeGroup = true                      # ATAK's chat room icon ("All Chat Rooms")
+    getDefaultConnector() = the XMPP connector
+    # parent: the root group, where IndividualContact puts every contact
+
+syncRooms(open):                                 # main thread, from refresh()
+    remove the contacts of the rooms no longer open      # Contacts.removeContact
+    add a contact per new room to the root group; rename the ones whose name changed
+```
+
+They are listed directly in the contact list, not in a group of their own: a group of them
+was one tap further for the thing users look for most.
+
+Tapping a room's contact (or its connector) goes through `handleContact` like a user's:
+`engine.openConversation(address)` finds the open group chat by its address before it would
+create anything. Its unread count shows on its row and adds to the Contacts button. The
+contacts exist only while the plugin runs; `stop()` removes them.
 
 ## Notifications
 
@@ -198,7 +228,8 @@ $B.DEBUG_OPEN_CONTACT                              # what tapping the XMPP conne
 $B.DEBUG_REMOVE_FAKE_CONTACT
 ```
 
-Tested on the Samsung (ATAK 5.5.1.8, Android 16), 2026-09-30:
+Tested on the Samsung (ATAK 5.5.1.8, Android 16), 2026-09-30 (the group chats in Contacts also
+on 5.8.0.5):
 
 - the fake contact's row shows the XMPP connector as default with a red **1**; the Contacts
   button shows **1**; tapping the connector opens the self chat in the pane and clears both;
@@ -212,3 +243,8 @@ Tested on the Samsung (ATAK 5.5.1.8, Android 16), 2026-09-30:
 
 Not tested yet: presence dots (the fake contact advertises our own JID, whose presence we don't
 subscribe to), the error notification's tap to the account pane, and a real second TAK user.
+
+Group chats, tested on the Samsung 2026-09-30: Contacts lists `team-room` with ATAK's chat
+room icon, the XMPP connector and a green dot (joined); tapping it opens the group chat in the
+pane. A group chat's unread count on its contact wasn't
+tested: that takes a message from someone else in the room.

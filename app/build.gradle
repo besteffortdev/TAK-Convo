@@ -9,9 +9,10 @@
 buildscript {
 
     ext.PLUGIN_VERSION = "0.1"
-    // built against the ATAK-CIV 5.5.1.8 SDK; override with -PatakVersion=x.y.z to declare
-    // another plugin-api version (the ATAK APIs used must still exist in that version)
-    ext.ATAK_VERSION = project.findProperty('atakVersion') ?: "5.5.0"
+    // chosen in the root build.gradle (-PatakVersion=5.6.0 or 5.8.0), with its SDK
+    ext.ATAK_VERSION = rootProject.ATAK_VERSION
+    // the takdev plugin finds main.jar and the keystore here; local.properties must not set it
+    ext.set('sdk.path', rootProject.ATAK_SDK)
 
     def takdevVersion = '3.+'
 
@@ -43,7 +44,8 @@ buildscript {
     ext.takrepoUrl = getProperty(urlKey, 'https://localhost/')
     ext.takrepoUser = getProperty('takrepo.user', 'invalid')
     ext.takrepoPassword = getProperty('takrepo.password', 'invalid')
-    ext.takdevPlugin = getProperty('takdev.plugin', "${rootDir}/../../atak-gradle-takdev.jar")
+    ext.takdevPlugin = getProperty('takdev.plugin',
+            "${rootProject.ATAK_SDK}/atak-gradle-takdev.jar")
 
     repositories {
         google()

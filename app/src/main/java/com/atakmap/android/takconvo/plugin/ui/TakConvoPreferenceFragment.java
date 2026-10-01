@@ -8,6 +8,7 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.preference.CheckBoxPreference;
 import android.preference.EditTextPreference;
+import android.preference.ListPreference;
 import android.preference.Preference;
 import android.widget.Toast;
 
@@ -22,6 +23,7 @@ import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 import com.atakmap.app.preferences.PreferenceControl;
 
 import eu.siacs.conversations.entities.Account;
+import eu.siacs.conversations.xmpp.Jid;
 
 import java.io.File;
 import java.util.List;
@@ -88,6 +90,25 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
                 return true;
             });
         }
+        findPreference(XmppSettings.KEY_CHANNEL_DISCOVERY).setOnPreferenceChangeListener(
+                (p, value) -> {
+                    showChannelDiscovery(XmppSettings.ChannelDiscovery.parse(
+                            String.valueOf(value)), channelServer());
+                    return true;
+                });
+        findPreference(XmppSettings.KEY_CHANNEL_SERVER).setOnPreferenceChangeListener(
+                (p, value) -> {
+                    final String server = String.valueOf(value).trim();
+                    if (!server.isEmpty() && !validServer(server)) {
+                        Toast.makeText(getActivity(), pluginContext.getString(
+                                R.string.takconvo_pref_channel_server_invalid, server),
+                                Toast.LENGTH_LONG).show();
+                        return false;
+                    }
+                    showChannelDiscovery(XmppSettings.ChannelDiscovery.parse(prefs().getString(
+                            XmppSettings.KEY_CHANNEL_DISCOVERY, null)), server);
+                    return true;
+                });
     }
 
     @Override
@@ -116,6 +137,58 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
         findPreference(KEY_TRUSTED_CA_PICKER).setSummary(ca == null || ca.trim().isEmpty()
                 ? pluginContext.getString(R.string.takconvo_pref_trusted_ca_none) : ca);
         findPreference(KEY_ACCOUNT).setSummary(accountSummary());
+
+        final XmppSettings.ChannelDiscovery discovery = XmppSettings.ChannelDiscovery.parse(
+                prefs.getString(XmppSettings.KEY_CHANNEL_DISCOVERY, null));
+        ((ListPreference) findPreference(XmppSettings.KEY_CHANNEL_DISCOVERY))
+                .setValue(discovery.value);
+        ((EditTextPreference) findPreference(XmppSettings.KEY_CHANNEL_SERVER))
+                .setText(channelServer());
+        showChannelDiscovery(discovery, channelServer());
+    }
+
+    /** The choice as the list's summary; the server field only matters for "another server". */
+    private void showChannelDiscovery(final XmppSettings.ChannelDiscovery discovery,
+            final String server) {
+        final boolean empty = server == null || server.trim().isEmpty();
+        final String summary;
+        switch (discovery) {
+            case SERVER:
+                summary = pluginContext.getString(
+                        R.string.takconvo_pref_channel_discovery_server) + ": "
+                        + (empty ? pluginContext.getString(R.string.takconvo_pref_not_set)
+                                : server.trim());
+                break;
+            case PUBLIC:
+                summary = pluginContext.getString(
+                        R.string.takconvo_pref_channel_discovery_public_summary);
+                break;
+            case XMPP_SERVER:
+            default:
+                summary = pluginContext.getString(
+                        R.string.takconvo_pref_channel_discovery_xmpp_server_summary);
+        }
+        findPreference(XmppSettings.KEY_CHANNEL_DISCOVERY).setSummary(summary);
+        final Preference serverPref = findPreference(XmppSettings.KEY_CHANNEL_SERVER);
+        serverPref.setEnabled(discovery == XmppSettings.ChannelDiscovery.SERVER);
+        serverPref.setSummary(empty
+                ? pluginContext.getString(R.string.takconvo_pref_channel_server_summary)
+                : server.trim());
+    }
+
+    private String channelServer() {
+        final String value = prefs().getString(XmppSettings.KEY_CHANNEL_SERVER, "");
+        return value == null ? "" : value;
+    }
+
+    /** An XMPP address that a server or a group chat service can have: no user, no resource. */
+    private static boolean validServer(final String value) {
+        try {
+            final Jid jid = Jid.ofUserInput(value);
+            return jid.getLocal() == null && jid.isBareJid();
+        } catch (final IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private void showSummary(final String key, final String value) {

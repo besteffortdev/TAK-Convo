@@ -1,12 +1,15 @@
-# Builds the plugin, link-checks it against ATAK, installs it on a device running the developer
-# ATAK, and restarts ATAK with the plugin loaded. See docs/07-development-and-testing.md.
+# Builds the plugin for one ATAK version, link-checks it against that version's developer ATAK,
+# installs it on a device running that ATAK, and restarts ATAK with the plugin loaded. See
+# docs/07-development-and-testing.md.
 #
-#   tools\deploy.ps1 -Serial <serial> [-NoBuild] [-SkipLinkCheck]
+#   tools\deploy.ps1 -Serial <serial> [-AtakVersion 5.8.0|5.6.0] [-NoBuild] [-SkipLinkCheck]
 #
 # Needs: JDK 21 (JAVA_HOME or -JavaHome), adb (Android SDK platform-tools), local.properties
-# with sdk.path pointing to the ATAK-CIV SDK (its atak.apk is the link check reference).
+# with atak.sdk.<major.minor> pointing to that version's ATAK SDK (its atak.apk is the link
+# check reference).
 param(
     [Parameter(Mandatory = $true)][string]$Serial,
+    [string]$AtakVersion = '5.8.0',
     [switch]$NoBuild,
     [switch]$SkipLinkCheck,
     [string]$JavaHome = $env:JAVA_HOME,
@@ -24,20 +27,34 @@ if ($JavaHome) { $env:JAVA_HOME = $JavaHome }
 $java = if ($env:JAVA_HOME) { Join-Path $env:JAVA_HOME 'bin\java.exe' } else { 'java' }
 
 if (-not $NoBuild) {
-    & .\gradlew.bat assembleCivDebug --offline -q
+    # quoted: PowerShell would split the argument at its first dot
+    & .\gradlew.bat assembleCivDebug --offline -q "-PatakVersion=$AtakVersion"
     if ($LASTEXITCODE -ne 0) { throw 'build failed' }
 }
-$apk = Get-ChildItem "$root\app\build\outputs\apk\civ\debug\*.apk" |
+$apk = Get-ChildItem "$root\app\build\outputs\apk\civ\debug\*-$AtakVersion-civ-debug.apk" |
     Sort-Object LastWriteTime | Select-Object -Last 1
-if (-not $apk) { throw 'no APK in app\build\outputs\apk\civ\debug' }
+if (-not $apk) { throw "no APK for ATAK $AtakVersion in app\build\outputs\apk\civ\debug" }
 
 if (-not $SkipLinkCheck) {
-    $sdk = (Select-String -Path "$root\local.properties" -Pattern '^sdk\.path=(.*)$').Matches |
+    $minor = ($AtakVersion -split '\.')[0..1] -join '.'
+    $key = [regex]::Escape("atak.sdk.$minor")
+    $sdk = (Select-String -Path "$root\local.properties" -Pattern "^$key=(.*)$").Matches |
         Select-Object -First 1
-    if (-not $sdk) { throw 'sdk.path is not set in local.properties' }
+    if (-not $sdk) { throw "atak.sdk.$minor is not set in local.properties" }
     $atakApk = Join-Path ($sdk.Groups[1].Value -replace '\\\\', '\' -replace '\\:', ':') 'atak.apk'
     & $java -Xmx4g tools\AtakLinkCheck.java $atakApk $apk.FullName
     if ($LASTEXITCODE -ne 0) { throw 'link check failed: fix it or accept it in tools\atak-link-ignore.txt' }
+}
+
+# a plugin built for another ATAK version would load into this one, against other APIs
+$installed = (& $Adb -s $Serial shell dumpsys package $atakPackage |
+    Select-String 'versionName=(\d+\.\d+)' | Select-Object -First 1)
+if (-not $installed) { throw "$atakPackage is not installed on $Serial" }
+$deviceMinor = $installed.Matches[0].Groups[1].Value
+$buildMinor = ($AtakVersion -split '\.')[0..1] -join '.'
+if ($deviceMinor -ne $buildMinor) {
+    throw "$Serial runs ATAK $deviceMinor; pass -AtakVersion $deviceMinor.0, or install that " +
+        "version's developer atak.apk (docs/07)"
 }
 
 & $Adb -s $Serial install -r $apk.FullName

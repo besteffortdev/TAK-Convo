@@ -24,6 +24,16 @@ import manager) provisions them, and they appear under
 | `takconvo_xmpp_use_tak_truststore` | Boolean | `true` | trust the CAs of ATAK's TAK server truststores |
 | `takconvo_xmpp_use_android_ca_store` | Boolean | `false` | trust the device CA store, including user/MDM CAs |
 | `takconvo_xmpp_trusted_ca` | String | — | path of a PEM/DER CA file to trust |
+| `takconvo_xmpp_channel_discovery` | String | `xmpp_server` | where "Discover channels" looks: `xmpp_server` (the group chat services of the account's server), `server` (the next key) or `public` (the public directory search.jabber.network) |
+| `takconvo_xmpp_channel_server` | String | — | for `server`: a server (`example.org`) or one of its group chat services (`conference.example.org`) |
+
+Upstream Conversations defaults to the public directory, which asks before sending a search to
+it. Inside ATAK the default is the account's own server: on an organisation's network the
+public directory is out of reach or has nothing of interest. `provision()` hands the choice to
+Conversations (its `channel_discovery_method` preference: `LOCAL_SERVER` or `JABBER_NETWORK`)
+and sets `TakConvoCompat.CHANNEL_DISCOVERY_SERVER` for another server (see
+[05](05-conversations-fork.md#i-channel-discovery-on-another-server)). An address that isn't
+valid falls back to the account's server.
 
 Public CAs are always trusted, as in Conversations. `provisioning/takconvo-template.pref`
 documents the keys. A `.pref` file may carry Booleans as strings; `XmppSettings.normalize()`
@@ -182,7 +192,10 @@ A plugin view outside an `AppCompatActivity` has no `AppCompatDelegate` to turn 
 `LayoutInflater` factory, with the arguments `AppCompatDelegateImpl` passes.
 
 The chat pane opens this pane for Conversations' "Manage accounts" and for an account's own
-details, and when there is no provisioned account.
+details, and when there is no provisioned account. In that last case, and whenever the user
+signs in from it (`Host.onSignInStarted`), the plugin swaps it for the chat list once the
+account is online (`TakConvoPlugin.showChatIfSignedIn`): logging in lands on the chats. Only if
+the account pane is still showing; opened deliberately with an account online, it stays.
 
 ## Tool preferences
 

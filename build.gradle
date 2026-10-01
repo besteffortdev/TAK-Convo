@@ -16,6 +16,28 @@ allprojects {
     }
 }
 
+// The ATAK version the plugin is built for: -PatakVersion=5.6.0 or 5.8.0 (the default). Its SDK
+// (main.jar, the takdev Gradle plugin, the developer atak.apk) is atak.sdk.5.6 or atak.sdk.5.8 in
+// local.properties. Each version gets its own APK, compiled against the libraries that version of
+// ATAK ships (gradle/atak-runtime.gradle).
+ext.ATAK_VERSION = findProperty('atakVersion') ?: '5.8.0'
+ext.ATAK_MINOR = ATAK_VERSION.tokenize('.').take(2).join('.')
+def localProperties = new Properties()
+if (file('local.properties').isFile()) {
+    file('local.properties').withReader { localProperties.load(it) }
+}
+if (localProperties.getProperty('sdk.path') != null) {
+    // the takdev plugin reads sdk.path from local.properties before the build's own value
+    throw new GradleException('local.properties: replace sdk.path by atak.sdk.5.6 and '
+            + 'atak.sdk.5.8, the SDK of each ATAK version (see docs/07)')
+}
+ext.ATAK_SDK = findProperty("atak.sdk.${ATAK_MINOR}") ?:
+        localProperties.getProperty("atak.sdk.${ATAK_MINOR}")
+if (ATAK_SDK == null || !file(ATAK_SDK).isDirectory()) {
+    throw new GradleException("No ATAK SDK for ATAK ${ATAK_MINOR}: set atak.sdk.${ATAK_MINOR} "
+            + 'in local.properties to the SDK directory (see docs/07)')
+}
+
 task clean(type: Delete) {
     delete rootProject.buildDir
 }

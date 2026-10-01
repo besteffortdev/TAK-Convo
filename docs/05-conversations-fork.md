@@ -12,8 +12,8 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-09-30 (evening) it is **29 modified files, 1 added file, 2 removed manifests**
-(90 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
+As of 2026-09-30 (evening) it is **30 modified files, 1 added file, 2 removed manifests**
+(94 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
 comment: `grep -rn TAKCONVO conversations/src`. When codeberg is unreachable,
 `UPSTREAM_DIR=<a checkout of the tag> tools/fork-diff.sh` compares with a local clone.
 
@@ -50,7 +50,7 @@ Upstream's app `build.gradle` became a `com.android.library` build:
   works with, and AGP 8 can't compile against SDK 37. SDK 37 constants moved to
   `TakConvoCompat` (below).
 - `apply from: gradle/atak-runtime.gradle`: AndroidX, OkHttp and Kotlin versions are forced
-  to the ones ATAK 5.5.1.8 ships, because ATAK's copies win at runtime
+  to the ones the target ATAK (5.6 or 5.8) ships, because ATAK's copies win at runtime
   (see [06](06-atak-runtime-and-classloading.md)).
 - `org.jetbrains:annotations` excluded (duplicate classes with ATAK's).
 
@@ -63,7 +63,7 @@ Dependency versions that differ from upstream 2.20.4:
 | `androidx.appcompat:appcompat` | 1.8.0 | 1.7.1 | builds with compileSdk 36 against ATAK's AndroidX |
 | `androidx.concurrent:concurrent-futures` | 1.3.0 | 1.2.0 | same |
 | `androidx.emoji2:*` | 1.6.0 | 1.5.0 | same |
-| `androidx.exifinterface` | 1.4.2 | 1.4.1 | forced to ATAK's version |
+| `androidx.exifinterface` | 1.4.2 | 1.4.1 (5.6), 1.4.2 (5.8) | forced to ATAK's version |
 | `androidx.swiperefreshlayout` | 1.2.0 | 1.1.0 | builds with compileSdk 36 against ATAK's AndroidX |
 | `androidx.viewpager` | 1.1.0 | 1.0.0 | same; also ATAK-provided |
 | `androidx.work:work-runtime` | 2.11.2 | 2.10.5 | same |
@@ -195,7 +195,18 @@ reuse its paths.
 | `java/eu/siacs/conversations/xmpp/manager/DiscoManager.java` | The Jingle RTP features (`VOIP_NAMESPACES`) aren't advertised when embedded, so contacts' clients don't offer to call this device. |
 | `java/eu/siacs/conversations/xmpp/manager/JingleManager.java` | `isUsingClearNet()`, which only gates RTP, is false when embedded: incoming RTP `session-initiate`s get an `unsupported-info` error, and call proposals are ignored, as over Tor. |
 
-### I. Diagnostics
+### I. Channel discovery on another server
+
+The plugin's settings choose where "Discover channels" looks (see
+[03](03-provisioning-and-trust.md)). Upstream's own setting already chooses between the public
+directory and the account's server; these changes add another server.
+
+| File | Change |
+|---|---|
+| `java/eu/siacs/conversations/utils/TakConvoCompat.java` | New hook `CHANNEL_DISCOVERY_SERVER` (a `Jid`, null by default). |
+| `java/eu/siacs/conversations/services/ChannelDiscoveryService.java` | `getLocalMucServices()` returns that server, asked through the first enabled account, instead of the account's group chat services. New `discoverRoomsOf()` looks for rooms there: a group chat service's items are its rooms, and a server's items are its services, whose items are the rooms (rooms have a local part, services don't). Used for the account's services too, where it finds the same rooms. The cache key includes the server. |
+
+### J. Diagnostics
 
 | File | Change |
 |---|---|
@@ -210,10 +221,10 @@ Conversations APIs the plugin (`app/`) uses directly:
 |---|---|
 | `xmpp/EmbeddedConversations` | extends `Conversations`; `attachBaseContext`, `onCreateEmbedded()` |
 | `xmpp/EmbeddedXmppService` | extends `XmppConnectionService`; `attachBaseContext` |
-| `xmpp/XmppEngine` | `XmppConnectionService`: `onCreate`, `onStartCommand(null, 0, 0)`, `onBind`, `onTaskRemoved`, `onDestroy`, `getAccounts`, `findAccountByJid`, `createAccount`, `updateAccount`, `reconnectAccountInBackground`, `findOrCreateConversation`, `sendMessage`, `getConversations`. `TakConvoCompat` hooks (section G). `Account` (constructor, `setResource`, `setPassword`, `setHostname`, `setPort`, `setOption`/`isOptionSet(OPTION_DISABLED)`, `isOnlineAndConnected`). `AppSettings.SHOW_CONNECTION_OPTIONS`, `BuildConfig.APP_NAME`, `CryptoHelper.random`, `Jid.ofUserInput`, `FileBackend.deleteShareableCopies` |
+| `xmpp/XmppEngine` | `XmppConnectionService`: `onCreate`, `onStartCommand(null, 0, 0)`, `onBind`, `onTaskRemoved`, `onDestroy`, `getAccounts`, `findAccountByJid`, `createAccount`, `updateAccount`, `reconnectAccountInBackground`, `findOrCreateConversation`, `sendMessage`, `getConversations`. `TakConvoCompat` hooks (sections G and I). `AppSettings.CHANNEL_DISCOVERY_METHOD`, `ChannelDiscoveryService.Method`. `Account` (constructor, `setResource`, `setPassword`, `setHostname`, `setPort`, `setOption`/`isOptionSet(OPTION_DISABLED)`, `isOnlineAndConnected`). `AppSettings.SHOW_CONNECTION_OPTIONS`, `BuildConfig.APP_NAME`, `CryptoHelper.random`, `Jid.ofUserInput`, `FileBackend.deleteShareableCopies` |
 | `xmpp/EmbeddedPendingIntents` | `TakConvoCompat.PendingIntentFactory`; the `eu.siacs.conversations.` package prefix of the components it redirects; `SystemEventReceiver` being a `BroadcastReceiver` with a no-argument constructor, `XmppConnectionService` a `Service` |
 | `xmpp/EmbeddedNotifications` | `TakConvoCompat.NotificationFilter`; style `Theme.Conversations3` (the icons' tints) |
-| `contacts/XmppContacts` | `Conversation`: `getAccount`, `getMode`/`MODE_SINGLE`, `getAddress`, `unreadCount`. `Account.getRoster().getContacts()`, `Contact.getOption(Contact.Options.TO)`, `getShownStatus()`, `Presence.Availability` |
+| `contacts/XmppContacts` | `Conversation`: `getAccount`, `getMode`/`MODE_SINGLE`/`MODE_MULTI`, `getAddress`, `getName`, `unreadCount`, `getMucOptions().online()`. `Account.getRoster().getContacts()`, `Contact.getOption(Contact.Options.TO)`, `getShownStatus()`, `Presence.Availability` |
 | `debug/DebugReceiver` | `Message(conversation, body, ENCRYPTION_NONE, STATUS_RECEIVED)`, `markUnread`, `Conversation.add`, `XmppConnectionService.createMessageAsync`, `getNotificationService().push`, `updateConversationUi` |
 | `ui/AccountView` | layout `activity_edit_account` and its view ids (`toolbar`, `editor`, `avater`, `account_jid(_layout)`, `account_password(_layout)` and that they share a parent, `save_button`, `cancel_button`, `stats`, `account_main_layout`, and the ids it hides), string `account_status_connecting`, `Account.State` and `getReadableId()`, style `Theme.Conversations3.Dark`, `AxolotlService`, `UIHelper`, `XmppConnection` and its managers (`Blocking`, `Carbons`, `ClientStateIndication`, `ExternalServiceDiscovery`, `HttpUpload`, `MessageArchive`, `Pep`, `Roster`) |
 | `ui/host/EmbeddedActivityHost` | activity class names (the `SUPPORTED` and `FLOATING` lists, `ui.activity.SettingsActivity`, `EditAccountActivity`, `ManageAccountActivity`), `ConversationsActivity.ACTION_VIEW_CONVERSATION` / `EXTRA_CONVERSATION`, styles `Theme.Conversations3` and `Theme.Conversations3.Dialog`, `BaseActivity.embeddedContent` |
@@ -243,8 +254,9 @@ Conversations APIs the plugin (`app/`) uses directly:
    the build stays on compileSdk 36.
 6. **Build and link-check.**
    ```bash
-   ./gradlew assembleCivDebug --offline
-   java tools/AtakLinkCheck.java <sdk>/atak.apk app/build/outputs/apk/civ/debug/<apk>
+   ./gradlew assembleCivDebug                       # for ATAK 5.8, then each other version:
+   ./gradlew assembleCivDebug -PatakVersion=5.6.0   # online the first time: new libraries
+   java tools/AtakLinkCheck.java <that ATAK SDK>/atak.apk app/build/outputs/apk/civ/debug/<apk>
    ```
    Fix every `AbstractMethodError` finding: implement all methods, and replace lambdas by
    anonymous classes for interfaces ATAK provides. Fix `NoSuch...Error` findings by using another

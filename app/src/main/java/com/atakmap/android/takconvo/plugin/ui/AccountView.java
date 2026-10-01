@@ -59,6 +59,9 @@ public final class AccountView implements XmppEngine.Listener {
         void openSettings();
 
         void showTestMessagePane();
+
+        /** The user signed in: once the account is online, the chats are what to show. */
+        void onSignInStarted();
     }
 
     /** Shown, masked, in the disabled password field when a password is stored. */
@@ -262,6 +265,7 @@ public final class AccountView implements XmppEngine.Listener {
         edited = false;
         startAttempt(before);
         hideKeyboard();
+        host.onSignInStarted();
         refresh();
     }
 

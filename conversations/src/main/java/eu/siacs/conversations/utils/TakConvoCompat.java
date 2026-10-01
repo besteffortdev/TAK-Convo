@@ -36,6 +36,13 @@ public final class TakConvoCompat {
     public static volatile javax.net.ssl.X509TrustManager EXTRA_TRUST_MANAGER = null;
 
     /**
+     * Where "Discover channels" looks when it looks at XMPP servers (its LOCAL_SERVER method):
+     * a server, or one of its group chat services, set in the plugin's settings. Null for the
+     * group chat services of the account's own server, as upstream.
+     */
+    public static volatile eu.siacs.conversations.xmpp.Jid CHANNEL_DISCOVERY_SERVER = null;
+
+    /**
      * Makes the PendingIntents Conversations hands to the system (notification taps and actions,
      * alarms). Embedded, their targets are Conversations components that don't exist in ATAK's
      * package, so the plugin redirects them to ones that do.

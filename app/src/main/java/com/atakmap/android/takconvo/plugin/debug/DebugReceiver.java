@@ -45,6 +45,7 @@ import java.util.List;
  *
  * <pre>
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SET_PREF --es key K --es value V
+ *     (without value: removes K)
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_PROVISION
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SEND --es to J --es body B
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_ADD_TAK_SERVER \
@@ -139,7 +140,10 @@ public final class DebugReceiver extends BroadcastReceiver {
         if (ACTION_SET_PREF.equals(action)) {
             final String key = intent.getStringExtra("key");
             final String value = intent.getStringExtra("value");
-            if (key != null) {
+            if (key != null && value == null) {
+                AtakPreferences.getInstance(context).remove(key);
+                Log.d(TAG, "removed " + key);
+            } else if (key != null) {
                 AtakPreferences.getInstance(context).set(key, value);
                 Log.d(TAG, "set " + key);
             }

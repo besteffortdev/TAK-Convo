@@ -34,6 +34,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 import gov.tak.api.plugin.IPlugin;
@@ -72,6 +73,13 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     private TextView logView;
     private final Set<String> loggedMessages = new HashSet<>();
     private String lastStatus;
+    /** the account the chat pane's screens belong to (its uuid), or null */
+    private String chatAccount;
+    /**
+     * The account pane shows instead of the chats, for lack of an account or because the user
+     * is signing in: once the account is online, the chats replace it.
+     */
+    private boolean showChatWhenOnline;
     private final StringBuilder log = new StringBuilder();
 
     private final BroadcastReceiver showReceiver = new BroadcastReceiver() {
@@ -259,6 +267,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             return null;
         }
         if (engine.getAccount() == null) {
+            showChatWhenOnline = true;
             showAccountPane();
             return null;
         }
@@ -270,6 +279,20 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
         chatDropDown.show();
         return chatHost;
+    }
+
+    /**
+     * Closes the chat pane and destroys its screens, e.g. once their account is gone. ATAK would
+     * otherwise bring the pane back, with the old chats, when the account pane over it closes.
+     */
+    private void closeChatPane() {
+        if (chatDropDown != null && !chatDropDown.isClosed()) {
+            // also when it is hidden on ATAK's drop-down stack
+            chatDropDown.closeDropDown();
+        }
+        if (chatHost != null && !chatHost.isEmpty()) {
+            chatHost.destroy();
+        }
     }
 
     @Override
@@ -313,6 +336,23 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     @Override
     public void openSettings() {
         SettingsActivity.start(TakConvoPreferenceFragment.TOOL_KEY, null);
+    }
+
+    @Override
+    public void onSignInStarted() {
+        showChatWhenOnline = true;
+    }
+
+    /** The account came online while the account pane stood in for the chats: swap them. */
+    private void showChatIfSignedIn(final Account account) {
+        if (!showChatWhenOnline || account == null || !account.isOnlineAndConnected()) {
+            return;
+        }
+        showChatWhenOnline = false;
+        if (accountPane != null && uiService != null && uiService.isPaneVisible(accountPane)) {
+            uiService.closePane(accountPane);
+            showChat();
+        }
     }
 
     // --- spike UI: send a plain message and log traffic (debug builds) ---
@@ -365,6 +405,14 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         if (engine == null) {
             return;
         }
+        // signed out, turned off or another account: the chats shown were the old account's
+        final Account account = engine.getAccount();
+        final String accountUuid = account == null ? null : account.getUuid();
+        if (!Objects.equals(accountUuid, chatAccount)) {
+            chatAccount = accountUuid;
+            closeChatPane();
+        }
+        showChatIfSignedIn(account);
         final String status = describe(engine);
         if (!status.equals(lastStatus)) {
             lastStatus = status;

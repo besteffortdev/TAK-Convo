@@ -442,6 +442,7 @@ through the provider's grant.
 ## Not available yet
 
 Started from Conversations' UI, these show "Not available inside ATAK": share/show location,
-Conversations' own settings (replaced by the plugin's), backup import. Library activities
+Conversations' own settings (replaced by the plugin's; a `.pref` file sets them, see
+[03](03-provisioning-and-trust.md#conversations-own-settings)), backup import. Library activities
 aren't hosted either: the image cropper's `CropImageActivity` is avoided by the fork instead. Calls (`RtpSessionActivity`) are switched off rather than refused: the call
 button would already have made the contact's device ring.

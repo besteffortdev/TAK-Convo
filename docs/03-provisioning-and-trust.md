@@ -4,14 +4,16 @@ The user types nothing XMPP-specific: the XMPP domain arrives in a `.pref` file 
 in a mission package), the login reuses the TAK server's username and password, and the
 server's certificate is checked against the CAs ATAK already trusts for its TAK servers.
 
-Classes: `plugin/config/XmppSettings`, `TrustSources`, `TrustedCa`; `plugin/xmpp/XmppEngine`;
+Classes: `plugin/config/XmppSettings`, `ConversationsSettings`, `TrustSources`, `TrustedCa`;
+`plugin/xmpp/XmppEngine`, `CallsignNicknames`;
 `plugin/ui/TakConvoPreferenceFragment`, `AccountView`.
 
 ## Settings
 
 All settings are ATAK preferences, so ATAK's own import (`.pref` files, mission packages, the
-import manager) provisions them, and they appear under
-**Settings › Tool Preferences › TAK Convo**.
+import manager) provisions every one of them. Those in the table also appear under
+**Settings › Tool Preferences › TAK Convo**; Conversations' own settings and the login are
+.pref-only (below).
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
@@ -20,7 +22,8 @@ import manager) provisions them, and they appear under
 | `takconvo_xmpp_host` | String | — | only if the domain has no reachable SRV/A record |
 | `takconvo_xmpp_port` | String | `5222` | port for `takconvo_xmpp_host` |
 | `takconvo_xmpp_use_tak_credentials` | Boolean | `true` | reuse the TAK server username/password |
-| `takconvo_xmpp_username` | String | — | username suggested on the XMPP login screen |
+| `takconvo_xmpp_username` | String | — | the XMPP login's username; without a password, only suggested on the login screen |
+| `takconvo_xmpp_password` | String | — | the XMPP login's password, moved to ATAK's credential store at once (see Credentials) |
 | `takconvo_xmpp_use_tak_truststore` | Boolean | `true` | trust the CAs of ATAK's TAK server truststores |
 | `takconvo_xmpp_use_android_ca_store` | Boolean | `false` | trust the device CA store, including user/MDM CAs |
 | `takconvo_xmpp_trusted_ca` | String | — | path of a PEM/DER CA file to trust |
@@ -41,6 +44,35 @@ valid falls back to the account's server.
 Public CAs are always trusted, as in Conversations. `provisioning/takconvo-template.pref`
 documents the keys. A `.pref` file may carry Booleans as strings; `XmppSettings.normalize()`
 stores them as Booleans, because the preference check boxes fail on strings.
+
+### Conversations' own settings
+
+The plugin's settings page replaces Conversations' settings screen. Conversations' settings
+are set with ATAK preferences named `takconvo_conversations_<key>` (the keys and values are
+listed in the template), which only a `.pref` file sets:
+
+```text
+ConversationsSettings.apply(atak, conversations):   # engine start, and each change of one
+    for each takconvo_conversations_<key> in ATAK's preferences:
+        unknown key or invalid value: log a warning, skip
+        switch: putBoolean(key, value)               # "true" / "false", as String or Boolean
+        list or number: putString(key, value)        # Conversations parses numbers itself
+    keys applied last time but gone now: remove      # back to Conversations' default
+    remember the applied keys (takconvo_applied_settings)
+```
+
+Supported are the settings that work inside ATAK and that the plugin doesn't manage:
+privacy, security, availability, attachments, chat appearance, and two notification
+settings. Left out:
+- theme and dynamic colours: ATAK is dark;
+- connection options and channel discovery: the plugin's own settings;
+- notification sound, vibration, LED and heads-up: the plugin's notification channels;
+- calls, the foreground service, crash reports, shared storage, backups and UnifiedPush: not
+  available embedded;
+- screenshot blocking: it applies to the activity's own window, which is never shown.
+
+Most settings are read when used. The connection ones (TLS 1.3, channel binding, Tor, system
+CAs) apply at the next connection.
 
 ## Credentials
 
@@ -69,8 +101,22 @@ start-up the TAK server credentials are often not available yet, and silently sw
 another identity would provision the wrong account.
 
 When TAK credentials are not used, the account pane is a login form. The password goes to
-ATAK's encrypted credential store under type `takconvo.xmpp`, never into preferences or `.pref`
-files.
+ATAK's encrypted credential store under type `takconvo.xmpp`.
+
+A `.pref` file can also provision the login, with `takconvo_xmpp_username` and
+`takconvo_xmpp_password`. The password doesn't stay in the preferences:
+
+```text
+XmppSettings.importLogin(prefs):          # at the start of each provision()
+    if takconvo_xmpp_password is set:
+        if takconvo_xmpp_username is set: saveLogin(username, password)   # credential store
+        else: log a warning
+        remove takconvo_xmpp_password from the preferences
+```
+
+ATAK's preference exports therefore never carry it. The `.pref` file itself holds the password
+in clear text, as ATAK's own `.pref` files hold certificate passwords: distribute it the same
+way.
 
 ## Provisioning the account
 
@@ -163,13 +209,21 @@ With `takconvo_xmpp_use_callsign` on (the default), the ATAK callsign (ATAK's
 `locationCallsign` preference) is the account's XMPP nickname:
 
 ```text
-XmppEngine.syncCallsign():        # each engine change (e.g. the account came online), and
+CallsignNicknames.sync():         # each engine change (e.g. the account came online), and
                                   # each change of locationCallsign; only while online
     if account.displayName != callsign:
         account.displayName = callsign; save
         publishDisplayName(account)   # User Nickname (XEP-0172): what contacts' clients show
         checkMucRequiresRename()      # group chats whose nickname is the display name
-    for each group chat of the account:
+    for each open group chat of the account:
+        if the callsign is marked taken there: skip      # keeps its nickname
+        if not joined:
+            if the join failed with "nickname in use" and proposed the callsign:
+                mark taken; changeUsername(room, its last other nickname, else the username)
+            continue                  # a pending join: re-check every 3 s, up to 30 s
+        remember its nickname if it isn't the callsign
+        if another account is in the room under the callsign:
+            mark taken; bookmark nick = current nickname; continue
         if its bookmark has another nickname (once per room and callsign):
             BookmarkManager.create(bookmark with nick = callsign)
             # the server echoes the bookmark; Conversations renames itself in the room then
@@ -178,8 +232,20 @@ XmppEngine.syncCallsign():        # each engine change (e.g. the account came on
             # a room joined right after connecting, before the display name changed
 ```
 
-Changing the callsign in ATAK renames the user everywhere within a fraction of a second. "Once
-per room and callsign": a nickname the room refuses (taken) isn't retried on every change.
+Changing the callsign in ATAK renames the user everywhere within a fraction of a second.
+
+**A taken callsign.** Two people can't hold the same nickname in a room. Where another account
+has the callsign, the room keeps the nickname it had, and the display name and the other rooms
+keep the callsign. Conversations alone would leave that room unjoined after the next reconnect,
+with a "nickname in use" error. The plugin catches the conflict two ways:
+
+- while joined: it sees the other occupant, in a room that shows accounts;
+- when joining: the join fails, and it joins again with the room's last nickname.
+
+The "taken" mark is stored per room, in the engine's `takconvo_room_nicknames` preferences, so
+a restart doesn't try again. A new callsign gets a new try. The account's own other sessions,
+such as the Conversations app on the same phone, may share a nickname, so they don't count as
+taking it. A failed join doesn't notify the engine, which is why pending joins are re-checked.
 
 ## The account pane
 

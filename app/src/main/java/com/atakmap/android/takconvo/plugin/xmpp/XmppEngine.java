@@ -18,6 +18,7 @@ import android.view.Display;
 
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.android.takconvo.plugin.SensitiveLog;
+import com.atakmap.android.takconvo.plugin.config.ConversationsSettings;
 import com.atakmap.android.takconvo.plugin.config.TrustSources;
 import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.comms.CommsMapComponent;
@@ -28,23 +29,15 @@ import eu.siacs.conversations.AppSettings;
 import eu.siacs.conversations.entities.Account;
 import eu.siacs.conversations.entities.Conversation;
 import eu.siacs.conversations.entities.Message;
-import eu.siacs.conversations.entities.MucOptions;
 import eu.siacs.conversations.persistance.FileBackend;
 import eu.siacs.conversations.services.ChannelDiscoveryService;
 import eu.siacs.conversations.services.XmppConnectionService;
 import eu.siacs.conversations.utils.CryptoHelper;
 import eu.siacs.conversations.utils.TakConvoCompat;
 import eu.siacs.conversations.xmpp.Jid;
-import eu.siacs.conversations.xmpp.manager.BookmarkManager;
-import eu.siacs.conversations.xmpp.manager.MultiUserChatManager;
-
-import im.conversations.android.model.Bookmark;
-import im.conversations.android.model.ImmutableBookmark;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -73,18 +66,8 @@ public final class XmppEngine {
     private final List<Listener> listeners = new CopyOnWriteArrayList<>();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AtomicBoolean dispatchPending = new AtomicBoolean();
-    private final Runnable dispatchTask = () -> {
-        dispatchPending.set(false);
-        // e.g. the account came online: the callsign can be published now
-        syncCallsign();
-        for (final Listener l : listeners) {
-            l.onXmppStateChanged();
-        }
-    };
-    /** Room address to the callsign its bookmark nickname was set to. */
-    private final Map<String, String> renamedBookmarks = new HashMap<>();
-    /** Room address to the callsign it was asked to rename to. */
-    private final Map<String, String> renamedRooms = new HashMap<>();
+    private final Runnable dispatchTask = this::dispatch;
+    private final CallsignNicknames nicknames;
     /**
      * The service's changes. Not a UI listener: Conversations would think it is always on
      * screen, keep the client state active and silence notifications.
@@ -175,6 +158,8 @@ public final class XmppEngine {
             }
         });
 
+        nicknames = new CallsignNicknames(this.atakContext, context, service, mainHandler,
+                this::getAccount);
         pendingIntents = new EmbeddedPendingIntents(this.atakContext, context);
         pendingIntents.register();
         TakConvoCompat.PENDING_INTENTS = pendingIntents;
@@ -182,6 +167,8 @@ public final class XmppEngine {
         TakConvoCompat.OBSERVER = observer;
 
         Log.d(TAG, "starting embedded Conversations engine");
+        ConversationsSettings.apply(AtakPreferences.getInstance(this.atakContext).getSharedPrefs(),
+                defaultPreferences());
         service.onCreate();
         // trust must be in place before the service connects the stored accounts
         XmppSettings.normalize(AtakPreferences.getInstance(this.atakContext).getSharedPrefs());
@@ -199,10 +186,15 @@ public final class XmppEngine {
         // re-provision on our preferences (e.g. a .pref import) and TAK server changes; the
         // TAK credentials are often not there yet when the plugin starts
         prefListener = (prefs, key) -> {
-            if (key != null && key.startsWith(XmppSettings.KEY_PREFIX)) {
+            if (key == null) {
+                return;
+            }
+            if (key.startsWith(XmppSettings.KEY_PREFIX)) {
                 scheduleProvision();
+            } else if (key.startsWith(ConversationsSettings.PREFIX)) {
+                mainHandler.post(() -> ConversationsSettings.apply(prefs, defaultPreferences()));
             } else if (XmppSettings.KEY_ATAK_CALLSIGN.equals(key)) {
-                mainHandler.post(this::syncCallsign);
+                mainHandler.post(nicknames::sync);
             }
         };
         AtakPreferences.getInstance(this.atakContext).registerListener(prefListener);
@@ -246,6 +238,7 @@ public final class XmppEngine {
     private void stop() {
         Log.d(TAG, "stopping embedded Conversations engine");
         mainHandler.removeCallbacks(provisionTask);
+        nicknames.stop();
         AtakPreferences.getInstance(atakContext).unregisterListener(prefListener);
         CommsMapComponent.getInstance().removeOutputsChangedListener(takServerListener);
         try {
@@ -271,6 +264,7 @@ public final class XmppEngine {
      */
     public void provision() {
         mainHandler.removeCallbacks(provisionTask);
+        XmppSettings.importLogin(AtakPreferences.getInstance(atakContext).getSharedPrefs());
         XmppSettings.normalize(AtakPreferences.getInstance(atakContext).getSharedPrefs());
         settings = XmppSettings.load(atakContext);
         final boolean trustChanged = applyTrust();
@@ -352,63 +346,6 @@ public final class XmppEngine {
         final boolean changed = trustFingerprint != null && !trustFingerprint.equals(fingerprint);
         trustFingerprint = fingerprint;
         return changed;
-    }
-
-    /**
-     * Makes the ATAK callsign the XMPP nickname while online: the display name (XEP-0172 User
-     * Nickname) and the nickname of bookmarked group chats, each asked once per callsign.
-     */
-    private void syncCallsign() {
-        final Account account = getAccount();
-        final SharedPreferences prefs = AtakPreferences.getInstance(atakContext).getSharedPrefs();
-        if (account == null || !account.isOnlineAndConnected()
-                || !XmppSettings.usesCallsign(prefs)) {
-            return;
-        }
-        final String callsign = XmppSettings.atakCallsign(prefs);
-        if (callsign == null) {
-            return;
-        }
-        if (!callsign.equals(account.getDisplayName())) {
-            SensitiveLog.d(TAG, "nickname " + account.getDisplayName() + " -> callsign "
-                    + callsign);
-            account.setDisplayName(callsign);
-            service.databaseBackend.updateAccount(account);
-            service.publishDisplayName(account);
-            // the group chats that use the display name
-            service.checkMucRequiresRename();
-        }
-        final BookmarkManager bookmarks =
-                account.getXmppConnection().getManager(BookmarkManager.class);
-        final MultiUserChatManager rooms =
-                account.getXmppConnection().getManager(MultiUserChatManager.class);
-        try {
-            for (final Conversation conversation : service.getConversations()) {
-                if (conversation.getAccount() != account
-                        || conversation.getMode() != Conversation.MODE_MULTI) {
-                    continue;
-                }
-                final String room = conversation.getAddress().asBareJid().toString();
-                final Bookmark bookmark = conversation.getBookmark();
-                if (bookmark != null && bookmark.getNick() != null
-                        && !callsign.equals(bookmark.getNick())
-                        && !callsign.equals(renamedBookmarks.put(room, callsign))) {
-                    SensitiveLog.d(TAG, "bookmarked nickname in " + room + ": "
-                            + bookmark.getNick() + " -> " + callsign);
-                    bookmarks.create(
-                            ImmutableBookmark.builder().from(bookmark).nick(callsign).build());
-                }
-                // joined before the display name changed: Conversations only renames on change
-                final MucOptions options = conversation.getMucOptions();
-                if (options.online() && !callsign.equals(options.getActualNick())
-                        && !callsign.equals(renamedRooms.put(room, callsign))) {
-                    rooms.checkMucRequiresRename(conversation);
-                }
-            }
-        } catch (final RuntimeException e) {
-            // e.g. the conversations changing on another thread; the next change retries
-            Log.w(TAG, "unable to check the group chats' nicknames", e);
-        }
     }
 
     /**
@@ -608,6 +545,15 @@ public final class XmppEngine {
     private void dispatchChanged() {
         if (dispatchPending.compareAndSet(false, true)) {
             mainHandler.post(dispatchTask);
+        }
+    }
+
+    private void dispatch() {
+        dispatchPending.set(false);
+        // e.g. the account came online: the callsign can be published now
+        nicknames.sync();
+        for (final Listener l : listeners) {
+            l.onXmppStateChanged();
         }
     }
 

@@ -16,10 +16,23 @@ allprojects {
     }
 }
 
-// The ATAK version the plugin is built for: -PatakVersion=5.6.0 or 5.8.0 (the default). Its SDK
-// (main.jar, the takdev Gradle plugin, the developer atak.apk) is atak.sdk.5.6 or atak.sdk.5.8 in
-// local.properties. Each version gets its own APK, compiled against the libraries that version of
-// ATAK ships (gradle/atak-runtime.gradle).
+// Conversations is Java 21. javac comes from a JDK 21 even when Gradle runs on another JDK
+// (TAK.gov's pipeline lists JDK 17): an installed one, or one foojay downloads (settings.gradle).
+subprojects {
+    plugins.withId('java-base') {
+        java {
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(21)
+            }
+        }
+    }
+}
+
+// The ATAK version the plugin is built for: atakVersion in gradle.properties, or
+// -PatakVersion=5.6.0. Each version gets its own APK, compiled against the libraries that version
+// of ATAK ships (gradle/atak-runtime.gradle). Its SDK (main.jar, the takdev Gradle plugin, the
+// developer atak.apk) is atak.sdk.5.6 or atak.sdk.5.8 in local.properties; with takrepo.url
+// (TAK.gov's pipeline) the takdev plugin downloads it instead. See docs/07.
 ext.ATAK_VERSION = findProperty('atakVersion') ?: '5.8.0'
 ext.ATAK_MINOR = ATAK_VERSION.tokenize('.').take(2).join('.')
 def localProperties = new Properties()
@@ -33,9 +46,10 @@ if (localProperties.getProperty('sdk.path') != null) {
 }
 ext.ATAK_SDK = findProperty("atak.sdk.${ATAK_MINOR}") ?:
         localProperties.getProperty("atak.sdk.${ATAK_MINOR}")
-if (ATAK_SDK == null || !file(ATAK_SDK).isDirectory()) {
+def takrepo = findProperty('takrepo.url') ?: localProperties.getProperty('takrepo.url')
+if (takrepo == null && (ATAK_SDK == null || !file(ATAK_SDK).isDirectory())) {
     throw new GradleException("No ATAK SDK for ATAK ${ATAK_MINOR}: set atak.sdk.${ATAK_MINOR} "
-            + 'in local.properties to the SDK directory (see docs/07)')
+            + 'in local.properties to the SDK directory, or takrepo.url (see docs/07)')
 }
 
 task clean(type: Delete) {

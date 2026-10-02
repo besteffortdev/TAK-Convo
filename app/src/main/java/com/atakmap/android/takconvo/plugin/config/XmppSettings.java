@@ -17,8 +17,9 @@ import java.util.List;
 
 /**
  * XMPP settings from ATAK's preferences, so a {@code .pref} file can provision them; the keys
- * are described in provisioning/takconvo-template.pref. A login entered in the plugin goes to
- * ATAK's encrypted credential store ({@link #CREDENTIALS_TYPE}), never to the preferences.
+ * are described in provisioning/takconvo-template.pref. The XMPP login lives in ATAK's
+ * encrypted credential store ({@link #CREDENTIALS_TYPE}); a password provisioned in the
+ * preferences is moved there ({@link #importLogin}).
  */
 public final class XmppSettings {
 
@@ -30,6 +31,8 @@ public final class XmppSettings {
     public static final String KEY_PORT = "takconvo_xmpp_port";
     public static final String KEY_USE_TAK_CREDENTIALS = "takconvo_xmpp_use_tak_credentials";
     public static final String KEY_USERNAME = "takconvo_xmpp_username";
+    /** Only in transit: moved to the credential store, see {@link #importLogin}. */
+    public static final String KEY_PASSWORD = "takconvo_xmpp_password";
     public static final String KEY_TRUSTED_CA = "takconvo_xmpp_trusted_ca";
     public static final String KEY_USE_TAK_TRUSTSTORE = "takconvo_xmpp_use_tak_truststore";
     public static final String KEY_USE_ANDROID_CA_STORE = "takconvo_xmpp_use_android_ca_store";
@@ -211,6 +214,25 @@ public final class XmppSettings {
 
     public static void clearLogin() {
         AtakAuthenticationDatabase.delete(CREDENTIALS_TYPE, CREDENTIALS_TYPE);
+    }
+
+    /**
+     * Moves a login a .pref file provisioned ({@link #KEY_USERNAME} and {@link #KEY_PASSWORD})
+     * into ATAK's credential store. The password is removed from the preferences either way.
+     */
+    public static void importLogin(final SharedPreferences prefs) {
+        final String password = getString(prefs, KEY_PASSWORD);
+        if (password == null) {
+            return;
+        }
+        final String username = trimToNull(getString(prefs, KEY_USERNAME));
+        if (username != null && !password.isEmpty()) {
+            saveLogin(username, password);
+            Log.i(TAG, "XMPP login moved from the preferences to ATAK's credential store");
+        } else {
+            Log.w(TAG, "ignoring " + KEY_PASSWORD + " without " + KEY_USERNAME);
+        }
+        prefs.edit().remove(KEY_PASSWORD).apply();
     }
 
     /** The stored XMPP login's username, or null. */

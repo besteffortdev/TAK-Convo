@@ -39,6 +39,15 @@ excludeAtakProvidedFromRuntime(project):
 The versions were read from `META-INF/*.version` and the dex of each SDK's `atak.apk`. A new
 ATAK version needs its own table; the build stops without one.
 
+Only libraries in the SDK's `main.jar` are left out of the APK. A release build's R8 has to
+see every class the plugin refers to, packaged or as a library, and `main.jar` is the library
+input: ATAK's API and most of the libraries it ships, including OkHttp, Okio and the AndroidX
+modules above. `androidx.concurrent:concurrent-futures` and `androidx.tracing:tracing` are in
+ATAK's APK but not in `main.jar` (it only has `androidx.tracing.R`), so the plugin packages
+them. Loading is parent-first, so ATAK's copy is used wherever ATAK has those classes under
+their own names. If release ATAK renames them, the plugin's copy is used. `AtakLinkCheck` lists
+them among the shadowed classes.
+
 Consequences for the fork: OkHttp is held at 4.11.0 (upstream uses 5.x, whose API ATAK's copy
 lacks), and several AndroidX and Material versions are held back
 (see [05](05-conversations-fork.md#build-changes)).

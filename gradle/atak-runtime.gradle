@@ -44,7 +44,10 @@ if (atakProvidedVersions == null) {
             + rootProject.ATAK_MINOR + ': read them from that SDK\'s atak.apk (see docs/06)')
 }
 
-// group:module pairs excluded from the plugin APK (still on the compile classpath)
+// group:module pairs excluded from the plugin APK (still on the compile classpath). Only those
+// in the SDK's main.jar: R8 needs ATAK's copy as a library for a release build. The plugin
+// packages its own androidx.concurrent:concurrent-futures and androidx.tracing:tracing, which
+// main.jar lacks; ATAK's copy still wins where it has one (see docs/06).
 ext.atakProvidedModules = [
         'androidx.activity:activity',
         'androidx.annotation:annotation-experimental',
@@ -53,7 +56,6 @@ ext.atakProvidedModules = [
         'androidx.collection:collection',
         'androidx.collection:collection-jvm',
         'androidx.collection:collection-ktx',
-        'androidx.concurrent:concurrent-futures',
         'androidx.core:core',
         'androidx.core:core-ktx',
         'androidx.core:core-viewtree',
@@ -80,7 +82,6 @@ ext.atakProvidedModules = [
         'androidx.savedstate:savedstate',
         'androidx.savedstate:savedstate-android',
         'androidx.startup:startup-runtime',
-        'androidx.tracing:tracing',
         'androidx.versionedparcelable:versionedparcelable',
         'androidx.viewpager:viewpager',
         'com.google.guava:listenablefuture',

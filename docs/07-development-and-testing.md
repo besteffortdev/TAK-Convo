@@ -4,7 +4,7 @@
 
 | Need | Notes |
 |---|---|
-| JDK 21 | Temurin 21 for Gradle (`JAVA_HOME`); AGP 8.13 / Gradle 8.14.3 |
+| JDK 17 or 21 | runs Gradle (`JAVA_HOME`); AGP 8.13 / Gradle 8.14.3. javac is always a JDK 21 (Conversations is Java 21): Gradle's toolchain uses an installed one or downloads it (foojay, `settings.gradle`) |
 | Android SDK | platform 36, build-tools 35 (`dexdump`, `aapt2` are handy) |
 | ATAK SDK 5.6 and 5.8 | the ATAK-CAN 5.6.0.24 and 5.8.0.5 SDKs: `main.jar`, `atak-gradle-takdev.jar`, the developer `atak.apk`, the keystore |
 | A device with that version's **developer** `atak.apk` | release ATAK refuses plugins not signed by TAK.gov, see below |
@@ -19,8 +19,10 @@ atak.sdk.5.8=C:\\...\\ATAK-CAN-5.8.0.5-SDK
 # takrepo.url / takrepo.user / takrepo.password switch to tak.gov's Maven repository instead
 ```
 
-The root `build.gradle` picks the SDK for `-PatakVersion` and sets `sdk.path` for the takdev
-plugin, and the takdev plugin is that SDK's `atak-gradle-takdev.jar`. Don't set `sdk.path` in
+The ATAK version is `atakVersion` in `gradle.properties` (5.8.0), or `-PatakVersion`. The root
+`build.gradle` picks that version's SDK and sets `sdk.path` for the takdev plugin, and the
+takdev plugin is that SDK's `atak-gradle-takdev.jar`. With `takrepo.url` (TAK.gov's pipeline)
+no local SDK is needed: takdev comes from that Maven repository and downloads the SDK. Don't set `sdk.path` in
 `local.properties`: takdev reads it from there before the build's value, and the build stops
 with a message if it finds it. `gradle/atak-runtime.gradle` has the versions of the libraries
 each ATAK version ships (see [06](06-atak-runtime-and-classloading.md)).
@@ -31,7 +33,7 @@ one, and `settings.gradle` then fails to parse.
 ## Build
 
 ```bash
-./gradlew assembleCivDebug --offline                       # ATAK 5.8 (the default)
+./gradlew assembleCivDebug --offline                       # ATAK 5.8 (gradle.properties)
 ./gradlew assembleCivDebug --offline -PatakVersion=5.6.0   # ATAK 5.6
 # app/build/outputs/apk/civ/debug/ATAK-Plugin-takconvo-<version>-<git>-<atak version>-civ-debug.apk
 java tools/AtakLinkCheck.java <atak.sdk.5.x>/atak.apk app/build/outputs/apk/civ/debug/<apk>
@@ -73,12 +75,67 @@ A **release** ATAK (Play Store, or an organisation's loadout) won't load the plu
   shadows the plugin's.
 
 A release build for a given ATAK has to apply that release's ProGuard mapping
-(`-applymapping`), which the 5.6 and 5.8 SDKs don't include (takdev: "no mapping file could be
-established"), and moves the plugin's classes, OkHttp included, into `atakplugin.takconvo`
-(`-repackageclasses`). It then has to be signed by TAK.gov, for example through its
-third-party plugin pipeline. Until then, a test device needs the developer ATAK; installing it
-over a release ATAK takes an uninstall first (another signing key), and ATAK's app data goes
-with it (`/sdcard/atak` stays).
+(`-applymapping`), which the 5.6 and 5.8 SDKs don't include (their `mapping.txt` is empty), and
+moves the plugin's classes, OkHttp included, into `atakplugin.takconvo` (`-repackageclasses`).
+It then has to be signed by TAK.gov: its Third Party Pipeline does both (next section). Until
+then, a test device needs the developer ATAK; installing it over a release ATAK takes an
+uninstall first (another signing key), and ATAK's app data goes with it (`/sdcard/atak` stays).
+
+### Release builds and TAK.gov's Third Party Pipeline
+
+TAK.gov's Third Party Pipeline (TPP, tak.gov › Resources › Third Party Pipeline) builds a
+plugin from its source and signs it, so that release ATAK loads it. Its requirements, and how
+this repository meets them:
+
+| TPP requirement | Here |
+|---|---|
+| a zip with one root folder, whose name the APKs get | `tools/tpp-package.sh` |
+| Gradle, with its scripts and wrapper | `gradlew` (executable, LF), `gradle/wrapper/` |
+| an `assembleCivRelease` target | the `civ` flavor's release build |
+| the SDK through `atak-gradle-takdev` from TAK.gov's Maven | `takdev 3.+` (the 5.x template's; the page's "2.+" is older), resolved from `takrepo.url` |
+| `-repackageclasses` naming the plugin | `atakplugin.takconvo`, written by `app/build.gradle` |
+| the `com.atakmap.app.component` activity in the manifest | `app/src/main/AndroidManifest.xml` |
+| its build machine: JDK 17 (FAQ) | Gradle runs on 17; javac 21 comes from the toolchain |
+
+```bash
+tools/tpp-package.sh                  # build/tpp/takconvo-atak56.zip, build/tpp/takconvo-atak58.zip
+tools/tpp-package.sh 5.8.0            # one version
+```
+
+Each zip holds the working tree as it is, from a temporary git index, so nothing is staged.
+Commit first: uncommitted changes make the version `<commit>-wip`. Each zip:
+- sets `atakVersion` (the TPP builds the default);
+- writes `takVersionName` (the commit) and `takStaticVersion` (the packaging time, as version
+  code), because the archive has no `.git` for takdev to read them from;
+- leaves out `docs/`, `tools/`, `provisioning/`, `README.md` and `template.local.properties`:
+  the build doesn't need them, and they name internal hosts;
+- keeps files byte for byte (`core.autocrlf=false`): with Windows line endings `gradlew` breaks
+  on the TPP's Linux.
+
+Upload each zip on the TPP page. It builds `assembleCivRelease` for that ATAK version and
+returns the signed APK, which declares `com.atakmap.app@5.6.0.CIV` or `...@5.8.0.CIV`.
+
+**Checked locally**, on the extracted zips with Gradle on JDK 17, no `.git` and no
+`local.properties`:
+- `assembleCivRelease` succeeds for both versions, with the SDK given as
+  `-Patak.sdk.5.x=<dir>`;
+- the APK's version is `0.1 (<commit>) - [5.x.0]`, with the static version code;
+- with the TPP's flags (`-Ptakrepo.force=true -Ptakrepo.url=https://artifacts.tak.gov/artifactory/maven
+  -Ptakrepo.user=... -Ptakrepo.password=...`), the build goes straight to TAK.gov's Maven for
+  takdev.
+
+That last step is as far as a local check goes: artifacts.tak.gov is reserved for US
+government accounts, so the TPP's own pre-check command can't be run here.
+
+**What the release build needed:**
+- R8 needs every class the plugin refers to, either packaged or as a library: ATAK's classes
+  and the libraries it ships come from the SDK's `main.jar`. `androidx.concurrent` and
+  `androidx.tracing`, which ATAK has but `main.jar` lacks, are packaged
+  ([06](06-atak-runtime-and-classloading.md)).
+- `app/proguard-gradle.txt` (user section) has `-dontwarn` rules for `androidx.window`'s device
+  extensions and JNDI (`javax.naming`), which exist on no Android device.
+- The TPP applies release ATAK's mapping to everything in `main.jar`, OkHttp and Okio included,
+  which release ATAK renames (see above).
 
 ## Install and run
 
@@ -114,6 +171,14 @@ sideloaded plugins from a cached `/sdcard/atak/support/apks/sideloaded/product.i
 - `provisioning/` has a template and two test files: `takconvo-local-test.pref` and
   `takconvo-emulator-relay.pref` (emulator through the relay below). They use example host
   names: put in your own server's.
+- What a `.pref` set, on a developer ATAK (debuggable, so `run-as` works):
+  ```bash
+  P="run-as com.atakmap.app.civ cat shared_prefs"
+  adb shell $P/com.atakmap.app.civ_preferences.xml | grep takconvo_   # ATAK's: the keys as imported
+  adb shell $P/takconvo_com.atakmap.app.civ_preferences.xml           # Conversations' settings
+  adb shell $P/takconvo_room_nicknames.xml                            # rooms where the callsign is taken
+  ```
+  `takconvo_xmpp_password` must be gone from ATAK's file within a second of the import.
 
 ## Debug broadcasts
 
@@ -148,7 +213,7 @@ adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_CHAT
 
 | Tag | From |
 |---|---|
-| `TakConvo.Plugin`, `.XmppEngine`, `.Trust`, `.Settings`, `.Host`, `.Contacts`, `.PendingIntents`, `.Notifications`, `.Debug` | the plugin |
+| `TakConvo.Plugin`, `.XmppEngine`, `.Nicknames`, `.Trust`, `.Settings`, `.Host`, `.Contacts`, `.PendingIntents`, `.Notifications`, `.Debug` | the plugin (`.Settings`: also rejected `takconvo_conversations_*` values) |
 | `tak convo` | Conversations (its `Config.LOGTAG` is the app name) |
 | `AndroidRuntime` | crashes; `adb logcat -b crash` keeps them after the main buffer rolls |
 
@@ -207,7 +272,10 @@ After an upstream merge, a dependency change or a change to the host:
    back closes it. The chats are still there next time.
    Changing the ATAK callsign (`DEBUG_SET_PREF --es key locationCallsign --es value X`, then
    back) logs `nickname ... -> callsign X` and, in `tak convo`, `published User Nick` and a
-   group chat `setSelf(.../X)`. Notifications › Vibration off, then `DEBUG_FAKE_INCOMING`: the
+   group chat `setSelf(.../X)`. With a second phone (another account) in a group chat, give
+   both phones the same callsign: the second one keeps its nickname in that room
+   (`TakConvo.Nicknames`: `X taken in <room>, keeping ...`), and it is still joined after a
+   reconnect (`... joining as ...` if the join hit the conflict). Notifications › Vibration off, then `DEBUG_FAKE_INCOMING`: the
    notification is in channel `takconvo_messages_sound` (`dumpsys notification`).
 4. Chat pane from the toolbar: chat list; open a chat; send to yourself; the message is
    delivered (double tick) and encrypted (shield).
@@ -239,7 +307,14 @@ After an upstream merge, a dependency change or a change to the host:
 13. `dumpsys alarm` lists ATAK alarms tagged `com.atakmap.android.takconvo.DELIVER`, and
     `TakConvo.PendingIntents` logs "delivering eu.siacs.conversations.POST_CONNECTIVITY_CHANGE"
     (about a minute after the account connects) or "... PING" when they fire.
-14. `adb logcat -b crash` is empty.
+14. `.pref` provisioning: import a file with a few `takconvo_conversations_*` keys (one
+    Boolean as a String, one number as an Integer), an invalid value and an unknown key. The
+    valid ones are in Conversations' preferences with the right types (`run-as`, see
+    Provisioning). `TakConvo.Settings` warns about the other two. Removing a key
+    (`DEBUG_SET_PREF` without `value`) removes it there. A `takconvo_xmpp_password` without
+    `takconvo_xmpp_username` is logged as ignored and removed. Only test one with a username
+    using the account's real password: it replaces the stored login.
+15. `adb logcat -b crash` is empty.
 
 ## Gotchas
 
@@ -250,5 +325,9 @@ After an upstream merge, a dependency change or a change to the host:
   hand in `conversations/build.gradle`.
 - The dev PC may not resolve internal hosts that the phone reaches; test against the real
   server from the phone.
-- Never put credentials in `.pref` files or preferences: TAK server credentials come from ATAK,
-  and the XMPP login goes to ATAK's credential store.
+- Credentials: TAK server credentials come from ATAK. An XMPP login in a `.pref` file
+  (`takconvo_xmpp_password`) is moved to ATAK's credential store as soon as the plugin reads
+  it, but the file holds it in clear text. Keep such files out of the repository.
+- ATAK doesn't finish starting while the phone is locked. `deploy.ps1` then reports that the
+  account did not come online, and no `TakConvo` log appears. Unlock the phone, or keep it
+  awake while charging (Developer options › Stay awake).

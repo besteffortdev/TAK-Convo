@@ -73,8 +73,10 @@ flowchart TB
 | `TakConvoPlugin` | `plugin` | ATAK entry point: starts the engine, adds the toolbar button, the tool preferences page and the pane receivers | — |
 | `XmppEngine` | `plugin.xmpp` | Creates and drives Conversations' service in-process; provisions the account from settings; advertises the JID in the SA | [02](02-embedded-engine.md) |
 | `EmbeddedContext` | `plugin.xmpp` | The `Context` Conversations runs on: ATAK's identity, the plugin's resources, namespaced storage, service routing | [02](02-embedded-engine.md) |
+| `CallsignNicknames` | `plugin.xmpp` | The ATAK callsign as XMPP display name and group chat nickname; rooms where it's taken keep theirs | [03](03-provisioning-and-trust.md#the-callsign-as-nickname) |
 | `EmbeddedConversations`, `EmbeddedXmppService` | `plugin.xmpp` | Upstream's `Application` and `Service` subclasses, attached by hand | [02](02-embedded-engine.md) |
 | `XmppSettings`, `TrustSources`, `TrustedCa` | `plugin.config` | What to connect to, with which credentials, trusting which CAs | [03](03-provisioning-and-trust.md) |
+| `ConversationsSettings` | `plugin.config` | Conversations' own settings from `takconvo_conversations_*` preferences (.pref) | [03](03-provisioning-and-trust.md#conversations-own-settings) |
 | `AccountView`, `ConversationsInflater`, `TakConvoPreferenceFragment` | `plugin.ui` | Account pane (Conversations' `activity_edit_account` layout) and the tool preferences page | [03](03-provisioning-and-trust.md) |
 | `EmbeddedActivityHost`, `HostParent`, `PaneFrame`, `ChatDropDown` | `plugin.ui.host` | Run Conversations' own activities, their views shown in an ATAK drop-down | [04](04-chat-pane-activity-host.md) |
 | `EmbeddedPendingIntents`, `EmbeddedNotifications` | `plugin.xmpp` | Make Conversations' notification taps, notification actions, alarms and notification icons work as ATAK's | [02](02-embedded-engine.md#pendingintents), [08](08-contacts-and-notifications.md) |

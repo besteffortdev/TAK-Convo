@@ -1,22 +1,31 @@
 <?xml version='1.0' standalone='yes'?>
 <!-- TAK Convo provisioning template. Import it on its own or ship it in a mission package.
-     The same values can be edited in ATAK: Settings > Tool Preferences > TAK Convo.
+     The takconvo_xmpp_* and takconvo_notification_* values can also be edited in ATAK:
+     Settings > Tool Preferences > TAK Convo.
 
+     Account and connection
      takconvo_xmpp_domain               XMPP domain; the JID becomes <TAK username>@<domain>
      takconvo_xmpp_use_tak_credentials  true (default): reuse the TAK server username/password
-                                        false: the user signs in on the TAK Convo account screen
-                                        (the password goes to ATAK's credential store, never in a
-                                        .pref file)
-     takconvo_xmpp_username             optional: username suggested on that sign-in screen
+                                        false: an XMPP login, entered on the TAK Convo account
+                                        screen or provisioned with the two keys below
+     takconvo_xmpp_username             the XMPP login's username (or full JID); without a
+                                        password, only suggested on the sign-in screen
+     takconvo_xmpp_password             the XMPP login's password. Moved to ATAK's encrypted
+                                        credential store and deleted from the preferences as
+                                        soon as the plugin reads it; the .pref file itself
+                                        holds it in clear text, so distribute it accordingly
      takconvo_xmpp_enabled              false turns the XMPP connection off (default true)
      takconvo_xmpp_host / _port         only if the domain has no SRV/A record reachable from
                                         the device (omit otherwise; port defaults to 5222)
+
      Server certificate: public CAs are always trusted, plus
      takconvo_xmpp_use_tak_truststore   true (default): the CAs of the TAK server truststores
                                         imported in ATAK
      takconvo_xmpp_use_android_ca_store true: the device CA store, including CAs the user
                                         imported or an MDM installed (default false)
      takconvo_xmpp_trusted_ca           a CA certificate file (PEM or DER)
+
+     Chats
      takconvo_xmpp_channel_discovery    where "Discover channels" looks: xmpp_server (default,
                                         the account's server), server or public
                                         (search.jabber.network)
@@ -24,6 +33,28 @@
      takconvo_xmpp_use_callsign         true (default): the ATAK callsign is the XMPP nickname
      takconvo_notification_sound        false: message notifications make no sound
      takconvo_notification_vibrate      false: message notifications don't vibrate
+
+     Conversations' own settings: takconvo_conversations_<key>. Leave a key out to keep
+     Conversations' default (in brackets). Invalid values are ignored (logged).
+       Booleans: confirm_messages [true] (read receipts), chat_states [true] (typing),
+         last_activity [false], entity_time [true], allow_message_correction [true],
+         accept_invites_from_strangers [true], notifications_from_strangers [true],
+         use_relays [false], btbv [true] (blind trust before verification, OMEMO),
+         trust_system_ca_store [true], require_tls_v1_3 [true],
+         channel_binding_required [false], use_tor [false] (needs Orbot),
+         manually_change_presence [false], away_when_screen_off [false],
+         dnd_on_silent_mode [false], treat_vibrate_as_silent [false],
+         auto_send_recording [true], show_dynamic_tags [false], scroll_to_bottom [true],
+         start_searching [false], display_enter_key [false], enter_is_send [false],
+         use_green_background [true], large_font [false], align_start [false],
+         show_avatars [true], show_avatars_accounts [true]
+       omemo: always, default_on [default], default_off
+       picture_compression: never, auto [default], always
+       video_compression: 360, 480 [default], 720, 1080, uncompressed
+       auto_accept_file_size: bytes to download without asking, 0 = never [524288]
+       grace_period_length: seconds notifications stay quiet after using another device [0]
+       automatic_message_deletion: seconds after which messages are deleted, 0 = never [0]
+     Connection settings apply at the next connection (account screen > Reconnect).
 
      Booleans must use class java.lang.Boolean, as ATAK's own .pref exports do. -->
 <preferences>
@@ -39,6 +70,16 @@
         <!--
         <entry key="takconvo_xmpp_host" class="class java.lang.String">xmpp.example.org</entry>
         <entry key="takconvo_xmpp_port" class="class java.lang.String">5222</entry>
+        -->
+        <!-- an XMPP login instead of the TAK credentials:
+        <entry key="takconvo_xmpp_use_tak_credentials" class="class java.lang.Boolean">false</entry>
+        <entry key="takconvo_xmpp_username" class="class java.lang.String">user</entry>
+        <entry key="takconvo_xmpp_password" class="class java.lang.String">password</entry>
+        -->
+        <!-- Conversations' settings, e.g.:
+        <entry key="takconvo_conversations_omemo" class="class java.lang.String">always</entry>
+        <entry key="takconvo_conversations_auto_accept_file_size" class="class java.lang.String">5242880</entry>
+        <entry key="takconvo_conversations_confirm_messages" class="class java.lang.Boolean">true</entry>
         -->
     </preference>
 </preferences>

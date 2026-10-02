@@ -30,7 +30,7 @@ Galaxy S22+ with 5.5.1.8):
 | trust from TAK truststores / Android CA store / CA file | share or show a location (should become ATAK map integration) |
 | account pane, tool preferences, `.pref` import; QR codes: show and scan; profile picture (from the account pane) | backups |
 | chat pane: chat list, chats, group chats, start chat, channel details, search; channel discovery on your XMPP server (setting) | TAK callsigns as the names of other users' XMPP contacts |
-| your ATAK callsign is your XMPP nickname, for contacts and in group chats, and follows it (setting) | |
+| your ATAK callsign is your XMPP nickname, for contacts and in group chats, and follows it (setting); a group chat where someone else has it keeps your nickname there | |
 | sending/receiving with OMEMO, reactions, context menus, text selection | re-selecting resources when the pane is resized or the device rotated |
 | attachments: pick, upload, open with another app, camera; voice messages | some Conversations screens are allowed but untested (see docs/04) |
 | ATAK contacts: XMPP connector opens the chat, unread counts on contacts and buttons; group chats listed with the users | XMPP presence dots on contacts: implemented, untested with a real second user |
@@ -113,6 +113,15 @@ edited in **Settings › Tool Preferences › TAK Convo**. Minimal provisioning:
 The JID becomes `<TAK username>@<domain>`. All keys: [provisioning/takconvo-template.pref](provisioning/takconvo-template.pref)
 and [docs/03](docs/03-provisioning-and-trust.md).
 
+A `.pref` file can set everything:
+- the plugin's settings (`takconvo_xmpp_*`, `takconvo_notification_*`), which are also on its
+  settings page;
+- an XMPP login (`takconvo_xmpp_username`, `takconvo_xmpp_password`): the password is moved to
+  ATAK's encrypted credential store at once;
+- Conversations' own settings (`takconvo_conversations_<key>`: OMEMO, read receipts, typing
+  notifications, attachment size and compression, message deletion...), whose settings screen
+  the plugin's replaces.
+
 ## Build and install
 
 ```bash
@@ -126,6 +135,12 @@ or, on Windows, `tools\deploy.ps1 -Serial <adb serial> [-AtakVersion 5.6.0]`, wh
 re-enables the plugin in ATAK after the reinstall and restarts ATAK. See
 [docs/07](docs/07-development-and-testing.md) for the setup (`local.properties` with the two
 SDKs) and the test checklist.
+
+These debug builds load in the SDKs' developer ATAK only. For release ATAK (Play Store or an
+organisation's), TAK.gov's Third Party Pipeline builds and signs the plugin from source:
+`tools/tpp-package.sh` makes one zip per ATAK version (`build/tpp/takconvo-atak56.zip`,
+`takconvo-atak58.zip`) to upload there. See
+[docs/07](docs/07-development-and-testing.md#release-builds-and-takgovs-third-party-pipeline).
 
 ## Findings
 
@@ -276,9 +291,10 @@ app/                      the ATAK plugin
   src/main/java/com/atakmap/android/takconvo/plugin/
     TakConvoPlugin.java   entry point (IPlugin)
     SensitiveLog.java     debug-only logs that name users
-    xmpp/                 embedded engine: XmppEngine, EmbeddedContext, PendingIntents, notifications
+    xmpp/                 embedded engine: XmppEngine, EmbeddedContext, CallsignNicknames,
+                          PendingIntents, notifications
     contacts/             XmppContacts: ATAK contact handler, unread badges
-    config/               XmppSettings, TrustSources, TrustedCa
+    config/               XmppSettings, ConversationsSettings, TrustSources, TrustedCa
     ui/                   account pane, tool preferences
     ui/host/              chat pane: EmbeddedActivityHost, HostParent, PaneFrame, ChatDropDown
     debug/                DebugReceiver (debug builds)
@@ -287,7 +303,7 @@ conversations/            Conversations 2.20.4 fork, as an Android library (GPLv
   upstream/               upstream manifests and proguard rules, for reference
 gradle/atak-runtime.gradle  library versions ATAK provides at runtime
 provisioning/             .pref template and test files
-tools/                    AtakLinkCheck, fork-diff.sh, deploy.ps1
+tools/                    AtakLinkCheck, fork-diff.sh, deploy.ps1, tpp-package.sh
 docs/                     design and maintenance documentation
 ```
 

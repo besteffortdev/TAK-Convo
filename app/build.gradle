@@ -9,10 +9,13 @@
 buildscript {
 
     ext.PLUGIN_VERSION = "0.1"
-    // chosen in the root build.gradle (-PatakVersion=5.6.0 or 5.8.0), with its SDK
+    // chosen in the root build.gradle (atakVersion), with its SDK
     ext.ATAK_VERSION = rootProject.ATAK_VERSION
-    // the takdev plugin finds main.jar and the keystore here; local.properties must not set it
-    ext.set('sdk.path', rootProject.ATAK_SDK)
+    // the takdev plugin finds main.jar and the keystore here; local.properties must not set it.
+    // Unset in TAK.gov's pipeline: takdev downloads the SDK from takrepo.url
+    if (rootProject.ATAK_SDK != null) {
+        ext.set('sdk.path', rootProject.ATAK_SDK)
+    }
 
     def takdevVersion = '3.+'
 
@@ -219,11 +222,14 @@ android {
     sourceSets {
         main {
 
-            // It is strongly encouraged that plugin developers do not modify the archiveBaseName, version code logic and version 
-            // name logic to provide for consistency within the community.   
-            setProperty("archivesBaseName", "ATAK-Plugin-" + rootProject.name + "-" + PLUGIN_VERSION + "-" + getVersionName() + "-" + ATAK_VERSION)
+            // It is strongly encouraged that plugin developers do not modify the archiveBaseName, version code logic and version
+            // name logic to provide for consistency within the community.
+            // A source archive has no git: tools/tpp-package.sh writes the commit as takVersionName
+            // (and the version code as takStaticVersion, which takdev reads itself)
+            def revision = findProperty('takVersionName') ?: getVersionName()
+            setProperty("archivesBaseName", "ATAK-Plugin-" + rootProject.name + "-" + PLUGIN_VERSION + "-" + revision + "-" + ATAK_VERSION)
             defaultConfig.versionCode = getVersionCode()
-            defaultConfig.versionName = PLUGIN_VERSION + " (" + getVersionName() + ") - [" + ATAK_VERSION + "]"
+            defaultConfig.versionName = PLUGIN_VERSION + " (" + revision + ") - [" + ATAK_VERSION + "]"
         }
 
         gov.java.srcDirs 'src/gov/java'

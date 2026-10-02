@@ -27,3 +27,4 @@ Tools referenced throughout:
 | `tools/atak-link-ignore.txt` | accepted link-check findings, with reasons |
 | `tools/fork-diff.sh` | the fork's exact diff against upstream Conversations |
 | `tools/deploy.ps1` | build, link-check, install on a device, restart ATAK with the plugin loaded |
+| `tools/tpp-package.sh` | the source zips for TAK.gov's Third Party Pipeline, one per ATAK version |

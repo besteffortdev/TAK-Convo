@@ -95,16 +95,22 @@ XmppEngine.start(atakContext, pluginContext):          # once per process
     TakConvoCompat.PENDING_INTENTS = EmbeddedPendingIntents   # see "PendingIntents" below
     TakConvoCompat.NOTIFICATIONS   = EmbeddedNotifications    # see 08
     TakConvoCompat.OBSERVER        = observer                 # see "Changes and threads"
+    nicknames = new CallsignNicknames(...)             # see 03, the callsign as nickname
+    ConversationsSettings.apply(ATAK's prefs, Conversations' prefs)   # .pref-set, see 03
     service.onCreate()                                 # opens the DB, loads accounts
     settings = XmppSettings.load(); applyTrust()       # before anything connects, see 03
     for account in service.accounts:
         account.resource = "TAK Convo." + random(3)    # see "resource" below
     service.onStartCommand(null)                       # connects enabled accounts
-    provision()                                        # see 03
-    watch takconvo_* preferences, TAK server connections, device trust store -> provision()
+    provision()                                        # moves a .pref login first, see 03
+    watch ATAK's preferences:
+        takconvo_xmpp_*           -> provision() (debounced 750 ms)
+        takconvo_conversations_*  -> ConversationsSettings.apply()
+        locationCallsign          -> nicknames.sync()
+    watch TAK server connections and the device trust store -> provision()
 
 XmppEngine.shutdown():
-    stop watching
+    stop watching; nicknames.stop()                    # its pending join re-checks
     advertise(null)                                    # clear saXmppUsername
     service.onTaskRemoved(null)                        # logs out and saves, as on swipe-away
     service.onDestroy()
@@ -162,7 +168,10 @@ XmppEngine.observer (worker threads):
     onUnreadCountChanged(n): unreadCount = n; dispatchChanged()
 
 dispatchChanged():                    # changes come in bursts, e.g. catching up after a login
-    if no dispatch is pending: post(main) { for l in listeners: l.onXmppStateChanged() }
+    if no dispatch is pending: post(main) {
+        nicknames.sync()                  # e.g. the account came online: publish the callsign
+        for l in listeners: l.onXmppStateChanged()
+    }
 ```
 
 Every method of `XmppEngine` must be called on the main thread, as upstream's service expects.

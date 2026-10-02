@@ -46,6 +46,8 @@ import java.util.List;
  * <pre>
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SET_PREF --es key K --es value V
  *     (without value: removes K)
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_IMPORT_PREF --es path P
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_DUMP_SELF_SA
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_PROVISION
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SEND --es to J --es body B
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_ADD_TAK_SERVER \

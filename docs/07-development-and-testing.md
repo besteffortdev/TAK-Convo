@@ -107,8 +107,10 @@ Commit first: uncommitted changes make the version `<commit>-wip`. Each zip:
 - sets `atakVersion` (the TPP builds the default);
 - writes `takVersionName` (the commit) and `takStaticVersion` (the packaging time, as version
   code), because the archive has no `.git` for takdev to read them from;
-- leaves out `docs/`, `tools/`, `provisioning/`, `README.md` and `template.local.properties`:
-  the build doesn't need them, and they name internal hosts;
+- leaves out `docs/` (except `docs/user_manual/`), `tools/`, `provisioning/`, `README.md` and
+  `template.local.properties`: the build doesn't need them, and they name internal hosts. The
+  TPP sets `ATAK_CI=1`, which makes `gradle/typst.gradle` compile `docs/user_manual/usermanual.typ`
+  into `assets/usermanual.pdf`; the manual uses no Typst package, so nothing is downloaded then;
 - keeps files byte for byte (`core.autocrlf=false`): with Windows line endings `gradlew` breaks
   on the TPP's Linux.
 
@@ -152,6 +154,15 @@ government accounts, so the TPP's own pre-check command can't be run here.
   setting).
 - The dependency check only saw the Gradle wrapper and TAK's own `takdevlint.aar` (a false
   match on Apache SkyWalking's CPE), since the build stopped before resolving the libraries.
+
+**Second submission (9b14a22, 2026-10-02), both versions:**
+- The Java compilation passed. **The build failed** at `:app:runTypst` ("Cannot access first()
+  element from an empty Iterable"): the zip had no `docs/user_manual/`. Fixed in
+  `tools/tpp-package.sh`; the manual is now TAK Convo's own.
+- **Fortify: no critical** (the 4 are gone, DNSSocket's included), the same 38 high, 28 low (5
+  new "Password in Comment" in the generated `ImmutableBookmark`, scanned now that the build
+  got further).
+- The dependency check: still only `takdevlint.aar` (MEDIUM, false match).
 
 **What the release build needed:**
 - R8 needs every class the plugin refers to, either packaged or as a library: ATAK's classes

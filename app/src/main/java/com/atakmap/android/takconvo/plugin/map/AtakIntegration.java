@@ -60,9 +60,12 @@ public final class AtakIntegration implements TakConvoCompat.Atak {
 
     @Override
     public List<String> quickMessages() {
+        final List<String> messages = new ArrayList<>();
+        if (!prefs.getBoolean(XmppSettings.KEY_SHOW_QUICK_MESSAGES, false)) {
+            return messages;
+        }
         final String value = prefs.getString(XmppSettings.KEY_QUICK_MESSAGES,
                 plugin.getString(R.string.takconvo_quick_messages_default));
-        final List<String> messages = new ArrayList<>();
         for (final String message : value.split("\\|")) {
             if (!message.trim().isEmpty()) {
                 messages.add(message.trim());

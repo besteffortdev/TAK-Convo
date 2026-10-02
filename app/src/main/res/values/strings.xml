@@ -35,6 +35,8 @@
     <string name="takconvo_pref_notification_vibrate">Vibration</string>
     <string name="takconvo_pref_notification_vibrate_summary">New messages vibrate</string>
     <string name="takconvo_pref_cat_chat">Chat</string>
+    <string name="takconvo_pref_show_quick_messages">Show quick messages</string>
+    <string name="takconvo_pref_show_quick_messages_summary">A row of preset buttons above the message field</string>
     <string name="takconvo_pref_quick_messages">Quick messages</string>
     <string name="takconvo_pref_quick_messages_summary">Buttons above the message field, separated by |. A tap adds the text to the message. Empty: no buttons.</string>
     <string name="takconvo_channel_messages_no_vibration">Messages, without vibration</string>

@@ -8,7 +8,7 @@ What ties the chats to ATAK's map and data, beyond the contacts of
 | Locations on the map | a location opened from a chat becomes a marker on ATAK's map, which centers on it |
 | Sharing a location | the attachment row's **Location** sends ATAK's own position, or a point tapped on the map |
 | Positions in messages | MGRS grid references and latitude/longitude written in a message are links to the map |
-| Quick messages | a row of preset buttons above the message field, like GeoChat's; a tap adds the text to the message |
+| Quick messages | when turned on in the settings, a row of preset buttons above the message field, like GeoChat's; a tap adds the text to the message |
 | Show on map | in a one-to-one chat with a TAK user, the chat menu's **Show on map** centers the map on that user |
 | TAK Convo in the Send dialog | ATAK's **Send** (data packages, exported files) offers TAK Convo, then a chat |
 | Map items to a group chat | a marker's or shape's **Send** lists the group chats among the contacts; the chat gets a line naming it, with its MGRS, and a data package of it |
@@ -88,12 +88,11 @@ link covers it already. A tap goes through `FixedURLSpan` to `ShowLocationActivi
 |---|---|---|
 | MGRS | `18T VR 44690 31520`, `18TVR4469031520` | zone 1-60 and band, 100 km square, 1-5 digits each for easting and northing (as two groups or together, even count); decoded by ATAK's `MGRSPoint` |
 | signed decimal degrees | `45.4215, -75.6972` | at least 3 decimals each: fewer would match ordinary numbers |
-
-Spaces can be of any kind, with invisible format characters (`\p{Z}`, `\p{Cf}`): ATAK's MGRS
-has a left-to-right mark before each space (see "Map items to a group chat").
 | hemisphere letters | `45.30N 75.88W`, `45.30° N, 75.88° W` | at least 2 decimals |
 
-Positions outside -90..90 / -180..180 are ignored, and so are overlapping matches.
+Spaces can be of any kind, with invisible format characters (`\p{Z}`, `\p{Cf}`): ATAK's MGRS
+has a left-to-right mark before each space (see "Map items to a group chat"). Positions outside
+-90..90 / -180..180 are ignored, and so are overlapping matches.
 
 ## Quick messages
 
@@ -101,15 +100,18 @@ Positions outside -90..90 / -180..180 are ignored, and so are overlapping matche
 `HorizontalScrollView` above the message field) from `AtakIntegration.quickMessages()`:
 
 ```text
+takconvo_show_quick_messages       # ATAK preference, false by default
+    false   -> no row
 takconvo_quick_messages            # ATAK preference, texts separated by |
     missing -> Roger|Wilco|Say again|In position|Moving|All secure
     empty   -> no row
 tap: appends the text to the message field (after a space), cursor at the end
 ```
 
-Like GeoChat's buttons they fill the field; the user still taps send. Set in the tool
-preferences (Chat › Quick messages) or a `.pref` file ([03](03-provisioning-and-trust.md)); a
-change shows the next time a chat opens.
+Like GeoChat's buttons they fill the field; the user still taps send. The row is off by
+default: it takes a line of the pane's height. Turned on and edited in the tool preferences
+(Chat › Show quick messages, Quick messages) or a `.pref` file
+([03](03-provisioning-and-trust.md)); a change shows the next time a chat opens.
 
 ## Show on map
 

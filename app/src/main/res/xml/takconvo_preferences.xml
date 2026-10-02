@@ -43,8 +43,15 @@
 
     <PreferenceCategory android:title="@string/takconvo_pref_cat_chat" />
 
+    <com.atakmap.android.gui.PanCheckBoxPreference
+        android:defaultValue="false"
+        android:key="takconvo_show_quick_messages"
+        android:summary="@string/takconvo_pref_show_quick_messages_summary"
+        android:title="@string/takconvo_pref_show_quick_messages" />
+
     <com.atakmap.android.gui.PanEditTextPreference
         android:defaultValue="@string/takconvo_quick_messages_default"
+        android:dependency="takconvo_show_quick_messages"
         android:dialogTitle="@string/takconvo_pref_quick_messages"
         android:key="takconvo_quick_messages"
         android:summary="@string/takconvo_pref_quick_messages_summary"

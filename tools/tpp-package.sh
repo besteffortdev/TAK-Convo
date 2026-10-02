@@ -40,6 +40,8 @@ for version in "${versions[@]}"; do
         # not needed to build, and they name internal hosts
         git -C "$root" rm -r -q --cached --ignore-unmatch \
             docs tools provisioning README.md template.local.properties
+        # except the user manual: the pipeline builds it into the APK (gradle/typst.gradle)
+        git -C "$root" add docs/user_manual
         # the pipeline runs ./gradlew; the repository comes from Windows
         git -C "$root" update-index --chmod=+x gradlew
         sed "s/^atakVersion=.*/atakVersion=$version/" "$root/gradle.properties" > "$props"

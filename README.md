@@ -19,8 +19,8 @@ user's TAK identity.
   (reply, mark as read) bring ATAK up on the chat when tapped.
 - **On ATAK's map**: locations in chats become markers on the map; sharing a location sends
   ATAK's position or a point tapped on the map; MGRS and lat/lon written in messages are links
-  to the map; a chat's **Show on map** finds the TAK user. GeoChat-style quick messages sit
-  above the message field. ATAK's **Send** dialog offers TAK Convo for data packages and files,
+  to the map; a chat's **Show on map** finds the TAK user. GeoChat-style quick messages can sit
+  above the message field (a setting). ATAK's **Send** dialog offers TAK Convo for data packages and files,
   a marker's or shape's Send can go to a group chat, and a received map file can be imported
   into ATAK
   ([docs/10](docs/10-atak-map-integration.md)).

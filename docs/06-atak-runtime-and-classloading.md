@@ -138,8 +138,8 @@ annotations) are harmless: they are annotations or identical interfaces.
 | AGP | 8.13.0 | ATAK's `atak-gradle-takdev` plugin needs AGP 8 |
 | compileSdk | 36 | newest AGP 8 supports; upstream 2.20.4 uses 37 |
 | minSdk | 23 | |
-| Java | 21 source/target, core library desugaring | as upstream |
-| JDK to run Gradle | Temurin 21 | |
+| Java | 17 source/target, core library desugaring | TAK.gov's pipeline has JDK 17 only; upstream is 21 ([05](05-conversations-fork.md#k-java-17-for-takgovs-pipeline)) |
+| JDK to run Gradle | 17 or newer | |
 
 Constants that only exist in SDK 37 (`Build.VERSION_CODES.CINNAMON_BUN`,
 `Manifest.permission.ACCESS_LOCAL_NETWORK`) are copied into `TakConvoCompat`. WebRTC is held at

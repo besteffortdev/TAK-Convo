@@ -22,6 +22,7 @@ import java.security.cert.X509Certificate;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
+import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocket;
@@ -132,10 +133,21 @@ final class DNSSocket implements Closeable {
             final SSLSession session = sslSocket.getSession();
             final Certificate[] peerCertificates = session.getPeerCertificates();
             if (peerCertificates.length == 0
-                    || !(peerCertificates[0] instanceof X509Certificate certificate)) {
+                    || !(peerCertificates[0] instanceof X509Certificate)) {
                 throw new IOException("Peer did not provide X509 certificates");
             }
-            if (!OkHostnameVerifier.strictInstance().verify(dnsServer.hostname, certificate)) {
+            // TAKCONVO: the same check, as a HostnameVerifier: TAK.gov's scan (Fortify) only
+            // recognizes a server identity check made through HostnameVerifier.verify
+            final HostnameVerifier verifier =
+                    (host, s) -> {
+                        try {
+                            return OkHostnameVerifier.strictInstance()
+                                    .verify(host, (X509Certificate) s.getPeerCertificates()[0]);
+                        } catch (final SSLPeerUnverifiedException e) {
+                            return false;
+                        }
+                    };
+            if (!verifier.verify(dnsServer.hostname, session)) {
                 throw new SSLPeerUnverifiedException("Peer did not provide valid certificates");
             }
         }

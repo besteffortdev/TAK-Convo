@@ -1504,15 +1504,19 @@ public class JingleRtpConnection extends AbstractJingleConnection
                 id.account.getJid().asBareJid()
                         + ": delivered message to JingleRtpConnection "
                         + message);
-        switch (message) {
-            case Propose p -> receivePropose(from, p, serverMessageId, timestamp);
-            case Proceed p -> receiveProceed(from, p, serverMessageId, timestamp);
-            case Retract ignored -> receiveRetract(from, serverMessageId, timestamp);
-            case Reject ignored -> receiveReject(from, serverMessageId, timestamp);
-            case Accept ignored -> receiveAccept(from, serverMessageId, timestamp);
-            default -> {
-                Log.d(Config.LOGTAG, "received unhandled JMI: " + message);
-            }
+        // TAKCONVO: Java 17, no pattern switch
+        if (message instanceof Propose p) {
+            receivePropose(from, p, serverMessageId, timestamp);
+        } else if (message instanceof Proceed p) {
+            receiveProceed(from, p, serverMessageId, timestamp);
+        } else if (message instanceof Retract) {
+            receiveRetract(from, serverMessageId, timestamp);
+        } else if (message instanceof Reject) {
+            receiveReject(from, serverMessageId, timestamp);
+        } else if (message instanceof Accept) {
+            receiveAccept(from, serverMessageId, timestamp);
+        } else {
+            Log.d(Config.LOGTAG, "received unhandled JMI: " + message);
         }
     }
 

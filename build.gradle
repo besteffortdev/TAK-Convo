@@ -16,18 +16,6 @@ allprojects {
     }
 }
 
-// Conversations is Java 21. javac comes from a JDK 21 even when Gradle runs on another JDK
-// (TAK.gov's pipeline lists JDK 17): an installed one, or one foojay downloads (settings.gradle).
-subprojects {
-    plugins.withId('java-base') {
-        java {
-            toolchain {
-                languageVersion = JavaLanguageVersion.of(21)
-            }
-        }
-    }
-}
-
 // The ATAK version the plugin is built for: atakVersion in gradle.properties, or
 // -PatakVersion=5.6.0. Each version gets its own APK, compiled against the libraries that version
 // of ATAK ships (gradle/atak-runtime.gradle). Its SDK (main.jar, the takdev Gradle plugin, the

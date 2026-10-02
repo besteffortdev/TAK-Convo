@@ -132,15 +132,16 @@ public class InbandBytestreamsTransport implements Transport {
                     "ibb packet received from wrong address. was " + from + " expected " + with);
             throw new IqProcessingException(new Condition.ItemNotFound(), "Session not found");
         }
-        switch (inBandByteStream) {
-            case Open open -> receiveOpen(open);
-            case Data data -> receiveData(data);
-            case Close ignored -> receiveClose();
-            default ->
-                    throw new IqProcessingException(
-                            new Condition.BadRequest(), "Invalid IBB packet type");
+        // TAKCONVO: Java 17, no pattern switch
+        if (inBandByteStream instanceof Open open) {
+            receiveOpen(open);
+        } else if (inBandByteStream instanceof Data data) {
+            receiveData(data);
+        } else if (inBandByteStream instanceof Close) {
+            receiveClose();
+        } else {
+            throw new IqProcessingException(new Condition.BadRequest(), "Invalid IBB packet type");
         }
-        ;
     }
 
     private void receiveData(final Data data) throws IqProcessingException {

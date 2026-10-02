@@ -161,6 +161,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
+import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLHandshakeException;
@@ -1541,10 +1542,19 @@ public class XmppConnection implements Runnable {
         SSLSockets.setHostname(sslSocket, IDN.toASCII(account.getServer()));
         SSLSockets.setApplicationProtocol(sslSocket, "xmpp-client");
         final XmppDomainVerifier xmppDomainVerifier = new XmppDomainVerifier();
+        // TAKCONVO: the same check, as a HostnameVerifier: TAK.gov's scan (Fortify) only
+        // recognizes a server identity check made through HostnameVerifier.verify
+        final HostnameVerifier domainVerifier =
+                (domain, session) -> {
+                    try {
+                        return xmppDomainVerifier.verify(domain, this.verifiedHostname, session);
+                    } catch (final SSLPeerUnverifiedException e) {
+                        return false;
+                    }
+                };
         try {
             sslSocket.startHandshake();
-            if (!xmppDomainVerifier.verify(
-                    account.getServer(), this.verifiedHostname, sslSocket.getSession())) {
+            if (!domainVerifier.verify(account.getServer(), sslSocket.getSession())) {
                 Log.d(
                         Config.LOGTAG,
                         account.getJid().asBareJid()
@@ -2640,16 +2650,17 @@ public class XmppConnection implements Runnable {
     }
 
     private static Stanza errorResponse(final Stanza request) {
-        return switch (request) {
-            case Iq ignored -> new Iq(Iq.Type.ERROR);
-            case im.conversations.android.xmpp.model.stanza.Message ignored ->
-                    new im.conversations.android.xmpp.model.stanza.Message(
-                            im.conversations.android.xmpp.model.stanza.Message.Type.ERROR);
-            case Presence ignored -> new Presence(Presence.Type.ERROR);
-            default ->
-                    throw new IllegalArgumentException(
-                            "Can not create error for " + request.getClass().getSimpleName());
-        };
+        // TAKCONVO: Java 17, no pattern switch
+        if (request instanceof Iq) {
+            return new Iq(Iq.Type.ERROR);
+        } else if (request instanceof im.conversations.android.xmpp.model.stanza.Message) {
+            return new im.conversations.android.xmpp.model.stanza.Message(
+                    im.conversations.android.xmpp.model.stanza.Message.Type.ERROR);
+        } else if (request instanceof Presence) {
+            return new Presence(Presence.Type.ERROR);
+        }
+        throw new IllegalArgumentException(
+                "Can not create error for " + request.getClass().getSimpleName());
     }
 
     public void sendMessagePacket(final im.conversations.android.xmpp.model.stanza.Message packet) {

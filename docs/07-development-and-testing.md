@@ -4,7 +4,7 @@
 
 | Need | Notes |
 |---|---|
-| JDK 17 or 21 | runs Gradle (`JAVA_HOME`); AGP 8.13 / Gradle 8.14.3. javac is always a JDK 21 (Conversations is Java 21): Gradle's toolchain uses an installed one or downloads it (foojay, `settings.gradle`) |
+| JDK 17 or newer | runs Gradle and javac (`JAVA_HOME`); AGP 8.13 / Gradle 8.14.3. The code is Java 17 because TAK.gov's pipeline only has JDK 17 (see "Release builds" below) |
 | Android SDK | platform 36, build-tools 35 (`dexdump`, `aapt2` are handy) |
 | ATAK SDK 5.6 and 5.8 | the ATAK-CAN 5.6.0.24 and 5.8.0.5 SDKs: `main.jar`, `atak-gradle-takdev.jar`, the developer `atak.apk`, the keystore |
 | A device with that version's **developer** `atak.apk` | release ATAK refuses plugins not signed by TAK.gov, see below |
@@ -95,7 +95,7 @@ this repository meets them:
 | the SDK through `atak-gradle-takdev` from TAK.gov's Maven | `takdev 3.+` (the 5.x template's; the page's "2.+" is older), resolved from `takrepo.url` |
 | `-repackageclasses` naming the plugin | `atakplugin.takconvo`, written by `app/build.gradle` |
 | the `com.atakmap.app.component` activity in the manifest | `app/src/main/AndroidManifest.xml` |
-| its build machine: JDK 17 (FAQ) | Gradle runs on 17; javac 21 comes from the toolchain |
+| its build machine: JDK 17 (FAQ), and no internet beyond the Maven repositories | Java 17 source and target everywhere, no Gradle toolchain |
 
 ```bash
 tools/tpp-package.sh                  # build/tpp/takconvo-atak56.zip, build/tpp/takconvo-atak58.zip
@@ -115,8 +115,8 @@ Commit first: uncommitted changes make the version `<commit>-wip`. Each zip:
 Upload each zip on the TPP page. It builds `assembleCivRelease` for that ATAK version and
 returns the signed APK, which declares `com.atakmap.app@5.6.0.CIV` or `...@5.8.0.CIV`.
 
-**Checked locally**, on the extracted zips with Gradle on JDK 17, no `.git` and no
-`local.properties`:
+**Checked locally**, on the extracted zips with JDK 17, no `.git`, and a `local.properties`
+with only `sdk.dir` (takdev needs the file; the TPP writes its own):
 - `assembleCivRelease` succeeds for both versions, with the SDK given as
   `-Patak.sdk.5.x=<dir>`;
 - the APK's version is `0.1 (<commit>) - [5.x.0]`, with the static version code;
@@ -126,6 +126,32 @@ returns the signed APK, which declares `com.atakmap.app@5.6.0.CIV` or `...@5.8.0
 
 That last step is as far as a local check goes: artifacts.tak.gov is reserved for US
 government accounts, so the TPP's own pre-check command can't be run here.
+
+**What the TPP returns.** One folder per submission: `build.log`, the Fortify scan
+(`fortify_scan_results.pdf`, `scan_results.fpr`, logs) and an OWASP dependency check
+(`dependency-check-report.html`). Fortify scans the source even when the build fails. The
+`.fpr` is a zip; its `audit.fvdl` (XML) lists each finding with its trace. The PDF's priorities
+(Critical, High, ...) come from each rule's impact and likelihood.
+
+**First submission (2026-10-02), both versions:**
+- **The build failed**: Gradle's toolchain asked for a JDK 21, the machine has only 17, and its
+  proxy refuses the download (`api.foojay.io`: `ERR_ACCESS_DENIED`). Gradle itself
+  (services.gradle.org) and TAK.gov's Maven were reachable. Fixed by building as Java 17: no
+  toolchain, and the fork's Java 21 constructs rewritten
+  ([05](05-conversations-fork.md#k-java-17-for-takgovs-pipeline)).
+- **Fortify: 4 critical**, all "Insecure SSL: Server Identity Verification Disabled", in
+  upstream code that does verify the server, with its own verifiers, which Fortify doesn't
+  recognize. The fork now makes those checks through `HostnameVerifier.verify`
+  ([05](05-conversations-fork.md#l-server-identity-checks-takgovs-scan-recognizes)). One
+  path stays unverified by design: DNS over TLS to the network's DNS server when Android's
+  Private DNS is "Automatic", as Android itself does it (`de.gultsch.minidns.DNSSocket`).
+- Fortify's 38 high findings are all in upstream code: "Privacy Violation" (the password and
+  messages reach the XMPP socket or files, which is what a client does), "Hardcoded Password"
+  (the database column name `"password"`) and "Empty Password" (a group chat without one). The
+  23 low ones include "Password in Comment" in the plugin's code (comments about the password
+  setting).
+- The dependency check only saw the Gradle wrapper and TAK's own `takdevlint.aar` (a false
+  match on Apache SkyWalking's CPE), since the build stopped before resolving the libraries.
 
 **What the release build needed:**
 - R8 needs every class the plugin refers to, either packaged or as a library: ATAK's classes

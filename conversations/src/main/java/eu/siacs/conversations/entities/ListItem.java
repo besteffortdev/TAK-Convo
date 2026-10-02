@@ -51,8 +51,9 @@ public interface ListItem extends Comparable<ListItem>, AvatarService.Avatar {
 
     private boolean matchInTag(final String needle) {
         for (final DynamicTag tag : this.getTags()) {
-            if (tag instanceof DynamicTag.RosterGroup(String name)
-                    && Strings.nullToEmpty(name)
+            // TAKCONVO: Java 17, no record patterns
+            if (tag instanceof DynamicTag.RosterGroup rosterGroup
+                    && Strings.nullToEmpty(rosterGroup.name())
                             .toLowerCase(Locale.getDefault())
                             .contains(needle)) {
                 return true;

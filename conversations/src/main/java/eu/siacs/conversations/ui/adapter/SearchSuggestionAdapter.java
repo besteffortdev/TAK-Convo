@@ -63,13 +63,14 @@ public class SearchSuggestionAdapter
         final var searchSuggestion = getItem(position);
         holder.binding.wrapper.setOnClickListener(
                 v -> onSearchSuggestionClicked.accept(searchSuggestion));
-        if (searchSuggestion instanceof SearchSuggestion.Text(String text)) {
+        // TAKCONVO: Java 17, no record patterns
+        if (searchSuggestion instanceof SearchSuggestion.Text textSuggestion) {
             holder.binding.searchSuggestion.setMaxLines(2);
             holder.binding.searchSuggestion.setText(
                     holder.binding
                             .searchSuggestion
                             .getResources()
-                            .getString(R.string.search_for_x_in_chats, text));
+                            .getString(R.string.search_for_x_in_chats, textSuggestion.text()));
             holder.binding.address.setVisibility(ViewGroup.GONE);
             holder.binding.icon.setImageResource(R.drawable.ic_manage_search_24dp);
         } else if (searchSuggestion instanceof SearchSuggestion.Contact contact) {
@@ -84,10 +85,9 @@ public class SearchSuggestionAdapter
             holder.binding.address.setText(bookmark.address().toString());
             holder.binding.address.setVisibility(View.VISIBLE);
             holder.binding.icon.setImageResource(R.drawable.ic_group_24dp);
-        } else if (searchSuggestion
-                instanceof SearchSuggestion.Uri(de.gultsch.common.MiniUri.Xmpp uri)) {
+        } else if (searchSuggestion instanceof SearchSuggestion.Uri uriSuggestion) {
             holder.binding.searchSuggestion.setMaxLines(2);
-            holder.binding.searchSuggestion.setText(uri.asJid());
+            holder.binding.searchSuggestion.setText(uriSuggestion.uri().asJid());
             holder.binding.address.setVisibility(ViewGroup.GONE);
             holder.binding.icon.setImageResource(R.drawable.ic_link_24dp);
         } else if (searchSuggestion instanceof SearchSuggestion.Note) {

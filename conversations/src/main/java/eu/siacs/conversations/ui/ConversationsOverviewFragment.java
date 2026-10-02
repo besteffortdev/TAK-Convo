@@ -539,13 +539,14 @@ public class ConversationsOverviewFragment extends XmppFragment {
     }
 
     private void executeSuggestion(final SearchSuggestion suggestion) {
-        if (suggestion instanceof SearchSuggestion.Text(String text)) {
+        // TAKCONVO: Java 17, no record patterns
+        if (suggestion instanceof SearchSuggestion.Text text) {
             this.hideSearchView();
-            startSearch(text);
-        } else if (suggestion instanceof SearchSuggestion.Uri(MiniUri.Xmpp xmpp)) {
+            startSearch(text.text());
+        } else if (suggestion instanceof SearchSuggestion.Uri uri) {
             this.hideSearchView();
             final var uriLauncher = new XmppUriLauncher(requireContext(), true);
-            uriLauncher.launch(xmpp);
+            uriLauncher.launch(uri.uri());
         } else if (suggestion instanceof SearchSuggestion.Bookmark b) {
             final var account =
                     requireXmppActivity().xmppConnectionService.findAccountByUuid(b.uuid());

@@ -132,13 +132,15 @@ public abstract class Reason extends Extension {
     }
 
     public static Reason of(final RuntimeException e) {
-        return switch (e) {
-            case SecurityException ignored -> new SecurityError();
-            case RtpContentMap.UnsupportedTransportException ignored -> new UnsupportedTransports();
-            case RtpContentMap.UnsupportedApplicationException ignored ->
-                    new UnsupportedApplications();
-            case null, default -> new FailedApplication();
-        };
+        // TAKCONVO: Java 17, no pattern switch
+        if (e instanceof SecurityException) {
+            return new SecurityError();
+        } else if (e instanceof RtpContentMap.UnsupportedTransportException) {
+            return new UnsupportedTransports();
+        } else if (e instanceof RtpContentMap.UnsupportedApplicationException) {
+            return new UnsupportedApplications();
+        }
+        return new FailedApplication();
     }
 
     public static Reason ofThrowable(final Throwable throwable) {

@@ -17,7 +17,6 @@ import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -29,9 +28,14 @@ import javax.tools.JavaFileObject;
 import org.jspecify.annotations.NonNull;
 
 @AutoService(Processor.class)
-@SupportedSourceVersion(SourceVersion.RELEASE_21)
 @SupportedAnnotationTypes("im.conversations.android.annotation.XmlElement")
 public class XmlElementProcessor extends AbstractProcessor {
+
+    // TAKCONVO: was @SupportedSourceVersion(RELEASE_21), which JDK 17 lacks
+    @Override
+    public SourceVersion getSupportedSourceVersion() {
+        return SourceVersion.latestSupported();
+    }
 
     @Override
     public boolean process(Set<? extends TypeElement> set, RoundEnvironment roundEnvironment) {

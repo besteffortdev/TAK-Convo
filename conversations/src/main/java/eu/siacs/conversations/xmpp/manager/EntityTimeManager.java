@@ -170,10 +170,9 @@ public class EntityTimeManager extends AbstractManager {
                             Collections2.transform(
                                     entityTimes,
                                     entityTime -> {
-                                        if (entityTime
-                                                instanceof
-                                                OffsetEntityTime(ZoneOffset zoneOffset)) {
-                                            return zoneOffset;
+                                        // TAKCONVO: Java 17, no record patterns
+                                        if (entityTime instanceof OffsetEntityTime offset) {
+                                            return offset.zoneOffset();
                                         } else {
                                             return null;
                                         }

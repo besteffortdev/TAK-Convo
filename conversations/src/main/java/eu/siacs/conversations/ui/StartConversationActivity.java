@@ -169,7 +169,9 @@ public class StartConversationActivity extends XmppActivity
                     if (searchView == null) {
                         return;
                     }
-                    if (dynamicTag instanceof DynamicTag.RosterGroup(String name)) {
+                    // TAKCONVO: Java 17, no record patterns
+                    if (dynamicTag instanceof DynamicTag.RosterGroup rosterGroup) {
+                        final String name = rosterGroup.name();
                         mMenuSearchView.expandActionView();
                         mSearchEditText.setText("");
                         mSearchEditText.append(name);

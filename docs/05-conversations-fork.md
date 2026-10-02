@@ -12,8 +12,8 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-09-30 (evening) it is **31 modified files, 1 added file, 2 removed manifests**
-(95 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
+As of 2026-10-02 it is **46 modified files, 1 added file, 2 removed manifests**
+(119 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
 comment: `grep -rn TAKCONVO conversations/src`. When codeberg is unreachable,
 `UPSTREAM_DIR=<a checkout of the tag> tools/fork-diff.sh` compares with a local clone.
 
@@ -53,6 +53,7 @@ Upstream's app `build.gradle` became a `com.android.library` build:
   to the ones the target ATAK (5.6 or 5.8) ships, because ATAK's copies win at runtime
   (see [06](06-atak-runtime-and-classloading.md)).
 - `org.jetbrains:annotations` excluded (duplicate classes with ATAK's).
+- Java 17 instead of 21 (section K).
 
 Dependency versions that differ from upstream 2.20.4:
 
@@ -76,7 +77,7 @@ versions first and keep an older one only if the build or `AtakLinkCheck` fails 
 ### `libs/annotation-processor/build.gradle`
 
 `project(':libs:annotation')` → `project(':conversations-annotation')`, the name the plugin's
-`settings.gradle` gives it.
+`settings.gradle` gives it. Both `libs/` builds are Java 17 (section K).
 
 ### Manifests
 
@@ -213,6 +214,40 @@ directory and the account's server; these changes add another server.
 |---|---|
 | `java/eu/siacs/conversations/xmpp/XmppConnection.java` | A stream error without a known condition logs the condition's class name and text instead of the element's `toString()`, which said nothing. Harmless to drop. |
 
+### K. Java 17 for TAK.gov's pipeline
+
+Upstream is Java 21. TAK.gov's Third Party Pipeline builds with JDK 17 and can't download
+another one (see [07](07-development-and-testing.md#release-builds-and-takgovs-third-party-pipeline)),
+so the fork compiles as Java 17. Each Java 21 construct became its Java 17 equivalent, with the
+same result (a `null` selector now takes the default branch instead of throwing):
+
+| Construct | Java 17 form | Files |
+|---|---|---|
+| pattern `switch` (`case Foo f ->`, guards, `case null`) | `if (x instanceof Foo f) ... else if ...` | `ui/adapter/UserAdapter`, `xml/XmlReader`, `xmpp/XmppConnection` (`errorResponse`), `xmpp/jingle/AbstractJingleConnection`, `xmpp/jingle/JingleRtpConnection`, `xmpp/jingle/transports/InbandBytestreamsTransport`, `xmpp/manager/RegistrationManager`, `im/.../commands/Actions`, `im/.../jingle/Reason` |
+| `case null, default` in a `String` switch | `switch (Strings.nullToEmpty(x))` and `default` | `ui/ConversationFragment` (permission result) |
+| record pattern (`x instanceof Rec(Type c)`) | `x instanceof Rec r`, then `r.c()` | `entities/ListItem`, `ui/ConversationsOverviewFragment`, `ui/StartConversationActivity`, `ui/adapter/SearchSuggestionAdapter`, `xmpp/manager/EntityTimeManager` |
+| `instanceof` of the expression's own type | a null check | `ui/adapter/MediaAdapter` |
+
+The build files changed with it: `sourceCompatibility`/`targetCompatibility` 17 in
+`conversations/build.gradle` and both `libs/` builds, and the annotation processor
+(`XmlElementProcessor`) declares `SourceVersion.latestSupported()` instead of
+`@SupportedSourceVersion(RELEASE_21)`, which JDK 17 doesn't have.
+
+### L. Server identity checks TAK.gov's scan recognizes
+
+TAK.gov's pipeline runs Fortify, which reported "Insecure SSL: Server Identity Verification
+Disabled" (critical) wherever a TLS socket is used without a call to
+`HostnameVerifier.verify(host, session)`. Upstream does check the server, with its own
+verifiers. These changes make the same checks through a `HostnameVerifier`:
+
+| File | Change |
+|---|---|
+| `java/eu/siacs/conversations/xmpp/XmppConnection.java` | `upgradeSocketToTls()`: `XmppDomainVerifier.verify(domain, verifiedHostname, session)` is called from a `HostnameVerifier` lambda. An `SSLPeerUnverifiedException` inside it now means "domain not verified" (`TLS_ERROR_DOMAIN`) instead of `TLS_ERROR`. |
+| `java/de/gultsch/minidns/DNSSocket.java` | DNS over TLS to a named server: Conscrypt's `OkHostnameVerifier.strictInstance().verify(host, certificate)` is called from a `HostnameVerifier` lambda. |
+
+DNS over TLS to the network's DNS server by address (Android's Private DNS set to "Automatic")
+still verifies nothing, as Android itself does in that mode; Fortify may report that path.
+
 ## What the plugin relies on
 
 An upstream update can also break the plugin without touching a fork change. These are the
@@ -254,7 +289,10 @@ Conversations APIs the plugin (`app/`) uses directly:
    the changes into `conversations/build.gradle`: new dependencies, new `BuildConfig` fields,
    new flavor source sets. Keep the ATAK-provided versions from `gradle/atak-runtime.gradle`.
 5. **New SDK constants.** Anything new from SDK 37 or later goes into `TakConvoCompat` while
-   the build stays on compileSdk 36.
+   the build stays on compileSdk 36. **New Java 21 code** (pattern `switch`, record patterns,
+   `case null`, `instanceof` of an expression's own type) gets the Java 17 form of section K:
+   the build fails on each, one error per file at a time, so build until it passes. Check that
+   new TLS sockets verify the server through a `HostnameVerifier` (section L).
 6. **Build and link-check.**
    ```bash
    ./gradlew assembleCivDebug                       # for ATAK 5.8, then each other version:

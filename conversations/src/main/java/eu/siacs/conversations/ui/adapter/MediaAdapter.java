@@ -258,8 +258,10 @@ public class MediaAdapter extends ListAdapter<Attachment, MediaAdapter.MediaView
                 .setOnLongClickListener(
                         v -> {
                             final var wrapper = v.findViewById(R.id.wrapper);
-                            if (wrapper != null
-                                    && wrapper.getBackground() instanceof Drawable drawable) {
+                            // TAKCONVO: Java 17, no instanceof of the expression's own type
+                            final Drawable drawable =
+                                    wrapper == null ? null : wrapper.getBackground();
+                            if (drawable != null) {
                                 drawable.jumpToCurrentState();
                             }
                             return onAttachmentLongClicked.apply(attachment);

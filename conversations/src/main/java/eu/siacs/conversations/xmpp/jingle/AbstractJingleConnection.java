@@ -424,18 +424,21 @@ public abstract class AbstractJingleConnection {
     }
 
     protected static State reasonToState(final Reason reason) {
-        return switch (reason) {
-            case Reason.Success ignored -> State.TERMINATED_SUCCESS;
-            case Reason.Decline ignored -> State.TERMINATED_DECLINED_OR_BUSY;
-            case Reason.Busy ignored -> State.TERMINATED_DECLINED_OR_BUSY;
-            case Reason.Cancel ignored -> State.TERMINATED_CANCEL_OR_TIMEOUT;
-            case Reason.Timeout ignored -> State.TERMINATED_CANCEL_OR_TIMEOUT;
-            case Reason.SecurityError ignored -> State.TERMINATED_SECURITY_ERROR;
-            case Reason.FailedApplication ignored -> State.TERMINATED_APPLICATION_FAILURE;
-            case Reason.UnsupportedTransports ignored -> State.TERMINATED_APPLICATION_FAILURE;
-            case Reason.UnsupportedApplications ignored -> State.TERMINATED_APPLICATION_FAILURE;
-            default -> State.TERMINATED_CONNECTIVITY_ERROR;
-        };
+        // TAKCONVO: Java 17, no pattern switch
+        if (reason instanceof Reason.Success) {
+            return State.TERMINATED_SUCCESS;
+        } else if (reason instanceof Reason.Decline || reason instanceof Reason.Busy) {
+            return State.TERMINATED_DECLINED_OR_BUSY;
+        } else if (reason instanceof Reason.Cancel || reason instanceof Reason.Timeout) {
+            return State.TERMINATED_CANCEL_OR_TIMEOUT;
+        } else if (reason instanceof Reason.SecurityError) {
+            return State.TERMINATED_SECURITY_ERROR;
+        } else if (reason instanceof Reason.FailedApplication
+                || reason instanceof Reason.UnsupportedTransports
+                || reason instanceof Reason.UnsupportedApplications) {
+            return State.TERMINATED_APPLICATION_FAILURE;
+        }
+        return State.TERMINATED_CONNECTIVITY_ERROR;
     }
 
     public enum State {

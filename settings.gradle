@@ -1,8 +1,3 @@
-plugins {
-    // downloads the JDK 21 toolchain when the machine has none (build.gradle)
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
-}
-
 rootProject.name = 'takconvo'
 include ':app'
 

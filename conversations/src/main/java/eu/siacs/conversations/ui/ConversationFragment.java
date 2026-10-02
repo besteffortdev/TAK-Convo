@@ -2125,11 +2125,12 @@ public class ConversationFragment extends XmppFragment
                     getFirstDenied(permissionResult.grantResults(), permissionResult.permissions());
             @StringRes
             final int res =
-                    switch (firstDenied) {
+                    // TAKCONVO: Java 17, no case null
+                    switch (Strings.nullToEmpty(firstDenied)) {
                         case Manifest.permission.RECORD_AUDIO -> R.string.no_microphone_permission;
                         case Manifest.permission.CAMERA -> R.string.no_camera_permission;
                         case Manifest.permission.READ_CONTACTS -> R.string.no_contacts_permission;
-                        case null, default -> R.string.no_storage_permission;
+                        default -> R.string.no_storage_permission;
                     };
             Toast.makeText(
                             getActivity(),

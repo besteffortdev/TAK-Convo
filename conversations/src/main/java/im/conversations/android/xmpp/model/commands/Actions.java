@@ -35,11 +35,16 @@ public class Actions extends Extension {
         return ImmutableSet.copyOf(
                 Collections2.transform(
                         actions,
-                        a ->
-                                switch (Objects.requireNonNull(a)) {
-                                    case Action.Complete c -> Command.Action.COMPLETE;
-                                    case Action.Next n -> Command.Action.NEXT;
-                                    case Action.Prev p -> Command.Action.PREV;
-                                }));
+                        a -> {
+                            // TAKCONVO: Java 17, no pattern switch
+                            if (Objects.requireNonNull(a) instanceof Action.Complete) {
+                                return Command.Action.COMPLETE;
+                            } else if (a instanceof Action.Next) {
+                                return Command.Action.NEXT;
+                            } else if (a instanceof Action.Prev) {
+                                return Command.Action.PREV;
+                            }
+                            throw new IllegalStateException("Unknown action " + a.getClass());
+                        }));
     }
 }

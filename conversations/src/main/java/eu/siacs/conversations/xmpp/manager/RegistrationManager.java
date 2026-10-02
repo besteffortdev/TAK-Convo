@@ -302,24 +302,24 @@ public class RegistrationManager extends AbstractManager {
             final var condition = error.getCondition();
             final var text = Strings.nullToEmpty(error.getTextAsString());
             // for captcha errors ejabberd seems to use notAllowed and prosody notAcceptable
-            return switch (condition) {
-                case Condition.Conflict conflict -> Account.State.REGISTRATION_CONFLICT;
-                case Condition.ResourceConstraint resourceConstraint ->
-                        Account.State.REGISTRATION_PLEASE_WAIT;
-                case Condition.NotAcceptable notAcceptable -> {
-                    if (text.toLowerCase(Locale.ROOT).contains("password")) {
-                        yield Account.State.REGISTRATION_PASSWORD_TOO_WEAK;
-                    } else if (text.toLowerCase(Locale.ROOT).contains("captcha")) {
-                        yield Account.State.REGISTRATION_INVALID_CAPTCHA;
-                    } else {
-                        yield Account.State.REGISTRATION_FAILED;
-                    }
+            // TAKCONVO: Java 17, no pattern switch
+            if (condition instanceof Condition.Conflict) {
+                return Account.State.REGISTRATION_CONFLICT;
+            } else if (condition instanceof Condition.ResourceConstraint) {
+                return Account.State.REGISTRATION_PLEASE_WAIT;
+            } else if (condition instanceof Condition.NotAcceptable) {
+                if (text.toLowerCase(Locale.ROOT).contains("password")) {
+                    return Account.State.REGISTRATION_PASSWORD_TOO_WEAK;
+                } else if (text.toLowerCase(Locale.ROOT).contains("captcha")) {
+                    return Account.State.REGISTRATION_INVALID_CAPTCHA;
+                } else {
+                    return Account.State.REGISTRATION_FAILED;
                 }
-                case Condition.NotAllowed notAllowed
-                        when text.toLowerCase(Locale.ROOT).contains("captcha") ->
-                        Account.State.REGISTRATION_INVALID_CAPTCHA;
-                case null, default -> Account.State.REGISTRATION_FAILED;
-            };
+            } else if (condition instanceof Condition.NotAllowed
+                    && text.toLowerCase(Locale.ROOT).contains("captcha")) {
+                return Account.State.REGISTRATION_INVALID_CAPTCHA;
+            }
+            return Account.State.REGISTRATION_FAILED;
         }
     }
 }

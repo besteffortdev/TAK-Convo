@@ -77,6 +77,11 @@ From the Google Java style guide, which Android's own guide follows:
 - Constants `UPPER_SNAKE_CASE`, everything else `lowerCamelCase`. Acronyms as words
   (`XmppEngine`, `jid`).
 - No dead code. Unused template classes are removed.
+- Java 17: TAK.gov's pipeline has no newer JDK. No pattern `switch`, record patterns or
+  `case null`; use `instanceof` chains (see [05](05-conversations-fork.md#k-java-17-for-takgovs-pipeline)).
+- A TLS socket of our own verifies the server through `HostnameVerifier.verify(host, session)`:
+  TAK.gov's scan reports any other check as missing
+  ([05](05-conversations-fork.md#l-server-identity-checks-takgovs-scan-recognizes)).
 
 ## Comments
 

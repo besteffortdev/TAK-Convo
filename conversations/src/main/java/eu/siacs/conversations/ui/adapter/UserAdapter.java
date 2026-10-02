@@ -176,14 +176,19 @@ public class UserAdapter extends ListAdapter<MucOptions.User, UserAdapter.ViewHo
             final ImmutableList.Builder<Integer> viewIdBuilder = new ImmutableList.Builder<>();
             for (final var tag : tags) {
                 final TextView tv = (TextView) inflater.inflate(R.layout.item_tag, layout, false);
-                switch (tag) {
-                    case DynamicTag.Hat hat -> setTag(tv, hat);
-                    case DynamicTag.Attributes attributes -> setAttributes(tv, attributes);
-                    case DynamicTag.Status status -> setStatus(tv, status);
-                    case DynamicTag.RosterGroup rosterGroup -> setRosterGroup(tv, rosterGroup);
-                    case DynamicTag.Blocked ignored -> setBlocked(tv);
-                    case null, default ->
-                            throw new IllegalArgumentException("Could not render unknown tag");
+                // TAKCONVO: Java 17, no pattern switch
+                if (tag instanceof DynamicTag.Hat hat) {
+                    setTag(tv, hat);
+                } else if (tag instanceof DynamicTag.Attributes attributes) {
+                    setAttributes(tv, attributes);
+                } else if (tag instanceof DynamicTag.Status status) {
+                    setStatus(tv, status);
+                } else if (tag instanceof DynamicTag.RosterGroup rosterGroup) {
+                    setRosterGroup(tv, rosterGroup);
+                } else if (tag instanceof DynamicTag.Blocked) {
+                    setBlocked(tv);
+                } else {
+                    throw new IllegalArgumentException("Could not render unknown tag");
                 }
                 final int id = View.generateViewId();
                 tv.setId(id);

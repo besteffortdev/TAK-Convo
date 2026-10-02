@@ -15,6 +15,7 @@ closely; the class named at the top of each section is the reference.
 | 07 | [Development and testing](07-development-and-testing.md) | setup, build, deploy, debug broadcasts, logs, the device test checklist, gotchas |
 | 08 | [ATAK contacts and notifications](08-contacts-and-notifications.md) | the XMPP connector handler, unread counts and presence in ATAK's contacts, the toolbar badge, notifications posted as ATAK's: taps, actions, icons |
 | 09 | [Code guidelines](09-code-guidelines.md) | error handling, logging without user data, Android dos and don'ts, style, comments, with sources |
+| 10 | [Integration ideas](10-integration-ideas.md) | ATAK integrations not built yet (map locations, GeoChat-style quick messages, Send dialog, imports), with the hooks for each |
 
 `user_manual/` holds the end-user manual (Typst) from the ATAK plugin template; it is not
 written yet.

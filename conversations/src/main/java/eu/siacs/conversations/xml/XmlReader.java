@@ -124,24 +124,22 @@ public class XmlReader implements Closeable {
         element.setAttributes(parent.getAttributes());
         while (true) {
             final var tag = this.readTag();
-            switch (tag) {
-                case Tag.Start innerStart -> {
-                    final var child = this.readElement(innerStart, depth + 1);
-                    element.addChild(child);
+            // TAKCONVO: Java 17, no pattern switch
+            if (tag instanceof Tag.Start innerStart) {
+                final var child = this.readElement(innerStart, depth + 1);
+                element.addChild(child);
+            } else if (tag instanceof Tag.No no) {
+                if (element.getChildren().isEmpty()) {
+                    element.setContent(no.getText());
                 }
-                case Tag.No no -> {
-                    if (element.getChildren().isEmpty()) {
-                        element.setContent(no.getText());
-                    }
+            } else if (tag instanceof Tag.End end) {
+                if (end.getId().equals(id)) {
+                    return element;
+                } else {
+                    throw new IOException("End tag did not match start tag");
                 }
-                case Tag.End end -> {
-                    if (end.getId().equals(id)) {
-                        return element;
-                    } else {
-                        throw new IOException("End tag did not match start tag");
-                    }
-                }
-                default -> throw new IOException("Read invalid tag " + tag.getClass());
+            } else {
+                throw new IOException("Read invalid tag " + tag.getClass());
             }
         }
     }

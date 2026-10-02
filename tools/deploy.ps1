@@ -4,7 +4,7 @@
 #
 #   tools\deploy.ps1 -Serial <serial> [-AtakVersion 5.8.0|5.6.0] [-NoBuild] [-SkipLinkCheck]
 #
-# Needs: JDK 21 (JAVA_HOME or -JavaHome), adb (Android SDK platform-tools), local.properties
+# Needs: JDK 17 or newer (JAVA_HOME or -JavaHome), adb (Android SDK platform-tools), local.properties
 # with atak.sdk.<major.minor> pointing to that version's ATAK SDK (its atak.apk is the link
 # check reference).
 param(

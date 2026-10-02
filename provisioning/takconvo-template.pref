@@ -1,6 +1,7 @@
 <?xml version='1.0' standalone='yes'?>
 <!-- TAK Convo provisioning template. Import it on its own or ship it in a mission package.
-     The takconvo_xmpp_* and takconvo_notification_* values can also be edited in ATAK:
+     The takconvo_xmpp_*, takconvo_notification_* and takconvo_quick_messages values can also
+     be edited in ATAK:
      Settings > Tool Preferences > TAK Convo.
 
      Account and connection
@@ -33,6 +34,9 @@
      takconvo_xmpp_use_callsign         true (default): the ATAK callsign is the XMPP nickname
      takconvo_notification_sound        false: message notifications make no sound
      takconvo_notification_vibrate      false: message notifications don't vibrate
+     takconvo_quick_messages            the quick message buttons above the message field,
+                                        separated by |; empty for none (default:
+                                        Roger|Wilco|Say again|In position|Moving|All secure)
 
      Conversations' own settings: takconvo_conversations_<key>. Leave a key out to keep
      Conversations' default (in brackets). Invalid values are ignored (logged).
@@ -75,6 +79,9 @@
         <entry key="takconvo_xmpp_use_tak_credentials" class="class java.lang.Boolean">false</entry>
         <entry key="takconvo_xmpp_username" class="class java.lang.String">user</entry>
         <entry key="takconvo_xmpp_password" class="class java.lang.String">password</entry>
+        -->
+        <!-- quick messages:
+        <entry key="takconvo_quick_messages" class="class java.lang.String">Roger|Wilco|In position|Need medevac</entry>
         -->
         <!-- Conversations' settings, e.g.:
         <entry key="takconvo_conversations_omemo" class="class java.lang.String">always</entry>

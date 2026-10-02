@@ -740,6 +740,13 @@ public class ConversationFragment extends XmppFragment
                         menuCall.setVisible(false);
                         menuOngoingCall.setVisible(false);
                     }
+                    // TAKCONVO: the contact on ATAK's map
+                    final var atak = eu.siacs.conversations.utils.TakConvoCompat.atak();
+                    menu.findItem(R.id.action_show_on_map)
+                            .setVisible(
+                                    atak != null
+                                            && c.getMode() == Conversation.MODE_SINGLE
+                                            && atak.isOnMap(c.getAddress().asBareJid()));
                     if (c.isMuted()) {
                         menuMute.setVisible(false);
                     } else {
@@ -805,6 +812,12 @@ public class ConversationFragment extends XmppFragment
                         return true;
                     } else if (itemId == R.id.action_toggle_pinned) {
                         togglePinned();
+                        return true;
+                    } else if (itemId == R.id.action_show_on_map) { // TAKCONVO
+                        final var atak = eu.siacs.conversations.utils.TakConvoCompat.atak();
+                        if (atak != null) {
+                            atak.showOnMap(conversation.getAddress().asBareJid());
+                        }
                         return true;
                     } else {
                         return false;
@@ -2364,6 +2377,35 @@ public class ConversationFragment extends XmppFragment
         super.onResume();
         binding.messagesView.post(this::fireReadEvent);
         binding.textInput.setOnFocusChangeListener(this.textInputFocusListener);
+        showQuickMessages(); // TAKCONVO
+    }
+
+    /** TAKCONVO: preset messages, like ATAK's GeoChat; a tap adds one to the message field. */
+    private void showQuickMessages() {
+        final var atak = eu.siacs.conversations.utils.TakConvoCompat.atak();
+        final List<String> messages =
+                atak == null ? java.util.Collections.emptyList() : atak.quickMessages();
+        binding.quickMessages.removeAllViews();
+        for (final String text : messages) {
+            final var chip = new com.google.android.material.chip.Chip(requireContext());
+            chip.setText(text);
+            chip.setOnClickListener(v -> appendQuickMessage(text));
+            binding.quickMessages.addView(chip);
+        }
+        binding.quickMessagesScroll.setVisibility(messages.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    private void appendQuickMessage(final String text) {
+        final Editable input = binding.textInput.getText();
+        if (input == null) {
+            return;
+        }
+        if (input.length() > 0 && !Character.isWhitespace(input.charAt(input.length() - 1))) {
+            input.append(' ');
+        }
+        input.append(text);
+        binding.textInput.setSelection(input.length());
+        binding.textInput.requestFocus();
     }
 
     @Override

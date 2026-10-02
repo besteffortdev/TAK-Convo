@@ -19,6 +19,7 @@ import com.atakmap.android.maps.MapItem;
 import com.atakmap.android.maps.MapView;
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.android.takconvo.plugin.TakConvoPlugin;
+import com.atakmap.android.takconvo.plugin.map.ChatSender;
 import com.atakmap.android.takconvo.plugin.ui.TakConvoPreferenceFragment;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 import com.atakmap.app.SettingsActivity;
@@ -38,6 +39,7 @@ import eu.siacs.conversations.services.XmppConnectionService;
 
 import java.io.File;
 import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -66,9 +68,13 @@ import java.util.List;
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_FAKE_INCOMING \
  *     [--es from J] --es body B
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_ATAK_BROADCAST --es action A
+ *
+ * # what a group chat gets from ATAK's send list (a line and a data package), to the self chat
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SEND_MAP_ITEM --es uid U
  * </pre>
  *
  * <p>The fake contact and fake incoming messages stay on this device; nothing is sent.
+ * DEBUG_SEND and DEBUG_SEND_MAP_ITEM do send, to the self chat by default.
  */
 public final class DebugReceiver extends BroadcastReceiver {
 
@@ -90,12 +96,14 @@ public final class DebugReceiver extends BroadcastReceiver {
     public static final String ACTION_DUMP_CONTACT = PREFIX + "DEBUG_DUMP_CONTACT";
     public static final String ACTION_FAKE_INCOMING = PREFIX + "DEBUG_FAKE_INCOMING";
     public static final String ACTION_ATAK_BROADCAST = PREFIX + "DEBUG_ATAK_BROADCAST";
+    public static final String ACTION_SEND_MAP_ITEM = PREFIX + "DEBUG_SEND_MAP_ITEM";
 
     private static final String FAKE_UID = "TAKCONVO-DEBUG-CONTACT";
 
     private final Context context;
     /** The fake TAK user's XMPP address. */
     private String fakeJid;
+    private ChatSender chatSender;
 
     private DebugReceiver(final Context context) {
         this.context = context;
@@ -120,6 +128,7 @@ public final class DebugReceiver extends BroadcastReceiver {
         filter.addAction(ACTION_DUMP_CONTACT);
         filter.addAction(ACTION_FAKE_INCOMING);
         filter.addAction(ACTION_ATAK_BROADCAST);
+        filter.addAction(ACTION_SEND_MAP_ITEM);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // exported for adb's shell; registered in debug builds only
             context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
@@ -240,7 +249,22 @@ public final class DebugReceiver extends BroadcastReceiver {
         } else if (ACTION_FAKE_INCOMING.equals(action) && engine != null) {
             fakeIncoming(engine, orSelf(intent.getStringExtra("from"), engine),
                     intent.getStringExtra("body"));
+        } else if (ACTION_SEND_MAP_ITEM.equals(action) && engine != null && chatSender != null) {
+            // what a group chat gets from ATAK's send list, sent to the self chat instead
+            final MapItem item = MapView.getMapView().getRootGroup()
+                    .deepFindUID(intent.getStringExtra("uid"));
+            final Conversation self = engine.openConversation(orSelf(null, engine));
+            if (item == null || self == null) {
+                Log.w(TAG, "no such map item, or no account");
+            } else {
+                chatSender.sendMapItems(Collections.singletonList(item), self);
+            }
         }
+    }
+
+    /** The plugin's sender, for {@link #ACTION_SEND_MAP_ITEM}. */
+    public void setChatSender(final ChatSender chatSender) {
+        this.chatSender = chatSender;
     }
 
     private static String orSelf(final String jid, final XmppEngine engine) {

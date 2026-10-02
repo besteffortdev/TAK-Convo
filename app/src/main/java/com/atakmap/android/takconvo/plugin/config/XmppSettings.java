@@ -42,6 +42,8 @@ public final class XmppSettings {
     // not takconvo_xmpp_*: no provisioning on change
     public static final String KEY_NOTIFICATION_SOUND = "takconvo_notification_sound";
     public static final String KEY_NOTIFICATION_VIBRATE = "takconvo_notification_vibrate";
+    /** The quick message buttons' texts, separated by {@code |}. */
+    public static final String KEY_QUICK_MESSAGES = "takconvo_quick_messages";
     /** ATAK's preference for this device's callsign. */
     public static final String KEY_ATAK_CALLSIGN = "locationCallsign";
 

@@ -68,6 +68,24 @@
                 app:textColor="?colorOnTertiaryContainer"
                 tools:ignore="RtlCompat" />
 
+            <!-- TAKCONVO: quick messages, like ATAK's GeoChat; hidden when there are none -->
+            <HorizontalScrollView
+                android:id="@+id/quick_messages_scroll"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_above="@+id/message_input_box"
+                android:paddingHorizontal="8dp"
+                android:scrollbars="none"
+                android:visibility="gone">
+
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/quick_messages"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    app:chipSpacingHorizontal="4dp"
+                    app:singleLine="true" />
+            </HorizontalScrollView>
+
             <!-- TAKCONVO: compact for a side pane; upstream: 6dp, 8sp, 12dp padding, a
                  minimum-size attach button, a 32dp send icon -->
             <RelativeLayout
@@ -179,11 +197,12 @@
                     app:iconSize="24dp" />
             </RelativeLayout>
 
+            <!-- TAKCONVO: above the quick messages (upstream: above the input box) -->
             <RelativeLayout
                 android:id="@+id/snackbar"
                 android:layout_width="fill_parent"
                 android:layout_height="wrap_content"
-                android:layout_above="@+id/message_input_box"
+                android:layout_above="@+id/quick_messages_scroll"
                 android:layout_marginLeft="8dp"
                 android:layout_marginRight="8dp"
                 android:layout_marginBottom="4dp"

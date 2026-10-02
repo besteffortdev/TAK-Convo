@@ -83,6 +83,20 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         void onShowSettings();
     }
 
+    /** Takes over starts that ATAK does better, e.g. showing a location on its map. */
+    public interface Redirect {
+        /**
+         * Returns true if it handled the start; it answers through {@code result} if the caller
+         * wants a result. {@code caller} is null for starts from outside, e.g. a notification.
+         */
+        boolean start(Activity caller, Intent intent, Result result);
+    }
+
+    /** The result for the activity that started another. */
+    public interface Result {
+        void deliver(int resultCode, Intent data);
+    }
+
     /** Activities that work embedded; others are refused with a toast. */
     private static final Set<String> SUPPORTED = new HashSet<>(Arrays.asList(
             "eu.siacs.conversations.ui.ConversationsActivity",
@@ -189,6 +203,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     private boolean visible;
     private int paneWidthPx;
     private int paneHeightPx;
+    private Redirect redirect;
 
     public EmbeddedActivityHost(final Activity atak, final Context plugin,
             final XmppEngine engine, final Listener listener) {
@@ -207,6 +222,10 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
 
     public View getView() {
         return container;
+    }
+
+    public void setRedirect(final Redirect redirect) {
+        this.redirect = redirect;
     }
 
     /** Sets the size the pane is about to get, which selects the activities' resources. */
@@ -307,6 +326,11 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     // --- the back stack ---
 
     private void start(final Record caller, final Intent intent, final int requestCode) {
+        final Redirect r = redirect;
+        if (r != null && r.start(caller == null ? null : caller.activity, intent,
+                (code, data) -> deliverResult(caller, requestCode, code, data))) {
+            return;
+        }
         final ComponentName component = intent.getComponent();
         final String name = component == null ? null : component.getClassName();
         if (name == null || !name.startsWith(CONVERSATIONS_PACKAGE)) {

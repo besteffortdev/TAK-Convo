@@ -80,7 +80,9 @@ flowchart TB
 | `AccountView`, `ConversationsInflater`, `TakConvoPreferenceFragment` | `plugin.ui` | Account pane (Conversations' `activity_edit_account` layout) and the tool preferences page | [03](03-provisioning-and-trust.md) |
 | `EmbeddedActivityHost`, `HostParent`, `PaneFrame`, `ChatDropDown` | `plugin.ui.host` | Run Conversations' own activities, their views shown in an ATAK drop-down | [04](04-chat-pane-activity-host.md) |
 | `EmbeddedPendingIntents`, `EmbeddedNotifications` | `plugin.xmpp` | Make Conversations' notification taps, notification actions, alarms and notification icons work as ATAK's | [02](02-embedded-engine.md#pendingintents), [08](08-contacts-and-notifications.md) |
-| `XmppContacts` | `plugin.contacts` | ATAK's handler for XMPP connectors: opens chats, unread counts and presence for ATAK's contacts, the toolbar badge | [08](08-contacts-and-notifications.md) |
+| `XmppContacts`, `XmppRoomContact` | `plugin.contacts` | ATAK's handler for XMPP connectors: opens chats, unread counts and presence for ATAK's contacts, group chats as contacts, the toolbar badge | [08](08-contacts-and-notifications.md) |
+| `GroupChatSends` | `plugin.contacts` | Map items and data packages sent to a group chat from ATAK's send list | [10](10-atak-map-integration.md#map-items-to-a-group-chat) |
+| `MapLocations`, `AtakIntegration`, `CoordinateFinder`, `ChatSender` | `plugin.map` | Locations on ATAK's map, positions in messages, quick messages, Show on map, imports into ATAK, TAK Convo in ATAK's Send dialog | [10](10-atak-map-integration.md) |
 | `:conversations` | `eu.siacs.conversations` | Conversations 2.20.4, built as a library, with a small set of marked changes | [05](05-conversations-fork.md) |
 | `gradle/atak-runtime.gradle`, `tools/AtakLinkCheck.java` | build | Compile against what ATAK loads at runtime and check for it | [06](06-atak-runtime-and-classloading.md) |
 | `DebugReceiver` | `plugin.debug` | Debug builds: drive the plugin from `adb` | [07](07-development-and-testing.md) |

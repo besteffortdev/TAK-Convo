@@ -36,6 +36,17 @@ public class ViewUtil {
 
     private static void view(
             final Context context, final File file, final String uuid, final String mime) {
+        // TAKCONVO: a map file can be imported into ATAK instead
+        final var atak = eu.siacs.conversations.utils.TakConvoCompat.atak();
+        if (atak != null
+                && atak.openFile(context, file, () -> openWith(context, file, uuid, mime))) {
+            return;
+        }
+        openWith(context, file, uuid, mime);
+    }
+
+    private static void openWith(
+            final Context context, final File file, final String uuid, final String mime) {
         final Intent openIntent = new Intent(Intent.ACTION_VIEW);
         final Uri uri;
         try {

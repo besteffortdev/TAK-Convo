@@ -598,6 +598,7 @@ public class MessageAdapter extends ArrayAdapter<Message> {
 
         StylingHelper.format(body, viewHolder.messageBody().getCurrentTextColor());
         Linkify.addLinks(body);
+        eu.siacs.conversations.utils.TakConvoCompat.linkCoordinates(body); // TAKCONVO
         FixedURLSpan.fix(body);
         if (highlightedTerm != null) {
             StylingHelper.highlight(viewHolder.messageBody(), body, highlightedTerm);

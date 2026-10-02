@@ -17,6 +17,13 @@ user's TAK identity.
   connector in ATAK's contact list that opens the chat in TAK Convo. Unread messages show on the
   contact, on ATAK's Contacts button and on the TAK Convo button. Conversations' notifications
   (reply, mark as read) bring ATAK up on the chat when tapped.
+- **On ATAK's map**: locations in chats become markers on the map; sharing a location sends
+  ATAK's position or a point tapped on the map; MGRS and lat/lon written in messages are links
+  to the map; a chat's **Show on map** finds the TAK user. GeoChat-style quick messages sit
+  above the message field. ATAK's **Send** dialog offers TAK Convo for data packages and files,
+  a marker's or shape's Send can go to a group chat, and a received map file can be imported
+  into ATAK
+  ([docs/10](docs/10-atak-map-integration.md)).
 
 ## Status
 
@@ -27,7 +34,8 @@ Galaxy S22+ with 5.5.1.8):
 | Works | Not yet |
 |---|---|
 | engine in-process, provisioning from `.pref`, TAK credentials or XMPP login | calls (audio/video): switched off, not advertised |
-| trust from TAK truststores / Android CA store / CA file | share or show a location (should become ATAK map integration) |
+| trust from TAK truststores / Android CA store / CA file | |
+| ATAK's map: locations, positions in messages, quick messages, Show on map, Send dialog, import into ATAK | |
 | account pane, tool preferences, `.pref` import; QR codes: show and scan; profile picture (from the account pane) | backups |
 | chat pane: chat list, chats, group chats, start chat, channel details, search; channel discovery on your XMPP server (setting) | TAK callsigns as the names of other users' XMPP contacts |
 | your ATAK callsign is your XMPP nickname, for contacts and in group chats, and follows it (setting); a group chat where someone else has it keeps your nickname there | |

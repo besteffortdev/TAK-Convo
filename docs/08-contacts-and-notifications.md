@@ -115,9 +115,11 @@ A group chat has no TAK user, so the plugin adds a contact of its own for each o
 ```text
 XmppRoomContact(name, address) extends IndividualContact:
     uid = "takconvo.room:" + address
-    connectors = { XmppConnector(address) }     # handled above: tap opens it, unread, presence
+    connectors = { XmppConnector(address),      # handled above: tap opens it, unread, presence
+                   IpConnector(SEND_TO_GROUP_CHAT) }  # a recipient in ATAK's send list, see 10
     extras.fakeGroup = true                      # ATAK's chat room icon ("All Chat Rooms")
     getDefaultConnector() = the XMPP connector
+    accept(FOVFilter.MapState) = true            # not on the map: never hidden by "in view"
     # parent: the root group, where IndividualContact puts every contact
 
 syncRooms(open):                                 # main thread, from refresh()
@@ -264,6 +266,12 @@ on 5.8.0.5):
 
 Not tested yet: presence dots (the fake contact advertises our own JID, whose presence we don't
 subscribe to), the error notification's tap to the account pane, and a real second TAK user.
+
+The map: a TAK user's marker has an XMPP button in its contact sub-menu
+(`assets/menus/contact_submenu.xml`, next to GeoChat). It broadcasts `com.atakmap.xmppAction`,
+which `CotMapComponent` passes to `initiateContact(connector.xmpp, ...)`, so to
+`handleContact` above. Tested on the S23 (5.8) on 2026-10-02 with a fake contact advertising
+another address: the button opened its chat in the pane.
 
 Group chats, tested on the Samsung 2026-09-30: Contacts lists `team-room` with ATAK's chat
 room icon, the XMPP connector and a green dot (joined); tapping it opens the group chat in the

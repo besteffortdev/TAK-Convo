@@ -441,8 +441,12 @@ through the provider's grant.
 
 ## Not available yet
 
-Started from Conversations' UI, these show "Not available inside ATAK": share/show location,
-Conversations' own settings (replaced by the plugin's; a `.pref` file sets them, see
+Share and show location don't start Conversations' activities: the host's `Redirect`
+(`MapLocations`) takes them to ATAK's map, see [10](10-atak-map-integration.md). The host asks
+its `Redirect` about every start, before routing it.
+
+Started from Conversations' UI, these show "Not available inside ATAK": Conversations' own
+settings (replaced by the plugin's; a `.pref` file sets them, see
 [03](03-provisioning-and-trust.md#conversations-own-settings)), backup import. Library activities
 aren't hosted either: the image cropper's `CropImageActivity` is avoided by the fork instead. Calls (`RtpSessionActivity`) are switched off rather than refused: the call
 button would already have made the contact's device ring.

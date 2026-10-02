@@ -228,6 +228,7 @@ Debug builds register `DebugReceiver` (exported, debug only):
 | `DEBUG_DUMP_CONTACT` | | logs its unread counts, XMPP presence and default connector |
 | `DEBUG_FAKE_INCOMING` | `from` (default: own), `body` | stores and notifies a message as if received (nothing is sent) |
 | `DEBUG_ATAK_BROADCAST` | `action` | sends an ATAK-internal broadcast, e.g. `com.atakmap.android.contact.CONTACT_LIST` opens Contacts |
+| `DEBUG_SEND_MAP_ITEM` | `uid` (a map item's) | sends to the self chat what a group chat gets from ATAK's send list: a line naming the item, and a data package of it ([10](10-atak-map-integration.md#map-items-to-a-group-chat)) |
 
 ```bash
 adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_CHAT
@@ -340,7 +341,14 @@ After an upstream merge, a dependency change or a change to the host:
     (`DEBUG_SET_PREF` without `value`) removes it there. A `takconvo_xmpp_password` without
     `takconvo_xmpp_username` is logged as ignored and removed. Only test one with a username
     using the account's real password: it replaces the stored login.
-15. `adb logcat -b crash` is empty.
+15. ATAK's map ([10](10-atak-map-integration.md#testing)), in the self chat: a fake message
+    with an MGRS reference and a lat/lon pair shows two links, each tap a marker; the quick
+    message row is there and a tap fills the field; Location › A point on the map, then send:
+    **Show location** centers the map; the menu's Show on map centers on your position; Data
+    Packages › SEND › TAK Convo › the self chat sends the package, and tapping it offers
+    Import into ATAK, which extracts it. A marker's details › SEND lists the group chats;
+    `DEBUG_SEND_MAP_ITEM` sends the self chat a line whose MGRS is a link, and a data package.
+16. `adb logcat -b crash` is empty.
 
 ## Gotchas
 

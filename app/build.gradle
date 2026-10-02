@@ -313,6 +313,8 @@ dependencies {
     implementation project(':conversations')
     // same version as :conversations; the account pane drives its Material views directly
     implementation 'com.google.android.material:material:1.13.0'
+    // same version as :conversations; its attach calls return Guava futures
+    implementation 'com.google.guava:guava:33.7.1-android'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
 }
 

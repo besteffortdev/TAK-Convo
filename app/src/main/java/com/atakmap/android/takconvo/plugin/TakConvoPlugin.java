@@ -16,10 +16,16 @@ import android.widget.TextView;
 
 import com.atak.plugins.impl.PluginContextProvider;
 import com.atak.plugins.impl.PluginLayoutInflater;
+import com.atakmap.android.data.URIContentManager;
 import com.atakmap.android.ipc.AtakBroadcast;
 import com.atakmap.android.maps.MapView;
+import com.atakmap.android.preference.AtakPreferences;
+import com.atakmap.android.takconvo.plugin.contacts.GroupChatSends;
 import com.atakmap.android.takconvo.plugin.contacts.XmppContacts;
 import com.atakmap.android.takconvo.plugin.debug.DebugReceiver;
+import com.atakmap.android.takconvo.plugin.map.AtakIntegration;
+import com.atakmap.android.takconvo.plugin.map.ChatSender;
+import com.atakmap.android.takconvo.plugin.map.MapLocations;
 import com.atakmap.android.takconvo.plugin.ui.AccountView;
 import com.atakmap.android.takconvo.plugin.ui.TakConvoPreferenceFragment;
 import com.atakmap.android.takconvo.plugin.ui.host.ChatDropDown;
@@ -35,6 +41,7 @@ import eu.siacs.conversations.entities.Conversation;
 import eu.siacs.conversations.entities.Message;
 import eu.siacs.conversations.ui.PublishProfilePictureActivity;
 import eu.siacs.conversations.ui.XmppActivity;
+import eu.siacs.conversations.utils.TakConvoCompat;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -69,6 +76,9 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
 
     private XmppEngine engine;
     private XmppContacts contacts;
+    private MapLocations mapLocations;
+    private ChatSender chatSender;
+    private GroupChatSends groupChatSends;
     private DebugReceiver debugReceiver;
     private EmbeddedActivityHost chatHost;
     private ChatDropDown chatDropDown;
@@ -157,8 +167,16 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
                 contacts = null;
             }
         }
+        if (engine != null) {
+            try {
+                startMapIntegration(atakContext);
+            } catch (final RuntimeException | LinkageError e) {
+                Log.e(TAG, "unable to join ATAK's map and Send dialog", e);
+            }
+        }
         if (BuildConfig.DEBUG) {
             debugReceiver = DebugReceiver.register(atakContext);
+            debugReceiver.setChatSender(chatSender);
         }
 
         ToolsPreferenceFragment.register(new ToolsPreferenceFragment.ToolPreference(
@@ -182,10 +200,40 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
     }
 
+    /** Locations on ATAK's map, quick messages, imports, and the Send dialog. See docs/10. */
+    private void startMapIntegration(final Context atakContext) {
+        final MapView mapView = MapView.getMapView();
+        mapLocations = new MapLocations(mapView, pluginContext);
+        TakConvoCompat.ATAK = new AtakIntegration(mapView, pluginContext,
+                AtakPreferences.getInstance(atakContext).getSharedPrefs(), engine::getAccount);
+        chatSender = new ChatSender(mapView, pluginContext, engine, toolIcon(pluginContext),
+                this::showConversation);
+        URIContentManager.getInstance().registerSender(chatSender);
+        groupChatSends = new GroupChatSends(mapView, pluginContext, engine, chatSender);
+        groupChatSends.register();
+    }
+
+    private void stopMapIntegration() {
+        if (groupChatSends != null) {
+            groupChatSends.unregister();
+            groupChatSends = null;
+        }
+        if (chatSender != null) {
+            URIContentManager.getInstance().unregisterSender(chatSender);
+            chatSender = null;
+        }
+        TakConvoCompat.ATAK = null;
+        if (mapLocations != null) {
+            mapLocations.dispose();
+            mapLocations = null;
+        }
+    }
+
     @Override
     public void onStop() {
         AtakBroadcast.getInstance().unregisterReceiver(showReceiver);
         ToolsPreferenceFragment.unregister(TakConvoPreferenceFragment.TOOL_KEY);
+        stopMapIntegration();
         if (contacts != null) {
             contacts.stop();
             contacts = null;
@@ -269,6 +317,14 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
     }
 
+    /** Opens a chat, e.g. the one something was just sent to from ATAK. */
+    private void showConversation(final Conversation conversation) {
+        final EmbeddedActivityHost host = openChatPane();
+        if (host != null) {
+            host.showConversation(conversation.getUuid());
+        }
+    }
+
     /** Shows the chat pane; returns null and shows the account pane if there is no account. */
     private EmbeddedActivityHost openChatPane() {
         if (engine == null) {
@@ -283,6 +339,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         if (chatHost == null) {
             chatHost = new EmbeddedActivityHost((Activity) mapView.getContext(), pluginContext,
                     engine, this);
+            chatHost.setRedirect(mapLocations);
             chatDropDown = new ChatDropDown(mapView, chatHost);
         }
         chatDropDown.show();

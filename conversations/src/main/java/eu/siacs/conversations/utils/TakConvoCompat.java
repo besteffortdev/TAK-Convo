@@ -4,6 +4,13 @@ import android.app.Notification;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.text.Spannable;
+import android.text.Spanned;
+import android.text.style.URLSpan;
+import de.gultsch.common.MiniUri;
+import eu.siacs.conversations.xmpp.Jid;
+import java.io.File;
+import java.util.List;
 
 /**
  * TAKCONVO: SDK 37 constants (the build is on SDK 36, the newest AGP 8 supports) and the hooks
@@ -65,6 +72,53 @@ public final class TakConvoCompat {
     }
 
     public static volatile Observer OBSERVER = null;
+
+    /** A position written in a message, e.g. an MGRS grid reference: text from start to end. */
+    public record Coordinates(int start, int end, double latitude, double longitude) {}
+
+    /** What the chat screens use of ATAK: its map, its imports. Main thread. */
+    public interface Atak {
+        /** Texts for the quick message buttons above the message field; empty for none. */
+        List<String> quickMessages();
+
+        /** Whether a TAK user advertising this address is on ATAK's map. */
+        boolean isOnMap(Jid address);
+
+        /** Centers ATAK's map on that user. */
+        void showOnMap(Jid address);
+
+        /** Positions written in a text, linked to ATAK's map. */
+        List<Coordinates> findCoordinates(String text);
+
+        /**
+         * Offers to import a map file into ATAK. False: open it as usual. {@code openElsewhere}
+         * opens it as usual, if the user prefers that.
+         */
+        boolean openFile(Context context, File file, Runnable openElsewhere);
+    }
+
+    public static volatile Atak ATAK = null;
+
+    public static Atak atak() {
+        return EMBEDDED ? ATAK : null;
+    }
+
+    /** Links the positions written in a message to ATAK's map, where no other link is. */
+    public static void linkCoordinates(final Spannable body) {
+        final Atak atak = atak();
+        if (atak == null) {
+            return;
+        }
+        for (final Coordinates c : atak.findCoordinates(body.toString())) {
+            if (body.getSpans(c.start(), c.end(), URLSpan.class).length > 0) {
+                continue;
+            }
+            final String label = body.subSequence(c.start(), c.end()).toString();
+            final String uri =
+                    new MiniUri.Geo(c.latitude(), c.longitude()).asUniversalUri(label).toString();
+            body.setSpan(new URLSpan(uri), c.start(), c.end(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
+    }
 
     public static PendingIntent getActivity(
             final Context context, final int requestCode, final Intent intent, final int flags) {

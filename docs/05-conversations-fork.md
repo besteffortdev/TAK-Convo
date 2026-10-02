@@ -12,8 +12,8 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-10-02 it is **46 modified files, 1 added file, 2 removed manifests**
-(119 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
+As of 2026-10-02 (map integration) it is **50 modified files, 2 added files, 2 removed
+manifests** (126 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
 comment: `grep -rn TAKCONVO conversations/src`. When codeberg is unreachable,
 `UPSTREAM_DIR=<a checkout of the tag> tools/fork-diff.sh` compares with a local clone.
 
@@ -248,6 +248,22 @@ verifiers. These changes make the same checks through a `HostnameVerifier`:
 DNS over TLS to the network's DNS server by address (Android's Private DNS set to "Automatic")
 still verifies nothing, as Android itself does in that mode; Fortify may report that path.
 
+### M. ATAK's map and imports
+
+What ties the chats to ATAK's map (see [10](10-atak-map-integration.md)). Each change calls
+`TakConvoCompat.atak()`, null outside ATAK, so the fork behaves as upstream there.
+
+| File | Change |
+|---|---|
+| `java/eu/siacs/conversations/utils/TakConvoCompat.java` | Hook `ATAK` (`TakConvoCompat.Atak`: `quickMessages`, `isOnMap`, `showOnMap`, `findCoordinates`, `openFile`), record `Coordinates`, helper `linkCoordinates(Spannable)` (a `geo:` `URLSpan` over each position found, where no link is). |
+| `java/eu/siacs/conversations/ui/adapter/MessageAdapter.java` | `linkCoordinates(body)` between `Linkify.addLinks` and `FixedURLSpan.fix`. |
+| `java/eu/siacs/conversations/utils/GeoHelper.java` | `showLocationIntent()` adds the extra `label` (the sender, or "Me"), which names the marker. |
+| `java/eu/siacs/conversations/ui/util/ViewUtil.java` | `view(...)` asks `openFile` first; upstream's body is now `openWith(...)`, which `openFile` runs for "Open with another app". |
+| `java/eu/siacs/conversations/ui/ConversationFragment.java` | `onResume()` fills the quick message row (`showQuickMessages`, `appendQuickMessage`). The menu's `action_show_on_map`: visible in a one-to-one chat whose address `isOnMap`, calls `showOnMap`. |
+| `res/layout/fragment_conversation.xml` | `quick_messages_scroll` (a `HorizontalScrollView`, gone by default) with the `ChipGroup` `quick_messages`, above `message_input_box`; `snackbar` is above it instead of above the input box. |
+| `res/menu/fragment_conversation.xml` | Item `action_show_on_map` (location pin icon, hidden by default). |
+| `res/values/takconvo_strings.xml` | **New.** `takconvo_show_on_map`. |
+
 ## What the plugin relies on
 
 An upstream update can also break the plugin without touching a fork change. These are the
@@ -263,6 +279,10 @@ Conversations APIs the plugin (`app/`) uses directly:
 | `xmpp/EmbeddedPendingIntents` | `TakConvoCompat.PendingIntentFactory`; the `eu.siacs.conversations.` package prefix of the components it redirects; `SystemEventReceiver` being a `BroadcastReceiver` with a no-argument constructor, `XmppConnectionService` a `Service` |
 | `xmpp/EmbeddedNotifications` | `TakConvoCompat.NotificationFilter`; style `Theme.Conversations3` (the icons' tints); the channel id `messages` and the channel group `chats` |
 | `contacts/XmppContacts` | `Conversation`: `getAccount`, `getMode`/`MODE_SINGLE`/`MODE_MULTI`, `getAddress`, `getName`, `unreadCount`, `getMucOptions().online()`. `Account.getRoster().getContacts()`, `Contact.getOption(Contact.Options.TO)`, `getShownStatus()`, `Presence.Availability` |
+| `map/MapLocations` | the class names `ui.ShowLocationActivity` and `ui.ShareLocationActivity`; the show intent's extras `latitude`, `longitude`, `label` or its `geo:` data; the share result's extras `latitude`, `longitude`, `accuracy` (what `ConversationFragment` reads for `ATTACHMENT_CHOICE_LOCATION`). `MiniUri.getOrNull`, `MiniUri.Geo` (`getLatitude`, `getLongitude`, `getLabel`) |
+| `map/ChatSender` | `XmppConnectionService.attachFileToConversation(conversation, uri, type)` (a Guava `ListenableFuture`), `encryptIfNeededAndSend(message)`, `Message(conversation, body, encryption)`, `Conversation.getNextEncryption`/`getName`/`getStatus`/`getLatestMessage`/`getMode`/`getAddress` |
+| `contacts/GroupChatSends` | `Conversation.getMode` (`MODE_MULTI`), `getStatus` (`STATUS_ARCHIVED`), `getAddress`, `getAccount` |
+| `map/AtakIntegration` | `TakConvoCompat.Atak` and `Coordinates` (section M) |
 | `debug/DebugReceiver` | `Message(conversation, body, ENCRYPTION_NONE, STATUS_RECEIVED)`, `markUnread`, `Conversation.add`, `XmppConnectionService.createMessageAsync`, `getNotificationService().push`, `updateConversationUi` |
 | `ui/AccountView` | layout `activity_edit_account` and its view ids (`toolbar`, `editor`, `avater`, `account_jid(_layout)`, `account_password(_layout)` and that they share a parent, `save_button`, `cancel_button`, `stats`, `account_main_layout`, and the ids it hides), string `account_status_connecting`, `Account.State` and `getReadableId()`, style `Theme.Conversations3.Dark`, `AxolotlService`, `UIHelper`, `XmppConnection` and its managers (`Blocking`, `Carbons`, `ClientStateIndication`, `ExternalServiceDiscovery`, `HttpUpload`, `MessageArchive`, `Pep`, `Roster`) |
 | `ui/host/EmbeddedActivityHost` | activity class names (the `SUPPORTED` and `FLOATING` lists, `ui.activity.SettingsActivity`, `EditAccountActivity`, `ManageAccountActivity`), `ConversationsActivity.ACTION_VIEW_CONVERSATION` / `EXTRA_CONVERSATION`, styles `Theme.Conversations3` and `Theme.Conversations3.Dialog`, `BaseActivity.embeddedContent` |
@@ -315,7 +335,11 @@ Conversations APIs the plugin (`app/`) uses directly:
    notifications through `NotificationService.notify`. Check that the service still calls its
    UI listeners from `updateAccountUi`/`updateConversationUi`/`updateRosterUi`, where the
    observer hooks are.
-9. **Check the settings `ConversationsSettings` passes on**: compare its list with the
+9. **Check the location and file paths** (section M): that locations still open through
+   `ShowLocationActivity`/`GeoHelper` and are shared through `ShareLocationActivity` with the
+   same extras, that received files still open through `ViewUtil.view`, and that message text
+   is still linkified in `MessageAdapter` before `FixedURLSpan.fix`.
+   **Check the settings `ConversationsSettings` passes on**: compare its list with the
    switches and lists in `res/xml/preferences_*.xml`. Add new settings that work inside ATAK,
    drop removed ones, and keep the allowed values of lists in step. Update the template's list.
 10. **Test on the device**, see [07](07-development-and-testing.md#device-test-checklist).

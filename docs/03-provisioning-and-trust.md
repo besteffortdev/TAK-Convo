@@ -32,6 +32,7 @@ import manager) provisions every one of them. Those in the table also appear und
 | `takconvo_xmpp_use_callsign` | Boolean | `true` | the ATAK callsign is the XMPP nickname (see below) |
 | `takconvo_notification_sound` | Boolean | `true` | message notifications play the notification sound |
 | `takconvo_notification_vibrate` | Boolean | `true` | message notifications vibrate (see [08](08-contacts-and-notifications.md#sound-and-vibration)) |
+| `takconvo_quick_messages` | String | `Roger\|Wilco\|Say again\|In position\|Moving\|All secure` | the quick message buttons above the message field, separated by `\|`; empty for none (see [10](10-atak-map-integration.md#quick-messages)) |
 
 Upstream Conversations defaults to the public directory, which asks before sending a search to
 it. Inside ATAK the default is the account's own server: on an organisation's network the

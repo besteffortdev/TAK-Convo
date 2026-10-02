@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TAKCONVO: strings of the fork's ATAK integration -->
+<resources>
+    <string name="takconvo_show_on_map">Show on map</string>
+</resources>

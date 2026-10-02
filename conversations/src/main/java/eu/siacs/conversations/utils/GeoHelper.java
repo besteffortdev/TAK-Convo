@@ -48,6 +48,12 @@ public class GeoHelper {
         intent.setAction(ShowLocationActivity.ACTION_SHOW_LOCATION);
         intent.putExtra("latitude", geoPoint.getLatitude());
         intent.putExtra("longitude", geoPoint.getLongitude());
+        // TAKCONVO: names the marker on ATAK's map
+        intent.putExtra(
+                "label",
+                message.getStatus() == Message.STATUS_RECEIVED
+                        ? UIHelper.getMessageDisplayName(message)
+                        : context.getString(R.string.me));
         return intent;
     }
 }

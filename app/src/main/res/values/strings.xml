@@ -34,6 +34,9 @@
     <string name="takconvo_pref_notification_sound_summary">New messages play the notification sound</string>
     <string name="takconvo_pref_notification_vibrate">Vibration</string>
     <string name="takconvo_pref_notification_vibrate_summary">New messages vibrate</string>
+    <string name="takconvo_pref_cat_chat">Chat</string>
+    <string name="takconvo_pref_quick_messages">Quick messages</string>
+    <string name="takconvo_pref_quick_messages_summary">Buttons above the message field, separated by |. A tap adds the text to the message. Empty: no buttons.</string>
     <string name="takconvo_channel_messages_no_vibration">Messages, without vibration</string>
     <string name="takconvo_channel_messages_no_sound">Messages, without sound</string>
     <string name="takconvo_channel_messages_silent">Messages, without sound or vibration</string>
@@ -43,6 +46,30 @@
 
     <!-- chat pane (Conversations' own screens) -->
     <string name="takconvo_not_available_in_atak">Not available inside ATAK</string>
+
+    <!-- ATAK's map and imports -->
+    <string name="takconvo_location_marker">Location</string>
+    <string name="takconvo_location_invalid">Not a valid location</string>
+    <string name="takconvo_location_share_title">Share a location</string>
+    <string name="takconvo_location_share_self">My position</string>
+    <string name="takconvo_location_share_pick">A point on the map</string>
+    <string name="takconvo_location_pick_prompt">Tap the point to share</string>
+    <string name="takconvo_location_no_self">ATAK doesn\'t know your position yet</string>
+    <string name="takconvo_not_on_map">Not on the map</string>
+    <string name="takconvo_import_atak">Import into ATAK</string>
+    <string name="takconvo_import_elsewhere">Open with another app</string>
+    <string name="takconvo_send_to">Send to</string>
+    <string name="takconvo_send_group_chat">%1$s (group chat)</string>
+    <string name="takconvo_send_chat_address">%1$s · %2$s</string>
+    <string name="takconvo_send_no_group_chat">That group chat isn\'t open in TAK Convo anymore</string>
+    <string name="takconvo_send_unsupported">TAK Convo can\'t send this to a group chat</string>
+    <string name="takconvo_shared_item">%1$s · %2$s</string>
+    <string name="takconvo_shared_items">%1$d map items: %2$s</string>
+    <string name="takconvo_shared_items_name">%1$d map items</string>
+    <string name="takconvo_import_title">Received %1$s file</string>
+    <string name="takconvo_send_no_chats">No chats yet: start one in TAK Convo first</string>
+    <string name="takconvo_send_failed">Could not send it to the chat</string>
+    <string name="takconvo_quick_messages_default">Roger|Wilco|Say again|In position|Moving|All secure</string>
 
     <!-- ATAK contacts -->
     <string name="takconvo_connector_description">Chats with the XMPP address a TAK user advertises, in TAK Convo</string>

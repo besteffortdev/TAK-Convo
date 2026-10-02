@@ -30,18 +30,20 @@
             android:scrollbars="vertical"
             app:layout_behavior="@string/appbar_scrolling_view_behavior" />
 
+        <!-- TAKCONVO: 24dp margins (upstream 48dp) and a 64dp icon (the drawable's 192dp): in a
+             side pane the icon ran into the search bar and the text under the button -->
         <RelativeLayout
             android:id="@+id/empty_chat_hint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
-            android:layout_marginHorizontal="48dp"
+            android:layout_marginHorizontal="24dp"
             android:visibility="gone">
 
             <ImageView
                 android:id="@+id/empty_chat_hint_image"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
                 android:layout_centerHorizontal="true"
                 android:importantForAccessibility="no"
                 android:src="@drawable/ic_forum_thin_48dp"

@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.util.DisplayMetrics;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.LinearLayout;
 
 import com.atakmap.android.dropdown.DropDown;
 import com.atakmap.android.dropdown.DropDownReceiver;
@@ -19,10 +21,20 @@ public final class ChatDropDown extends DropDownReceiver implements DropDown.OnS
     public static final double PANE_FRACTION = 0.4;
 
     private final EmbeddedActivityHost host;
+    private final View pane;
 
-    public ChatDropDown(final MapView mapView, final EmbeddedActivityHost host) {
+    /** {@code banner}: shown above the activities' screens, e.g. the connection state. */
+    public ChatDropDown(final MapView mapView, final EmbeddedActivityHost host,
+            final View banner) {
         super(mapView);
         this.host = host;
+        final LinearLayout layout = new LinearLayout(mapView.getContext());
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.addView(banner, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        layout.addView(host.getView(), new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        this.pane = layout;
     }
 
     /**
@@ -36,7 +48,7 @@ public final class ChatDropDown extends DropDownReceiver implements DropDown.OnS
         final int[] size = estimatePaneSize(getMapView());
         host.setPaneSize(size[0], size[1]);
         // ignoreBackButton: kept on ATAK's stack, closed by goBack() only
-        showDropDown(host.getView(), PANE_FRACTION, FULL_HEIGHT, FULL_WIDTH, PANE_FRACTION, true,
+        showDropDown(pane, PANE_FRACTION, FULL_HEIGHT, FULL_WIDTH, PANE_FRACTION, true,
                 this);
     }
 

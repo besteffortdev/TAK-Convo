@@ -48,6 +48,8 @@
 
     <!-- chat pane (Conversations' own screens) -->
     <string name="takconvo_not_available_in_atak">Not available inside ATAK</string>
+    <string name="takconvo_banner_connecting">Not connected yet: connecting to the XMPP server…</string>
+    <string name="takconvo_banner_problem">Not connected: %1$s. Tap for details.</string>
 
     <!-- ATAK's map and imports -->
     <string name="takconvo_location_marker">Location</string>

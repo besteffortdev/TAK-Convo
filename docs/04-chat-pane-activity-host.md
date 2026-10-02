@@ -4,7 +4,8 @@ The chat list, the chats, contact and channel details, search and so on are **Co
 own activities**, unchanged apart from the few fork changes listed at the end. The plugin
 creates them itself, drives their lifecycle, and shows their views in an ATAK side pane.
 
-Classes: `plugin/ui/host/EmbeddedActivityHost`, `HostParent`, `PaneFrame`, `ChatDropDown`.
+Classes: `plugin/ui/host/EmbeddedActivityHost`, `HostParent`, `PaneFrame`, `ChatDropDown`;
+`plugin/ui/ConnectionBanner`.
 
 ## Why activities can't just be started
 
@@ -270,7 +271,8 @@ its own. So `goBack()` closes it explicitly: `closeDropDown()` passes the flag a
 ChatDropDown.show():
     if open and visible: return
     host.setPaneSize(estimatePaneSize(mapView))
-    showDropDown(view, 0.4, FULL_HEIGHT, FULL_WIDTH, 0.4, ignoreBackButton = true, this)
+    showDropDown(pane, 0.4, FULL_HEIGHT, FULL_WIDTH, 0.4, ignoreBackButton = true, this)
+                                       # pane: the connection banner above the host's view
 ```
 
 `show()` is also how the plugin reaches a pane that is open but **hidden under another
@@ -305,6 +307,24 @@ state. The `EditText`s re-set their text, which fired the text watchers: the pan
 that as an edit and showed a disabled "Log in". `AccountView` turns state saving off for
 the address and password fields. `refresh()` fills them anyway, and a password has no place
 in saved state.
+
+## Not connected: `ConnectionBanner`
+
+Conversations shows nothing while its account connects. The chat pane opens as soon as an
+account exists, so a first sign-in looked like an empty chat list. `ChatDropDown` puts a strip
+above the activities' screens, which the plugin builds and keeps up to date as an engine
+listener:
+
+```text
+account null or online      -> hidden (no account: the account pane shows instead)
+CONNECTING, OFFLINE         -> spinner, "Not connected yet: connecting to the XMPP server…"
+any other state             -> warning icon, "Not connected: <state>. Tap for details."
+                               (e.g. Server not found, Unauthorized, No internet)
+tap                         -> the account pane
+```
+
+It shows the current state, so a retry after an error shows "connecting" again for its
+duration. It uses the screens' theme and `UiScale`, inflated like the account pane.
 
 ## Views that talk to their window: `PaneFrame`
 
@@ -436,6 +456,7 @@ through the provider's grant.
 | `requestPermissions` → `ActivityCompat.requestPermissions` | see "Runtime permissions" |
 | attachment choices in one scrolling row | the pane is too narrow and low for the grid |
 | smaller avatars (chat list 44 dp, messages 36 dp) and attachment choices, a compact message field | in proportion with the pane, on top of the 0.9 scale |
+| the empty chat list hint's icon 64 dp instead of 192 dp, narrower margins | it ran into the search bar and pushed the text under Start chat |
 | `FileBackend` provider and camera | see "Files handed to other apps" |
 | call buttons hidden, calls neither advertised nor accepted | `RtpSessionActivity` can't run embedded, see [05](05-conversations-fork.md#h-no-calls-inside-atak) |
 

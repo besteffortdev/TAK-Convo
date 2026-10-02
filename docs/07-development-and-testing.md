@@ -316,7 +316,14 @@ After an upstream merge, a dependency change or a change to the host:
    reconnect (`... joining as ...` if the join hit the conflict). Notifications › Vibration off, then `DEBUG_FAKE_INCOMING`: the
    notification is in channel `takconvo_messages_sound` (`dumpsys notification`).
 4. Chat pane from the toolbar: chat list; open a chat; send to yourself; the message is
-   delivered (double tick) and encrypted (shield).
+   delivered (double tick) and encrypted (shield). With no chats, the hint's icon and text sit
+   between the search bar and Start chat. Not connected: block ATAK's network
+   (`adb shell cmd connectivity set-chain3-enabled true`, then
+   `set-package-networking-enabled false com.atakmap.app.civ`) and restart ATAK (the open
+   connection survives the block). The pane shows the red strip, "connecting" with a spinner,
+   then "Server not found"; a tap opens the account pane. Undo both commands (`true`, then
+   chain3 `false`): the strip goes away once online. A wrong `takconvo_xmpp_host` doesn't do
+   it: Conversations tries its last working address first.
 5. Back: chat → list → pane closes. Reopen: same state. With a chat open, log out (or turn
    XMPP off: `DEBUG_SET_PREF --es key takconvo_xmpp_enabled --es value false`, then `true`):
    one back closes the account pane and the old chat doesn't come back.

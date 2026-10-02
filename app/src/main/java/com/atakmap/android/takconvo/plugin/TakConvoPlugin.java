@@ -27,6 +27,7 @@ import com.atakmap.android.takconvo.plugin.map.AtakIntegration;
 import com.atakmap.android.takconvo.plugin.map.ChatSender;
 import com.atakmap.android.takconvo.plugin.map.MapLocations;
 import com.atakmap.android.takconvo.plugin.ui.AccountView;
+import com.atakmap.android.takconvo.plugin.ui.ConnectionBanner;
 import com.atakmap.android.takconvo.plugin.ui.TakConvoPreferenceFragment;
 import com.atakmap.android.takconvo.plugin.ui.host.ChatDropDown;
 import com.atakmap.android.takconvo.plugin.ui.host.EmbeddedActivityHost;
@@ -82,6 +83,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     private DebugReceiver debugReceiver;
     private EmbeddedActivityHost chatHost;
     private ChatDropDown chatDropDown;
+    private ConnectionBanner connectionBanner;
     private AccountView accountView;
     private Pane accountPane;
     private Pane testPane;
@@ -256,6 +258,10 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             if (accountView != null) {
                 engine.removeListener(accountView);
             }
+            if (connectionBanner != null) {
+                engine.removeListener(connectionBanner);
+                connectionBanner = null;
+            }
             engine = null;
         }
         try {
@@ -340,7 +346,10 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             chatHost = new EmbeddedActivityHost((Activity) mapView.getContext(), pluginContext,
                     engine, this);
             chatHost.setRedirect(mapLocations);
-            chatDropDown = new ChatDropDown(mapView, chatHost);
+            connectionBanner = new ConnectionBanner(mapView.getContext(), engine,
+                    this::showAccountPane);
+            engine.addListener(connectionBanner);
+            chatDropDown = new ChatDropDown(mapView, chatHost, connectionBanner.getView());
         }
         chatDropDown.show();
         return chatHost;

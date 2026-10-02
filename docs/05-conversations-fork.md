@@ -12,8 +12,8 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-10-02 (map integration) it is **50 modified files, 2 added files, 2 removed
-manifests** (126 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
+As of 2026-10-02 (smaller empty chat list hint) it is **51 modified files, 2 added files, 2
+removed manifests** (127 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
 comment: `grep -rn TAKCONVO conversations/src`. When codeberg is unreachable,
 `UPSTREAM_DIR=<a checkout of the tag> tools/fork-diff.sh` compares with a local clone.
 
@@ -154,6 +154,7 @@ Conversations' activities run hosted by the plugin, their views moved into an AT
 | `res/values/dimens.xml` | `bubble_avatar_size` 48 → 36 dp (the avatar next to messages, and a bubble's minimum height), `avatar_on_conversation_overview` 56 → 44 dp. |
 | `res/layout/item_conversation.xml` | The chat list avatar is `@dimen/avatar_on_conversation_overview` (the size its image is loaded at) instead of a fixed 56 dp. |
 | `res/layout/item_media_choice.xml` | Attachment choices: 76 dp wide instead of 108, 28 dp icons with 12 dp padding instead of 40 and 16. |
+| `res/layout/fragment_conversations_overview.xml` | The empty chat list hint: a 64 dp icon instead of the drawable's 192 dp, and 24 dp side margins instead of 48. In the pane the icon ran into the search bar and pushed the text under the Start chat button. |
 | `java/eu/siacs/conversations/ui/PublishProfilePictureActivity.java` | When embedded, `pickAvatar()` picks the image with `GetContent("image/*")` instead of the cropper's `CropImageActivity`, whose Crop button is in the window's action bar (an embedded activity's window isn't shown). The preview and the published avatar are the image's center square (`cropCenterSquare`), as before. |
 
 ### F. Files handed to other apps

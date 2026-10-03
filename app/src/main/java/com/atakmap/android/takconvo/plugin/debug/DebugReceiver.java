@@ -1,17 +1,20 @@
 package com.atakmap.android.takconvo.plugin.debug;
 
+import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.os.Build;
 import android.os.Bundle;
+
+import androidx.core.content.ContextCompat;
 
 import com.atakmap.android.contact.Connector;
 import com.atakmap.android.contact.Contact;
 import com.atakmap.android.contact.ContactConnectorManager;
 import com.atakmap.android.contact.Contacts;
 import com.atakmap.android.contact.IndividualContact;
+import com.atakmap.android.contact.IpConnector;
 import com.atakmap.android.contact.XmppConnector;
 import com.atakmap.android.cot.CotMapComponent;
 import com.atakmap.android.ipc.AtakBroadcast;
@@ -67,14 +70,22 @@ import java.util.List;
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_DUMP_CONTACT
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_FAKE_INCOMING \
  *     [--es from J] --es body B
- * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_ATAK_BROADCAST --es action A
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_ATAK_BROADCAST --es action A \
+ *     [--es extra.K V ...]
  *
  * # what a group chat gets from ATAK's send list (a line and a data package), to the self chat
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SEND_MAP_ITEM --es uid U
+ * # ATAK's send list to a contact with a send broadcast, e.g. uid takconvo.room:ROOM
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SEND_TO_CONTACT --es uid U \
+ *     [--es extra.K V ...]
+ * # a file to the self chat, as ATAK's Send dialog would send it
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SEND_FILE --es path P
  * </pre>
  *
- * <p>The fake contact and fake incoming messages stay on this device; nothing is sent.
- * DEBUG_SEND and DEBUG_SEND_MAP_ITEM do send, to the self chat by default.
+ * <p>Only adb's shell can send these: the receiver requires android.permission.DUMP. The fake
+ * contact and fake incoming messages stay on this device; nothing is sent. DEBUG_SEND,
+ * DEBUG_SEND_MAP_ITEM and DEBUG_SEND_FILE send, to the self chat by default; so does
+ * DEBUG_SEND_TO_CONTACT when given something to send.
  */
 public final class DebugReceiver extends BroadcastReceiver {
 
@@ -97,8 +108,12 @@ public final class DebugReceiver extends BroadcastReceiver {
     public static final String ACTION_FAKE_INCOMING = PREFIX + "DEBUG_FAKE_INCOMING";
     public static final String ACTION_ATAK_BROADCAST = PREFIX + "DEBUG_ATAK_BROADCAST";
     public static final String ACTION_SEND_MAP_ITEM = PREFIX + "DEBUG_SEND_MAP_ITEM";
+    public static final String ACTION_SEND_TO_CONTACT = PREFIX + "DEBUG_SEND_TO_CONTACT";
+    public static final String ACTION_SEND_FILE = PREFIX + "DEBUG_SEND_FILE";
 
     private static final String FAKE_UID = "TAKCONVO-DEBUG-CONTACT";
+    /** Extras named extra.K become extra K of the broadcast sent. */
+    private static final String EXTRA_PREFIX = "extra.";
 
     private final Context context;
     /** The fake TAK user's XMPP address. */
@@ -129,12 +144,11 @@ public final class DebugReceiver extends BroadcastReceiver {
         filter.addAction(ACTION_FAKE_INCOMING);
         filter.addAction(ACTION_ATAK_BROADCAST);
         filter.addAction(ACTION_SEND_MAP_ITEM);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // exported for adb's shell; registered in debug builds only
-            context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED);
-        } else {
-            context.registerReceiver(receiver, filter);
-        }
+        filter.addAction(ACTION_SEND_TO_CONTACT);
+        filter.addAction(ACTION_SEND_FILE);
+        // exported for adb's shell, which holds DUMP; apps can't get it
+        ContextCompat.registerReceiver(context, receiver, filter, Manifest.permission.DUMP, null,
+                ContextCompat.RECEIVER_EXPORTED);
         Log.d(TAG, "debug receiver registered");
         return receiver;
     }
@@ -244,8 +258,19 @@ public final class DebugReceiver extends BroadcastReceiver {
             }
         } else if (ACTION_ATAK_BROADCAST.equals(action)) {
             // e.g. com.atakmap.android.contact.CONTACT_LIST opens ATAK's contacts
-            AtakBroadcast.getInstance().sendBroadcast(
-                    new Intent(intent.getStringExtra("action")));
+            final Intent broadcast = new Intent(intent.getStringExtra("action"));
+            copyExtras(intent, broadcast);
+            AtakBroadcast.getInstance().sendBroadcast(broadcast);
+        } else if (ACTION_SEND_TO_CONTACT.equals(action)) {
+            sendToContact(intent);
+        } else if (ACTION_SEND_FILE.equals(action) && engine != null && chatSender != null) {
+            final Conversation self = engine.openConversation(orSelf(null, engine));
+            final String path = intent.getStringExtra("path");
+            if (self == null || path == null) {
+                Log.w(TAG, "no account, or no path");
+            } else {
+                chatSender.sendFile(new File(path), self);
+            }
         } else if (ACTION_FAKE_INCOMING.equals(action) && engine != null) {
             fakeIncoming(engine, orSelf(intent.getStringExtra("from"), engine),
                     intent.getStringExtra("body"));
@@ -265,6 +290,41 @@ public final class DebugReceiver extends BroadcastReceiver {
     /** The plugin's sender, for {@link #ACTION_SEND_MAP_ITEM}. */
     public void setChatSender(final ChatSender chatSender) {
         this.chatSender = chatSender;
+    }
+
+    /**
+     * What ATAK's send list does for a contact whose IP connector names a broadcast (a group
+     * chat's): that broadcast, with contactUID and the given extras.
+     */
+    private static void sendToContact(final Intent intent) {
+        final Contact contact = Contacts.getInstance().getContactByUuid(
+                intent.getStringExtra("uid"));
+        final Connector connector = contact instanceof IndividualContact
+                ? ((IndividualContact) contact).getConnector(IpConnector.CONNECTOR_TYPE)
+                : null;
+        final String sendIntent = connector instanceof IpConnector
+                ? ((IpConnector) connector).getSendIntent() : null;
+        if (sendIntent == null || sendIntent.isEmpty()) {
+            Log.w(TAG, "no contact with that uid whose IP connector names a broadcast");
+            return;
+        }
+        final Intent send = new Intent(sendIntent);
+        send.putExtra("contactUID", contact.getUID());
+        copyExtras(intent, send);
+        AtakBroadcast.getInstance().sendBroadcast(send);
+        Log.d(TAG, "sent the contact's send broadcast");
+    }
+
+    private static void copyExtras(final Intent from, final Intent to) {
+        final Bundle extras = from.getExtras();
+        if (extras == null) {
+            return;
+        }
+        for (final String key : extras.keySet()) {
+            if (key.startsWith(EXTRA_PREFIX)) {
+                to.putExtra(key.substring(EXTRA_PREFIX.length()), extras.getString(key));
+            }
+        }
     }
 
     private static String orSelf(final String jid, final XmppEngine engine) {

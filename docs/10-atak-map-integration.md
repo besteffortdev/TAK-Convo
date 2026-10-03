@@ -162,7 +162,7 @@ one:
 ```text
 XmppRoomContact:
     connectors: XmppConnector(address)                          # open, unread, presence
-                IpConnector("com.atakmap.android.takconvo.SEND_TO_GROUP_CHAT")
+                IpConnector("com.atakmap.android.takconvo.SEND_TO_GROUP_CHAT." + random UUID)
     FOVFilter.Filterable: always accepted                       # not on the map, so never
                                                                 #   hidden by "in view" filters
 
@@ -182,6 +182,17 @@ ChatSender.sendMapItems(items, chat):                            # as ATAK does 
     2. a data package of the items: MissionPackageApi.CreateTempManifest(name, import on
        receipt), addMapItem(uid) each, saved, then uploaded like any file
 ```
+
+The action's random part is chosen once per run (`XmppRoomContact.SEND_ACTION`). ATAK's
+launcher activity is exported, and it rebroadcasts the `internalIntent` extra of any intent it
+receives, from any app, through `AtakBroadcast`. With a fixed action, any app could make TAK
+Convo post a file or map items to a group chat, with no user involved. Only ATAK's send list
+knows the random action: it reads it from the contact's connector.
+
+`ChatSender` also refuses to send a file from ATAK's app storage (its internal data,
+`Android/data/<package>`), except from ATAK's `atak/` folder, which builds with
+`REQUIRE_APP_DATA_STORAGE` keep there. ATAK's databases and settings never leave the device,
+whatever asks.
 
 The text reads well in any XMPP client, and in TAK Convo its MGRS is a link to the map. The
 data package carries the items as they are (type, icon, remarks, shape points): a TAK Convo

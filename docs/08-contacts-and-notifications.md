@@ -116,7 +116,7 @@ A group chat has no TAK user, so the plugin adds a contact of its own for each o
 XmppRoomContact(name, address) extends IndividualContact:
     uid = "takconvo.room:" + address
     connectors = { XmppConnector(address),      # handled above: tap opens it, unread, presence
-                   IpConnector(SEND_TO_GROUP_CHAT) }  # a recipient in ATAK's send list, see 10
+                   IpConnector(SEND_TO_GROUP_CHAT.<random>) }  # in ATAK's send list, see 10
     extras.fakeGroup = true                      # ATAK's chat room icon ("All Chat Rooms")
     getDefaultConnector() = the XMPP connector
     accept(FOVFilter.MapState) = true            # not on the map: never hidden by "in view"

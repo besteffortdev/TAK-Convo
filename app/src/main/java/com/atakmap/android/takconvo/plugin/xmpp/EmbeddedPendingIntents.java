@@ -8,10 +8,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+
+import androidx.core.content.ContextCompat;
 
 import com.atakmap.android.util.ATAKConstants;
 import com.atakmap.coremap.log.Log;
@@ -61,13 +62,10 @@ public final class EmbeddedPendingIntents implements TakConvoCompat.PendingInten
         }
         final IntentFilter filter = new IntentFilter(ACTION_DELIVER);
         filter.addDataScheme(SCHEME);
-        // sent on ATAK's behalf, so not exported
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            atak.registerReceiver(receiver, filter, null, mainHandler,
-                    Context.RECEIVER_NOT_EXPORTED);
-        } else {
-            atak.registerReceiver(receiver, filter, null, mainHandler);
-        }
+        // sent on ATAK's behalf, so not exported; before Android 13 a plain registerReceiver
+        // would be, and ContextCompat requires ATAK's signature permission instead
+        ContextCompat.registerReceiver(atak, receiver, filter, null, mainHandler,
+                ContextCompat.RECEIVER_NOT_EXPORTED);
         registered = true;
     }
 

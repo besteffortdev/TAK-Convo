@@ -2,8 +2,10 @@ package com.atakmap.android.takconvo.plugin.map;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.pm.ApplicationInfo;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.TextUtils;
@@ -26,6 +28,7 @@ import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 import com.atakmap.android.util.ATAKUtilities;
 import com.atakmap.coremap.conversions.CoordinateFormat;
 import com.atakmap.coremap.conversions.CoordinateFormatUtilities;
+import com.atakmap.coremap.filesystem.FileSystemUtils;
 import com.atakmap.coremap.log.Log;
 import com.atakmap.coremap.maps.coords.GeoPoint;
 import com.google.common.util.concurrent.FutureCallback;
@@ -36,6 +39,7 @@ import eu.siacs.conversations.entities.Conversation;
 import eu.siacs.conversations.entities.Message;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -60,6 +64,8 @@ public final class ChatSender implements URIContentSender {
     private final Drawable icon;
     private final Consumer<Conversation> showChat;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    /** ATAK's own directories, canonical, each ending with a separator. */
+    private final List<String> privateDirs;
 
     public ChatSender(final MapView mapView, final Context plugin, final XmppEngine engine,
             final Drawable icon, final Consumer<Conversation> showChat) {
@@ -68,6 +74,7 @@ public final class ChatSender implements URIContentSender {
         this.engine = engine;
         this.icon = icon;
         this.showChat = showChat;
+        this.privateDirs = privateDirs(mapView.getContext());
     }
 
     @Override
@@ -249,6 +256,12 @@ public final class ChatSender implements URIContentSender {
             failed(contentUri, callback, null);
             return;
         }
+        if (!isShareable(file)) {
+            // e.g. a request naming ATAK's databases: its own data never leaves the device
+            Log.w(TAG, "refusing to send a file from ATAK's private storage");
+            failed(contentUri, callback, null);
+            return;
+        }
         Log.d(TAG, "sending a file from ATAK to a chat");
         Futures.addCallback(
                 engine.getService().attachFileToConversation(chat, Uri.fromFile(file), null),
@@ -267,6 +280,61 @@ public final class ChatSender implements URIContentSender {
                 },
                 mainHandler::post);
         showChat.accept(chat);
+    }
+
+    /**
+     * In ATAK's data folder ({@code atak/}), or outside ATAK's app storage; a path that can't be
+     * resolved counts as inside.
+     */
+    private boolean isShareable(final File file) {
+        final String path;
+        try {
+            path = file.getCanonicalPath();
+        } catch (final IOException e) {
+            // not logged with the exception: its message holds the path
+            Log.w(TAG, "unable to resolve a file to send: " + e.getClass().getName());
+            return false;
+        }
+        // builds with REQUIRE_APP_DATA_STORAGE keep that folder in app storage
+        if (path.startsWith(canonical(FileSystemUtils.getRoot()) + File.separator)) {
+            return true;
+        }
+        for (final String dir : privateDirs) {
+            if (path.startsWith(dir)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** ATAK's internal data and its app-specific external storage (Android/data/<package>). */
+    private static List<String> privateDirs(final Context atak) {
+        final ApplicationInfo info = atak.getApplicationInfo();
+        final List<File> dirs = new ArrayList<>();
+        dirs.add(new File(info.dataDir));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && info.deviceProtectedDataDir != null) {
+            dirs.add(new File(info.deviceProtectedDataDir));
+        }
+        for (final File external : atak.getExternalFilesDirs(null)) {
+            if (external != null && external.getParentFile() != null) {
+                dirs.add(external.getParentFile());
+            }
+        }
+        final List<String> paths = new ArrayList<>();
+        for (final File dir : dirs) {
+            paths.add(canonical(dir) + File.separator);
+        }
+        return paths;
+    }
+
+    /** Of one of ATAK's directories; as given if it can't be resolved. */
+    private static String canonical(final File dir) {
+        try {
+            return dir.getCanonicalPath();
+        } catch (final IOException e) {
+            Log.w(TAG, "unable to resolve one of ATAK's directories", e);
+            return dir.getAbsolutePath();
+        }
     }
 
     private void failed(final String contentUri, final Callback callback, final Throwable t) {

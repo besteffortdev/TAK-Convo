@@ -8,6 +8,8 @@ import com.atakmap.android.contact.IpConnector;
 import com.atakmap.android.contact.XmppConnector;
 import com.atakmap.android.hierarchy.filters.FOVFilter;
 
+import java.util.UUID;
+
 /**
  * An XMPP group chat in ATAK's contact list, with one XMPP connector that {@link XmppContacts}
  * handles (open, unread count). Its IP connector makes it a recipient in ATAK's send list:
@@ -16,8 +18,12 @@ import com.atakmap.android.hierarchy.filters.FOVFilter;
 final class XmppRoomContact extends IndividualContact implements FOVFilter.Filterable {
 
     private static final String UID_PREFIX = "takconvo.room:";
-    /** What ATAK broadcasts when the user sends something to this contact. */
-    static final String SEND_ACTION = "com.atakmap.android.takconvo.SEND_TO_GROUP_CHAT";
+    /**
+     * What ATAK broadcasts when the user sends something to this contact. Random per run: ATAK
+     * rebroadcasts any app's internalIntent, and only its send list reads this from the contact.
+     */
+    static final String SEND_ACTION =
+            "com.atakmap.android.takconvo.SEND_TO_GROUP_CHAT." + UUID.randomUUID();
 
     private final String address;
 

@@ -204,7 +204,10 @@ getService / getBroadcast(ctx, code, intent, flags):  # notification actions, al
               action = ACTION_DELIVER, data = "takconvo://deliver/<class>/<action>"
     return PendingIntent.getBroadcast(atak, code, wrapped, flags)
 
-receiver (registered on ATAK's context, not exported, while the engine runs):
+receiver (registered on ATAK's context while the engine runs, not exported: through
+          ContextCompat, which before Android 13 requires ATAK's signature permission
+          DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION; a plain registerReceiver would be open
+          to any app there):
     on ACTION_DELIVER with scheme takconvo:
         intent = copy(received)           # keeps what the system added: the reply text
         intent.action = original action; component = (ATAK, class)

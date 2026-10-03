@@ -48,9 +48,16 @@ data isn't meant for.
 - **Main thread**: no blocking work. Use `SharedPreferences.apply()`, not `commit()`. Network
   and database work belong to Conversations' own threads. The engine and the panes run on
   the main thread by design: their methods say so.
-- **Receivers**: register runtime receivers with `RECEIVER_NOT_EXPORTED` (Android 13+). The
-  only exported one is `DebugReceiver`, which adb's shell needs; it is registered in debug
-  builds only.
+- **Receivers**: register runtime receivers with
+  `ContextCompat.registerReceiver(..., RECEIVER_NOT_EXPORTED)`. A plain `registerReceiver`
+  without flags is open to every app before Android 13, and the plugin supports Android 6 and
+  up. The only exported one is `DebugReceiver`, registered in debug builds only, and it requires
+  `android.permission.DUMP` from senders: adb's shell has it, apps can't get it.
+- **ATAK's internal broadcasts are reachable from other apps**: ATAK's launcher activity is
+  exported and rebroadcasts any `internalIntent` extra through `AtakBroadcast`. A receiver that
+  acts without the user (sends, opens, imports) must not trust what it receives. Either it
+  listens on an action other apps can't know (the group chat send action has a random part,
+  see [10](10-atak-map-integration.md#map-items-to-a-group-chat)), or it checks what it gets.
 - **PendingIntents**: explicit targets, immutable unless the system has to fill in the
   intent. `EmbeddedPendingIntents` keeps Conversations' own flags. Upstream makes a few
   notification actions mutable: reply, mark as read, delete, show location.

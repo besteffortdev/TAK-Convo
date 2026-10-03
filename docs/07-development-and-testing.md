@@ -219,7 +219,10 @@ sideloaded plugins from a cached `/sdcard/atak/support/apks/sideloaded/product.i
 
 ## Debug broadcasts
 
-Debug builds register `DebugReceiver` (exported, debug only):
+Debug builds register `DebugReceiver`. It is exported, but senders need
+`android.permission.DUMP`: adb's shell has it, other apps can't get it. A broadcast from an
+app's uid (`adb shell run-as com.atakmap.app.civ am broadcast --user 0 ...`) isn't
+delivered.
 
 | Action (`com.atakmap.android.takconvo.` + ...) | Extras | Does |
 |---|---|---|
@@ -238,8 +241,10 @@ Debug builds register `DebugReceiver` (exported, debug only):
 | `DEBUG_OPEN_CONTACT` | | does what tapping its XMPP connector does |
 | `DEBUG_DUMP_CONTACT` | | logs its unread counts, XMPP presence and default connector |
 | `DEBUG_FAKE_INCOMING` | `from` (default: own), `body` | stores and notifies a message as if received (nothing is sent) |
-| `DEBUG_ATAK_BROADCAST` | `action` | sends an ATAK-internal broadcast, e.g. `com.atakmap.android.contact.CONTACT_LIST` opens Contacts |
+| `DEBUG_ATAK_BROADCAST` | `action`, `extra.<key>` (strings) | sends an ATAK-internal broadcast with those extras, e.g. `com.atakmap.android.contact.CONTACT_LIST` opens Contacts |
 | `DEBUG_SEND_MAP_ITEM` | `uid` (a map item's) | sends to the self chat what a group chat gets from ATAK's send list: a line naming the item, and a data package of it ([10](10-atak-map-integration.md#map-items-to-a-group-chat)) |
+| `DEBUG_SEND_TO_CONTACT` | `uid` (a contact's), `extra.<key>` | does what ATAK's send list does for a contact whose IP connector names a broadcast (a group chat's `takconvo.room:<address>`); without extras nothing is sent, `GroupChatSends` only warns |
+| `DEBUG_SEND_FILE` | `path` | sends a file to the self chat, as ATAK's Send dialog would |
 
 ```bash
 adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_CHAT
@@ -366,7 +371,20 @@ After an upstream merge, a dependency change or a change to the host:
     Packages › SEND › TAK Convo › the self chat sends the package, and tapping it offers
     Import into ATAK, which extracts it. A marker's details › SEND lists the group chats;
     `DEBUG_SEND_MAP_ITEM` sends the self chat a line whose MGRS is a link, and a data package.
-16. `adb logcat -b crash` is empty.
+16. What other apps can reach ([09](09-code-guidelines.md#android)):
+    - `DebugReceiver` takes adb's shell broadcasts, not an app's (`run-as`, see Debug
+      broadcasts).
+    - A `com.atakmap.android.takconvo.DELIVER` broadcast from adb (`-d takconvo://deliver/x
+      -p com.atakmap.app.civ`) logs nothing in `TakConvo.PendingIntents`, while alarms are
+      still delivered.
+    - `DEBUG_ATAK_BROADCAST` with `action` `com.atakmap.android.takconvo.SEND_TO_GROUP_CHAT`
+      and `extra.contactUID` `takconvo.room:<room>` gets no reaction. With that room open,
+      `DEBUG_SEND_TO_CONTACT --es uid takconvo.room:<room>` makes `TakConvo.Send` warn that
+      there's nothing to send.
+    - `DEBUG_SEND_FILE` with a file in ATAK's app storage (`run-as` into `files/`, path by
+      `/data/data/...` and `/data/user/0/...`) logs "refusing to send a file from ATAK's
+      private storage". A file in `/sdcard/atak` is sent.
+17. `adb logcat -b crash` is empty.
 
 ## Gotchas
 

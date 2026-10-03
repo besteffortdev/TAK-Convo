@@ -40,6 +40,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
@@ -49,6 +51,8 @@ import javax.net.ssl.X509TrustManager;
 public final class XmppEngine {
 
     private static final String TAG = "TakConvo.XmppEngine";
+    /** A .pref import changes many keys at once: act once they're all in. */
+    private static final long DEBOUNCE_MS = 750;
 
     /** ATAK preference that ATAK puts in this device's SA as contact@xmppUsername. */
     public static final String PREF_SA_XMPP_USERNAME = "saXmppUsername";
@@ -97,6 +101,13 @@ public final class XmppEngine {
     private final EmbeddedPendingIntents pendingIntents;
     private volatile int unreadCount;
     private final Runnable provisionTask = this::provision;
+    private final Runnable conversationsSettingsTask;
+    /** Reads ATAK's credential and certificate stores, which are on disk. */
+    private final ExecutorService loader =
+            Executors.newSingleThreadExecutor(r -> new Thread(r, "TakConvo.Provision"));
+    /** The latest provisioning; an older one's result is dropped. */
+    private int provisionRun;
+    private boolean stopped;
     private final SharedPreferences.OnSharedPreferenceChangeListener prefListener;
     private final CotServiceRemote.OutputsChangedListener takServerListener;
     private final BroadcastReceiver trustStoreReceiver;
@@ -170,10 +181,10 @@ public final class XmppEngine {
         ConversationsSettings.apply(AtakPreferences.getInstance(this.atakContext).getSharedPrefs(),
                 defaultPreferences());
         service.onCreate();
-        // trust must be in place before the service connects the stored accounts
-        XmppSettings.normalize(AtakPreferences.getInstance(this.atakContext).getSharedPrefs());
-        settings = XmppSettings.load(this.atakContext);
-        applyTrust();
+        // trust must be in place before the service connects the stored accounts: read once
+        // here, on the main thread, as the plugin starts
+        final Loaded initial = load();
+        applyTrust(initial);
         // a new resource per start: Openfire holds the previous session for resumption and
         // doesn't answer a bind of the same resource until it drops it
         for (final Account account : service.getAccounts()) {
@@ -181,10 +192,14 @@ public final class XmppEngine {
                     eu.siacs.conversations.BuildConfig.APP_NAME, CryptoHelper.random(3)));
         }
         service.onStartCommand(null, 0, 0);
-        provision();
+        apply(initial);
 
         // re-provision on our preferences (e.g. a .pref import) and TAK server changes; the
         // TAK credentials are often not there yet when the plugin starts
+        final SharedPreferences atakPrefs =
+                AtakPreferences.getInstance(this.atakContext).getSharedPrefs();
+        conversationsSettingsTask =
+                () -> ConversationsSettings.apply(atakPrefs, defaultPreferences());
         prefListener = (prefs, key) -> {
             if (key == null) {
                 return;
@@ -192,7 +207,9 @@ public final class XmppEngine {
             if (key.startsWith(XmppSettings.KEY_PREFIX)) {
                 scheduleProvision();
             } else if (key.startsWith(ConversationsSettings.PREFIX)) {
-                mainHandler.post(() -> ConversationsSettings.apply(prefs, defaultPreferences()));
+                // once for a .pref import's keys, not once per key
+                mainHandler.removeCallbacks(conversationsSettingsTask);
+                mainHandler.postDelayed(conversationsSettingsTask, DEBOUNCE_MS);
             } else if (XmppSettings.KEY_ATAK_CALLSIGN.equals(key)) {
                 mainHandler.post(nicknames::sync);
             }
@@ -232,12 +249,15 @@ public final class XmppEngine {
     /** Debounced: a .pref import changes several keys at once. */
     private void scheduleProvision() {
         mainHandler.removeCallbacks(provisionTask);
-        mainHandler.postDelayed(provisionTask, 750);
+        mainHandler.postDelayed(provisionTask, DEBOUNCE_MS);
     }
 
     private void stop() {
         Log.d(TAG, "stopping embedded Conversations engine");
+        stopped = true;
+        loader.shutdownNow();
         mainHandler.removeCallbacks(provisionTask);
+        mainHandler.removeCallbacks(conversationsSettingsTask);
         nicknames.stop();
         AtakPreferences.getInstance(atakContext).unregisterListener(prefListener);
         CommsMapComponent.getInstance().removeOutputsChangedListener(takServerListener);
@@ -258,16 +278,70 @@ public final class XmppEngine {
     }
 
     /**
-     * Creates or updates the XMPP account from {@link XmppSettings}; an unchanged configuration
-     * leaves the connection alone. Accounts of another address are disabled, never deleted, so
-     * their history survives a mistaken configuration.
+     * Re-reads {@link XmppSettings} in the background, then updates the account
+     * ({@link #apply}). Settings, TAK server and trust store changes come here, often.
      */
     public void provision() {
         mainHandler.removeCallbacks(provisionTask);
-        XmppSettings.importLogin(AtakPreferences.getInstance(atakContext).getSharedPrefs());
-        XmppSettings.normalize(AtakPreferences.getInstance(atakContext).getSharedPrefs());
-        settings = XmppSettings.load(atakContext);
-        final boolean trustChanged = applyTrust();
+        if (stopped) {
+            return;
+        }
+        final int run = ++provisionRun;
+        loader.execute(() -> {
+            final Loaded loaded;
+            try {
+                loaded = load();
+            } catch (final RuntimeException | LinkageError e) {
+                // uncaught on this thread, it would take ATAK down
+                Log.e(TAG, "unable to read the XMPP settings", e);
+                return;
+            }
+            mainHandler.post(() -> {
+                if (run == provisionRun && !stopped) {
+                    apply(loaded);
+                }
+            });
+        });
+    }
+
+    /** As {@link #provision}, at once on the main thread: for the user's sign-in and out. */
+    private void provisionNow() {
+        mainHandler.removeCallbacks(provisionTask);
+        // drops the result of one still in the background
+        provisionRun++;
+        apply(load());
+    }
+
+    /** What provisioning reads: the settings, and the CAs they trust. */
+    private static final class Loaded {
+        final XmppSettings settings;
+        final X509TrustManager trust;
+        final String trustFingerprint;
+
+        Loaded(final XmppSettings settings, final X509TrustManager trust) {
+            this.settings = settings;
+            this.trust = trust;
+            this.trustFingerprint = TrustSources.fingerprint(trust);
+        }
+    }
+
+    /** Reads the settings and builds their trust manager; disk work, any thread. */
+    private Loaded load() {
+        final SharedPreferences prefs = AtakPreferences.getInstance(atakContext).getSharedPrefs();
+        XmppSettings.importLogin(prefs);
+        XmppSettings.normalize(prefs);
+        final XmppSettings loaded = XmppSettings.load(atakContext);
+        return new Loaded(loaded, TrustSources.build(loaded));
+    }
+
+    /**
+     * Creates or updates the XMPP account from the settings read; an unchanged configuration
+     * leaves the connection alone. Accounts of another address are disabled, never deleted, so
+     * their history survives a mistaken configuration.
+     */
+    private void apply(final Loaded loaded) {
+        settings = loaded.settings;
+        final boolean trustChanged = applyTrust(loaded);
         applyChannelDiscovery();
         SensitiveLog.d(TAG, "provisioning " + settings);
 
@@ -339,12 +413,11 @@ public final class XmppEngine {
     }
 
     /** Makes Conversations trust the selected CAs; returns whether they changed. */
-    private boolean applyTrust() {
-        final X509TrustManager trust = TrustSources.build(settings);
-        TakConvoCompat.EXTRA_TRUST_MANAGER = trust;
-        final String fingerprint = TrustSources.fingerprint(trust);
-        final boolean changed = trustFingerprint != null && !trustFingerprint.equals(fingerprint);
-        trustFingerprint = fingerprint;
+    private boolean applyTrust(final Loaded loaded) {
+        TakConvoCompat.EXTRA_TRUST_MANAGER = loaded.trust;
+        final boolean changed = trustFingerprint != null
+                && !trustFingerprint.equals(loaded.trustFingerprint);
+        trustFingerprint = loaded.trustFingerprint;
         return changed;
     }
 
@@ -396,13 +469,14 @@ public final class XmppEngine {
         final Account before = getAccount();
         final String previousPassword = before == null ? null : before.getPassword();
         XmppSettings.saveLogin(username, password);
-        provision();
+        // at once: the account pane compares the account before and after
+        provisionNow();
         final Account account = getAccount();
         if (account != null && account == before
                 && Objects.equals(previousPassword, account.getPassword())
                 && !account.isOptionSet(Account.OPTION_DISABLED)
                 && !account.isOnlineAndConnected()) {
-            // unchanged, so provision() left it alone: retry now rather than after the backoff
+            // unchanged, so apply() left it alone: retry now rather than after the backoff
             service.reconnectAccountInBackground(account);
         }
         return true;
@@ -416,7 +490,7 @@ public final class XmppEngine {
         if (account != null) {
             account.setPassword("");
         }
-        provision();
+        provisionNow();
     }
 
     public void reconnect() {

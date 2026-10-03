@@ -128,7 +128,9 @@ Everything the plugin does runs on ATAK's main thread, as upstream's service and
 expect. Upstream's service reports changes from worker threads, so `XmppEngine` posts them
 back to the main thread. The XMPP connection, database, file and crypto work run on
 Conversations' own executors, unchanged. ATAK asks contact handlers for unread counts on a
-thread of its own; `XmppContacts` answers from snapshots made on the main thread.
+thread of its own; `XmppContacts` answers from snapshots made on the main thread. Provisioning
+reads ATAK's credential and certificate stores on a thread of its own (`TakConvo.Provision`),
+then applies what it read on the main thread ([03](03-provisioning-and-trust.md)).
 
 ## Data on the device
 

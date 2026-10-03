@@ -14,6 +14,7 @@ import com.atakmap.net.AtakAuthenticationDatabase;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * XMPP settings from ATAK's preferences, so a {@code .pref} file can provision them; the keys
@@ -147,21 +148,24 @@ public final class XmppSettings {
         this.channelServer = channels.server;
     }
 
+    /** Reads ATAK's credential store: not on the main thread. */
     public static XmppSettings load(final Context atakContext) {
-        final SharedPreferences prefs = AtakPreferences.getInstance(atakContext).getSharedPrefs();
-        final boolean enabled = parseBoolean(getString(prefs, KEY_ENABLED), true);
-        final String domain = trimToNull(getString(prefs, KEY_DOMAIN));
-        final String host = trimToNull(getString(prefs, KEY_HOST));
-        final int port = parsePort(getString(prefs, KEY_PORT));
+        // one copy of ATAK's preferences, not one per key
+        final Map<String, ?> prefs = AtakPreferences.getInstance(atakContext).getSharedPrefs()
+                .getAll();
+        final boolean enabled = parseBoolean(value(prefs, KEY_ENABLED), true);
+        final String domain = trimToNull(value(prefs, KEY_DOMAIN));
+        final String host = trimToNull(value(prefs, KEY_HOST));
+        final int port = parsePort(value(prefs, KEY_PORT));
         final Trust trust = new Trust(
-                parseBoolean(getString(prefs, KEY_USE_TAK_TRUSTSTORE), true),
-                parseBoolean(getString(prefs, KEY_USE_ANDROID_CA_STORE), false),
-                trimToNull(getString(prefs, KEY_TRUSTED_CA)));
-        final boolean useTak = parseBoolean(getString(prefs, KEY_USE_TAK_CREDENTIALS), true);
-        final String suggested = trimToNull(getString(prefs, KEY_USERNAME));
+                parseBoolean(value(prefs, KEY_USE_TAK_TRUSTSTORE), true),
+                parseBoolean(value(prefs, KEY_USE_ANDROID_CA_STORE), false),
+                trimToNull(value(prefs, KEY_TRUSTED_CA)));
+        final boolean useTak = parseBoolean(value(prefs, KEY_USE_TAK_CREDENTIALS), true);
+        final String suggested = trimToNull(value(prefs, KEY_USERNAME));
         final Channels channels = new Channels(
-                ChannelDiscovery.parse(getString(prefs, KEY_CHANNEL_DISCOVERY)),
-                trimToNull(getString(prefs, KEY_CHANNEL_SERVER)));
+                ChannelDiscovery.parse(value(prefs, KEY_CHANNEL_DISCOVERY)),
+                trimToNull(value(prefs, KEY_CHANNEL_SERVER)));
 
         if (useTak) {
             // no fallback to the XMPP login: the TAK credentials often come later, and
@@ -247,7 +251,7 @@ public final class XmppSettings {
     }
 
     public static boolean usesCallsign(final SharedPreferences prefs) {
-        return parseBoolean(getString(prefs, KEY_USE_CALLSIGN), true);
+        return getBoolean(prefs, KEY_USE_CALLSIGN, true);
     }
 
     /** This device's ATAK callsign, or null. */
@@ -256,27 +260,28 @@ public final class XmppSettings {
     }
 
     public static boolean notificationSound(final SharedPreferences prefs) {
-        return parseBoolean(getString(prefs, KEY_NOTIFICATION_SOUND), true);
+        return getBoolean(prefs, KEY_NOTIFICATION_SOUND, true);
     }
 
     public static boolean notificationVibrate(final SharedPreferences prefs) {
-        return parseBoolean(getString(prefs, KEY_NOTIFICATION_VIBRATE), true);
+        return getBoolean(prefs, KEY_NOTIFICATION_VIBRATE, true);
     }
 
     /** Stores .pref string booleans as Booleans, which the settings' check boxes need. */
     public static void normalize(final SharedPreferences prefs) {
+        final Map<String, ?> all = prefs.getAll();
         final SharedPreferences.Editor editor = prefs.edit();
         boolean changed = false;
         for (final String key : new String[] {KEY_ENABLED, KEY_USE_TAK_CREDENTIALS,
                 KEY_USE_TAK_TRUSTSTORE, KEY_USE_ANDROID_CA_STORE, KEY_USE_CALLSIGN,
                 KEY_NOTIFICATION_SOUND, KEY_NOTIFICATION_VIBRATE}) {
-            final Object value = prefs.getAll().get(key);
+            final Object value = all.get(key);
             if (value != null && !(value instanceof Boolean)) {
                 editor.putBoolean(key, Boolean.parseBoolean(String.valueOf(value).trim()));
                 changed = true;
             }
         }
-        final Object port = prefs.getAll().get(KEY_PORT);
+        final Object port = all.get(KEY_PORT);
         if (port != null && !(port instanceof String)) {
             editor.putString(KEY_PORT, String.valueOf(port));
             changed = true;
@@ -384,9 +389,29 @@ public final class XmppSettings {
 
     // --- .pref values are strings or typed ---
 
-    private static String getString(final SharedPreferences prefs, final String key) {
-        final Object value = prefs.getAll().get(key);
+    private static String value(final Map<String, ?> prefs, final String key) {
+        final Object value = prefs.get(key);
         return value == null ? null : String.valueOf(value);
+    }
+
+    /** One key, without copying all of ATAK's preferences unless it isn't a string. */
+    private static String getString(final SharedPreferences prefs, final String key) {
+        try {
+            return prefs.getString(key, null);
+        } catch (final ClassCastException e) {
+            // typed by a .pref file (a Boolean, a number): rare
+            return value(prefs.getAll(), key);
+        }
+    }
+
+    private static boolean getBoolean(final SharedPreferences prefs, final String key,
+            final boolean def) {
+        try {
+            return prefs.getBoolean(key, def);
+        } catch (final ClassCastException e) {
+            // a .pref string, until normalize() stores it as a Boolean
+            return parseBoolean(value(prefs.getAll(), key), def);
+        }
     }
 
     private static int parsePort(final String value) {

@@ -228,7 +228,7 @@ delivered.
 |---|---|---|
 | `DEBUG_SET_PREF` | `key`, `value` | sets an ATAK preference (string); removes it without `value` |
 | `DEBUG_IMPORT_PREF` | `path` | imports a `.pref` file with ATAK's importer |
-| `DEBUG_PROVISION` | | runs `XmppEngine.provision()` |
+| `DEBUG_PROVISION` | | runs `XmppEngine.provision()`: `TakConvo.Trust` logs the trust sources from the `TakConvo.Provision` thread, `TakConvo.XmppEngine` "provisioning ..." from the main thread |
 | `DEBUG_ADD_TAK_SERVER` | `connect` (`host:port:ssl`), `user`, `pass` | adds a TAK server connection the way ATAK's dialog does |
 | `DEBUG_DUMP_SELF_SA` | | logs the SA this device sends (check `xmppUsername`) |
 | `DEBUG_SEND` | `to`, `body` | sends a plain-text 1:1 message |
@@ -239,7 +239,7 @@ delivered.
 | `DEBUG_FAKE_CONTACT` | `jid` (default: own), `callsign` | injects the SA of a TAK user advertising `jid`, into this ATAK only |
 | `DEBUG_REMOVE_FAKE_CONTACT` | | removes it |
 | `DEBUG_OPEN_CONTACT` | | does what tapping its XMPP connector does |
-| `DEBUG_DUMP_CONTACT` | | logs its unread counts, XMPP presence and default connector |
+| `DEBUG_DUMP_CONTACT` | | logs its unread counts, XMPP presence and default connector, and whether its address is on the map (Show on map) with the time that took |
 | `DEBUG_FAKE_INCOMING` | `from` (default: own), `body` | stores and notifies a message as if received (nothing is sent) |
 | `DEBUG_ATAK_BROADCAST` | `action`, `extra.<key>` (strings) | sends an ATAK-internal broadcast with those extras, e.g. `com.atakmap.android.contact.CONTACT_LIST` opens Contacts |
 | `DEBUG_SEND_MAP_ITEM` | `uid` (a map item's) | sends to the self chat what a group chat gets from ATAK's send list: a line naming the item, and a data package of it ([10](10-atak-map-integration.md#map-items-to-a-group-chat)) |

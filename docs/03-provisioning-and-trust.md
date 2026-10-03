@@ -109,7 +109,7 @@ A `.pref` file can also provision the login, with `takconvo_xmpp_username` and
 `takconvo_xmpp_password`. The password doesn't stay in the preferences:
 
 ```text
-XmppSettings.importLogin(prefs):          # at the start of each provision()
+XmppSettings.importLogin(prefs):          # at the start of each load(), below
     if takconvo_xmpp_password is set:
         if takconvo_xmpp_username is set: saveLogin(username, password)   # credential store
         else: log a warning
@@ -126,9 +126,24 @@ The device has one XMPP identity. `provision()` makes Conversations' account lis
 settings. It is idempotent and runs at start and whenever an input changes. Accounts are
 **disabled, never deleted**, so history survives a transient or mistaken configuration.
 
+Reading the settings means reading ATAK's encrypted credential store and its certificate
+database, the Android CA store when enabled, and hashing every trusted CA. That is disk and
+crypto work, and the inputs below change often (each TAK server status change), so it runs
+on a thread of its own, and only the account changes run on the main thread:
+
 ```text
-XmppEngine.provision():
-    settings = XmppSettings.load(); trustChanged = applyTrust()
+XmppEngine.provision():                        # main thread
+    run = ++provisionRun
+    on the TakConvo.Provision thread:
+        loaded = load()                        # importLogin, normalize, XmppSettings.load,
+                                               #   TrustSources.build and its fingerprint
+        then on the main thread: if run is still the latest and not stopped: apply(loaded)
+
+provisionNow():                                # sign-in and sign-out: the account pane
+    ++provisionRun; apply(load())              #   compares the account before and after
+
+XmppEngine.apply(loaded):                      # main thread
+    settings = loaded.settings; trustChanged = applyTrust(loaded)
     problem  = settings.problem()
     if problem == NO_TAK_CREDENTIALS:
         # TAK credentials often arrive after the plugin starts: keep the account on the

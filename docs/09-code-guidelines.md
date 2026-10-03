@@ -20,7 +20,9 @@ The project is Java. Kotlin's conventions are listed too, for any Kotlin added l
 **The plugin's one deliberate exception**: code that calls into Conversations or ATAK
 from ATAK's process catches `RuntimeException | LinkageError` (or `Exception | LinkageError`
 when checked exceptions are involved) and logs it. This covers starting and stopping the
-engine (`TakConvoPlugin`) and an embedded activity's lifecycle (`EmbeddedActivityHost.guarded`).
+engine (`TakConvoPlugin`), an embedded activity's lifecycle (`EmbeddedActivityHost.guarded`),
+and the provisioning reads on their own thread (`XmppEngine.provision`), where an uncaught
+exception would kill ATAK just the same.
 A plugin must not crash its host: an uncaught exception there kills ATAK. `LinkageError`
 covers a library that ATAK provides not matching what the plugin was built against
 ([06](06-atak-runtime-and-classloading.md)). `Error`s like `OutOfMemoryError` are not caught.
@@ -47,7 +49,13 @@ data isn't meant for.
 
 - **Main thread**: no blocking work. Use `SharedPreferences.apply()`, not `commit()`. Network
   and database work belong to Conversations' own threads. The engine and the panes run on
-  the main thread by design: their methods say so.
+  the main thread by design: their methods say so. What the plugin reads from disk on a
+  frequent trigger goes to a thread of its own, its result back to the main thread: the
+  provisioning reads (`XmppEngine.provision`). Debounce what a `.pref` import triggers once
+  per key.
+- **Repeated work**: code that runs on every refresh doesn't walk the whole map
+  (`AtakIntegration.find` looks among the contacts, then by uid) or copy all of ATAK's
+  preferences (`prefs.getAll()`) for one key. What is drawn once is kept (the tool icon).
 - **Receivers**: register runtime receivers with
   `ContextCompat.registerReceiver(..., RECEIVER_NOT_EXPORTED)`. A plain `registerReceiver`
   without flags is open to every app before Android 13, and the plugin supports Android 6 and

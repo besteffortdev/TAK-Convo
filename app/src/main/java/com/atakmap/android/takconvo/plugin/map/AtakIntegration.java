@@ -6,10 +6,14 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.widget.Toast;
 
+import com.atakmap.android.contact.Connector;
+import com.atakmap.android.contact.Contact;
+import com.atakmap.android.contact.Contacts;
+import com.atakmap.android.contact.IndividualContact;
+import com.atakmap.android.contact.XmppConnector;
 import com.atakmap.android.importexport.ImportExportMapComponent;
 import com.atakmap.android.importexport.ImportReceiver;
 import com.atakmap.android.ipc.AtakBroadcast;
-import com.atakmap.android.maps.MapGroup;
 import com.atakmap.android.maps.MapItem;
 import com.atakmap.android.maps.MapTouchController;
 import com.atakmap.android.maps.MapView;
@@ -90,25 +94,35 @@ public final class AtakIntegration implements TakConvoCompat.Atak {
         MapTouchController.goTo(item, false);
     }
 
-    /** The marker of the TAK user advertising this address; ours is the self marker. */
+    /**
+     * The marker of the TAK user advertising this address; ours is the self marker. Asked on
+     * every refresh of a chat's menu: ATAK's contacts are few, the map's items may be many.
+     */
     private MapItem find(final Jid address) {
         final String wanted = address.asBareJid().toString();
         final Account own = account.get();
         if (own != null && own.getJid().asBareJid().toString().equalsIgnoreCase(wanted)) {
             return ATAKUtilities.findSelf(mapView);
         }
-        final MapItem[] found = new MapItem[1];
-        mapView.getRootGroup().deepForEachItem(new MapGroup.MapItemsCallback() {
-            @Override
-            public boolean onItemFunction(final MapItem item) {
-                if (wanted.equalsIgnoreCase(item.getMetaString(XMPP_META, null))) {
-                    found[0] = item;
-                    return true;
-                }
-                return false;
+        final Contacts contacts = Contacts.getInstance();
+        if (contacts == null) {
+            return null;
+        }
+        // ATAK gives a TAK user's contact an XMPP connector when its SA has the address
+        for (final Contact contact : contacts.getAllContacts()) {
+            final Connector xmpp = contact instanceof IndividualContact
+                    ? ((IndividualContact) contact).getConnector(XmppConnector.CONNECTOR_TYPE)
+                    : null;
+            if (xmpp == null || !wanted.equalsIgnoreCase(xmpp.getConnectionString())) {
+                continue;
             }
-        });
-        return found[0];
+            // a TAK user's contact has its marker's uid, which the root group indexes
+            final MapItem item = mapView.getRootGroup().deepFindUID(contact.getUID());
+            if (item != null && wanted.equalsIgnoreCase(item.getMetaString(XMPP_META, null))) {
+                return item;
+            }
+        }
+        return null;
     }
 
     @Override

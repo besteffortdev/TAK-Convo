@@ -39,6 +39,8 @@ import com.atakmap.coremap.maps.time.CoordinatedTime;
 import eu.siacs.conversations.entities.Conversation;
 import eu.siacs.conversations.entities.Message;
 import eu.siacs.conversations.services.XmppConnectionService;
+import eu.siacs.conversations.utils.TakConvoCompat;
+import eu.siacs.conversations.xmpp.Jid;
 
 import java.io.File;
 import java.lang.reflect.Method;
@@ -255,6 +257,15 @@ public final class DebugReceiver extends BroadcastReceiver {
                                 AtakPreferences.getInstance(context).getSharedPrefs()));
             } else {
                 Log.d(TAG, "no fake contact");
+            }
+            // what a chat's "Show on map" menu item asks
+            final TakConvoCompat.Atak atak = TakConvoCompat.atak();
+            final Jid jid = XmppEngine.bareJid(orSelf(fakeJid, engine));
+            if (atak != null && jid != null) {
+                final long start = System.nanoTime();
+                final boolean onMap = atak.isOnMap(jid);
+                Log.d(TAG, jid + " on the map: " + onMap + ", found in "
+                        + (System.nanoTime() - start) / 1000 + " µs");
             }
         } else if (ACTION_ATAK_BROADCAST.equals(action)) {
             // e.g. com.atakmap.android.contact.CONTACT_LIST opens ATAK's contacts

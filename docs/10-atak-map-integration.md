@@ -121,10 +121,17 @@ The chat menu's **Show on map** (`action_show_on_map`) is visible in a one-to-on
 ```text
 find(address):
     own address -> ATAKUtilities.findSelf(mapView)      # the self chat: your position
-    else        -> the map item whose meta "xmppUsername" equals it, ignoring case
-                   # ContactListDetailHandler sets it from <contact xmppUsername> in SA
+    else        -> for each ATAK contact with an XMPP connector to that address:
+                       item = rootGroup.deepFindUID(contact uid)   # indexed by uid
+                       the item, if its meta "xmppUsername" equals the address
+                   # ContactListDetailHandler gives the contact the connector and the
+                   # marker the meta, from <contact xmppUsername> in SA
 showOnMap: MapTouchController.goTo(item), or the toast "Not on the map" if it has gone
 ```
+
+`find` runs on every refresh of a chat's menu. ATAK's contacts are few, the map's items may be
+thousands (imported overlays), so it looks among the contacts rather than walking the map.
+`DEBUG_DUMP_CONTACT` logs the answer for the fake contact and how long it took.
 
 The menu is built when the chat's toolbar is refreshed, so a TAK user who appears or leaves
 afterwards changes it at the next refresh.

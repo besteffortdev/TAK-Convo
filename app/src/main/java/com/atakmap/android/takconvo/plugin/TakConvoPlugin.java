@@ -74,6 +74,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     Context pluginContext;
     IHostUIService uiService;
     ToolbarItem toolbarItem;
+    private final Bitmap toolIconBitmap;
 
     private XmppEngine engine;
     private XmppContacts contacts;
@@ -132,12 +133,14 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
 
         uiService = serviceController.getService(IHostUIService.class);
+        // drawn once: the toolbar, the tool preferences and ATAK's Send dialog show it
+        toolIconBitmap = drawToolIcon(pluginContext);
 
         // a fixed identifier lets ATAK find the button again after the user moves it
         toolbarItem = new ToolbarItem.Builder(
                 pluginContext.getString(R.string.app_name),
                 MarshalManager.marshal(
-                        toolIcon(pluginContext),
+                        toolIcon(),
                         Drawable.class,
                         gov.tak.api.commons.graphics.Bitmap.class))
                 .setListener(new ToolbarItemAdapter() {
@@ -185,7 +188,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
                 pluginContext.getString(R.string.takconvo_prefs_title),
                 pluginContext.getString(R.string.takconvo_prefs_summary),
                 TakConvoPreferenceFragment.TOOL_KEY,
-                toolIcon(pluginContext),
+                toolIcon(),
                 new TakConvoPreferenceFragment(pluginContext)));
         final AtakBroadcast.DocumentedIntentFilter filter =
                 new AtakBroadcast.DocumentedIntentFilter();
@@ -208,7 +211,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         mapLocations = new MapLocations(mapView, pluginContext);
         TakConvoCompat.ATAK = new AtakIntegration(mapView, pluginContext,
                 AtakPreferences.getInstance(atakContext).getSharedPrefs(), engine::getAccount);
-        chatSender = new ChatSender(mapView, pluginContext, engine, toolIcon(pluginContext),
+        chatSender = new ChatSender(mapView, pluginContext, engine, toolIcon(),
                 this::showConversation);
         URIContentManager.getInstance().registerSender(chatSender);
         groupChatSends = new GroupChatSends(mapView, pluginContext, engine, chatSender);
@@ -275,18 +278,23 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
     }
 
+    /** The tool icon; a drawable of its own for each user, which may tint it. */
+    private Drawable toolIcon() {
+        return new BitmapDrawable(pluginContext.getResources(), toolIconBitmap);
+    }
+
     /**
      * Conversations' speech bubble, drawn to a bitmap. ATAK paints tool icons in one color, so
      * the colored launcher icon would show as a square.
      */
-    private static Drawable toolIcon(final Context pluginContext) {
+    private static Bitmap drawToolIcon(final Context pluginContext) {
         final Drawable vector = pluginContext.getResources().getDrawable(R.drawable.ic_takconvo,
                 pluginContext.getTheme());
         final Bitmap bitmap = Bitmap.createBitmap(vector.getIntrinsicWidth(),
                 vector.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
         vector.setBounds(0, 0, bitmap.getWidth(), bitmap.getHeight());
         vector.draw(new Canvas(bitmap));
-        return new BitmapDrawable(pluginContext.getResources(), bitmap);
+        return bitmap;
     }
 
     /** Shows the chats, or the account pane if there is no account. */

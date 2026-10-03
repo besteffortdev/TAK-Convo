@@ -98,14 +98,15 @@ XmppEngine.start(atakContext, pluginContext):          # once per process
     nicknames = new CallsignNicknames(...)             # see 03, the callsign as nickname
     ConversationsSettings.apply(ATAK's prefs, Conversations' prefs)   # .pref-set, see 03
     service.onCreate()                                 # opens the DB, loads accounts
-    settings = XmppSettings.load(); applyTrust()       # before anything connects, see 03
+    initial = load(); applyTrust(initial)              # before anything connects, see 03;
+                                                       #   on the main thread, this once
     for account in service.accounts:
         account.resource = "TAK Convo." + random(3)    # see "resource" below
     service.onStartCommand(null)                       # connects enabled accounts
-    provision()                                        # moves a .pref login first, see 03
+    apply(initial)                                     # the account, see 03
     watch ATAK's preferences:
         takconvo_xmpp_*           -> provision() (debounced 750 ms)
-        takconvo_conversations_*  -> ConversationsSettings.apply()
+        takconvo_conversations_*  -> ConversationsSettings.apply() (debounced 750 ms)
         locationCallsign          -> nicknames.sync()
     watch TAK server connections and the device trust store -> provision()
 

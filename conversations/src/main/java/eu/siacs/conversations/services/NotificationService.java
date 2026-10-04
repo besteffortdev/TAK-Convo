@@ -2044,7 +2044,11 @@ public class NotificationService {
         final var notificationManager =
                 mXmppConnectionService.getSystemService(NotificationManager.class);
         try {
-            notificationManager.notify(tag, id, TakConvoCompat.filter(notification)); // TAKCONVO
+            // TAKCONVO: filtered, maybe dropped
+            final Notification filtered = TakConvoCompat.filter(notification);
+            if (filtered != null) {
+                notificationManager.notify(tag, id, filtered);
+            }
         } catch (final RuntimeException e) {
             Log.d(Config.LOGTAG, "unable to make notification", e);
         }
@@ -2059,7 +2063,11 @@ public class NotificationService {
             }
             final var notificationManager =
                     mXmppConnectionService.getSystemService(NotificationManager.class);
-            notificationManager.notify(id, TakConvoCompat.filter(notification)); // TAKCONVO
+            // TAKCONVO: filtered, maybe dropped
+            final Notification filtered = TakConvoCompat.filter(notification);
+            if (filtered != null) {
+                notificationManager.notify(id, filtered);
+            }
         } catch (final RuntimeException e) {
             Log.d(Config.LOGTAG, "unable to make notification", e);
         }

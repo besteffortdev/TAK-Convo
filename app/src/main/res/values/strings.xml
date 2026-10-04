@@ -30,6 +30,8 @@
     <string name="takconvo_pref_use_callsign">Use the ATAK callsign as nickname</string>
     <string name="takconvo_pref_use_callsign_summary">Your XMPP nickname, shown to your contacts and in group chats, follows your ATAK callsign</string>
     <string name="takconvo_pref_cat_notifications">Notifications</string>
+    <string name="takconvo_pref_notification_messages">Message notifications</string>
+    <string name="takconvo_pref_notification_messages_summary">New messages notify while the chats are closed. Leave off when the Conversations app on this device uses the same account: it notifies. ATAK\'s contacts show unread messages either way.</string>
     <string name="takconvo_pref_notification_sound">Sound</string>
     <string name="takconvo_pref_notification_sound_summary">New messages play the notification sound</string>
     <string name="takconvo_pref_notification_vibrate">Vibration</string>

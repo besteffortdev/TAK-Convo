@@ -30,13 +30,21 @@
     <PreferenceCategory android:title="@string/takconvo_pref_cat_notifications" />
 
     <com.atakmap.android.gui.PanCheckBoxPreference
+        android:defaultValue="false"
+        android:key="takconvo_notification_messages"
+        android:summary="@string/takconvo_pref_notification_messages_summary"
+        android:title="@string/takconvo_pref_notification_messages" />
+
+    <com.atakmap.android.gui.PanCheckBoxPreference
         android:defaultValue="true"
+        android:dependency="takconvo_notification_messages"
         android:key="takconvo_notification_sound"
         android:summary="@string/takconvo_pref_notification_sound_summary"
         android:title="@string/takconvo_pref_notification_sound" />
 
     <com.atakmap.android.gui.PanCheckBoxPreference
         android:defaultValue="true"
+        android:dependency="takconvo_notification_messages"
         android:key="takconvo_notification_vibrate"
         android:summary="@string/takconvo_pref_notification_vibrate_summary"
         android:title="@string/takconvo_pref_notification_vibrate" />

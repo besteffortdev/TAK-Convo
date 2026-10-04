@@ -41,6 +41,8 @@ public final class XmppSettings {
     public static final String KEY_CHANNEL_SERVER = "takconvo_xmpp_channel_server";
     public static final String KEY_USE_CALLSIGN = "takconvo_xmpp_use_callsign";
     // not takconvo_xmpp_*: no provisioning on change
+    /** Whether new messages notify (default false: the Conversations app beside ATAK does). */
+    public static final String KEY_NOTIFICATION_MESSAGES = "takconvo_notification_messages";
     public static final String KEY_NOTIFICATION_SOUND = "takconvo_notification_sound";
     public static final String KEY_NOTIFICATION_VIBRATE = "takconvo_notification_vibrate";
     /** Whether the quick message buttons show (default false). */
@@ -261,6 +263,10 @@ public final class XmppSettings {
         return trimToNull(getString(prefs, KEY_ATAK_CALLSIGN));
     }
 
+    public static boolean notificationMessages(final SharedPreferences prefs) {
+        return getBoolean(prefs, KEY_NOTIFICATION_MESSAGES, false);
+    }
+
     public static boolean notificationSound(final SharedPreferences prefs) {
         return getBoolean(prefs, KEY_NOTIFICATION_SOUND, true);
     }
@@ -276,7 +282,7 @@ public final class XmppSettings {
         boolean changed = false;
         for (final String key : new String[] {KEY_ENABLED, KEY_USE_TAK_CREDENTIALS,
                 KEY_USE_TAK_TRUSTSTORE, KEY_USE_ANDROID_CA_STORE, KEY_USE_CALLSIGN,
-                KEY_NOTIFICATION_SOUND, KEY_NOTIFICATION_VIBRATE}) {
+                KEY_NOTIFICATION_MESSAGES, KEY_NOTIFICATION_SOUND, KEY_NOTIFICATION_VIBRATE}) {
             final Object value = all.get(key);
             if (value != null && !(value instanceof Boolean)) {
                 editor.putBoolean(key, Boolean.parseBoolean(String.valueOf(value).trim()));

@@ -30,6 +30,7 @@ import manager) provisions every one of them. Those in the table also appear und
 | `takconvo_xmpp_channel_discovery` | String | `xmpp_server` | where "Discover channels" looks: `xmpp_server` (the group chat services of the account's server), `server` (the next key) or `public` (the public directory search.jabber.network) |
 | `takconvo_xmpp_channel_server` | String | — | for `server`: a server (`example.org`) or one of its group chat services (`conference.example.org`) |
 | `takconvo_xmpp_use_callsign` | Boolean | `true` | the ATAK callsign is the XMPP nickname (see below) |
+| `takconvo_notification_messages` | Boolean | `false` | new messages notify while the chats are closed; off because the Conversations app on the device, same account, notifies (see [08](08-contacts-and-notifications.md#off-by-default)) |
 | `takconvo_notification_sound` | Boolean | `true` | message notifications play the notification sound |
 | `takconvo_notification_vibrate` | Boolean | `true` | message notifications vibrate (see [08](08-contacts-and-notifications.md#sound-and-vibration)) |
 | `takconvo_show_quick_messages` | Boolean | `false` | show the quick message buttons above the message field (see [10](10-atak-map-integration.md#quick-messages)) |

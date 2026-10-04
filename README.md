@@ -15,8 +15,9 @@ user's TAK identity.
   TAK Chat does.
 - **In ATAK's contacts, like GeoChat**: a TAK user who advertises an XMPP address has an XMPP
   connector in ATAK's contact list that opens the chat in TAK Convo. Unread messages show on the
-  contact, on ATAK's Contacts button and on the TAK Convo button. Conversations' notifications
-  (reply, mark as read) bring ATAK up on the chat when tapped.
+  contact, on ATAK's Contacts button and on the TAK Convo button. Message notifications are off
+  by default, as the Conversations app on the device, signed in to the same account, notifies;
+  turned on, they (reply, mark as read) bring ATAK up on the chat when tapped.
 - **On ATAK's map**: locations in chats become markers on the map; sharing a location sends
   ATAK's position or a point tapped on the map; MGRS and lat/lon written in messages are links
   to the map; a chat's **Show on map** finds the TAK user. GeoChat-style quick messages can sit
@@ -43,7 +44,7 @@ Galaxy S22+ with 5.5.1.8):
 | the pane follows ATAK's rotation and goes full screen from its handle; the screens are rebuilt for the new size, keeping what they show | |
 | attachments: pick, upload, open with another app, camera; voice messages | some Conversations screens are allowed but untested (see docs/04) |
 | ATAK contacts: XMPP connector opens the chat, unread counts on contacts and buttons; group chats listed with the users | XMPP presence dots on contacts: implemented, untested with a real second user |
-| notifications: sound when the pane is closed, tap opens the chat, reply, mark as read; sound and vibration settings | |
+| notifications (a setting, off by default): sound when the pane is closed, tap opens the chat, reply, mark as read; sound and vibration settings | |
 
 Release ATAK (e.g. Play Store ATAK-CAN 5.8) loads only plugins signed by TAK.gov, and its API
 is obfuscated, so a plugin for it must be built with that version's SDK and mapping. Until the

@@ -31,8 +31,9 @@ import java.util.Set;
 
 /**
  * Fixes Conversations' notifications for ATAK: resource icons become bitmaps (as ATAK's they
- * would resolve in ATAK's package, or crash it), and message notifications move to a channel
- * with the sound and vibration of the plugin's settings. See docs/08.
+ * would resolve in ATAK's package, or crash it), and message notifications are dropped unless
+ * turned on, then move to a channel with the sound and vibration of the plugin's settings. See
+ * docs/08.
  */
 final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
 
@@ -40,6 +41,10 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
     private static final int ICON_DP = 24;
     /** Conversations' alerting message channel. */
     private static final String MESSAGES_CHANNEL = "messages";
+    /** Its message channel without sound or vibration. */
+    private static final String SILENT_MESSAGES_CHANNEL = "silent_messages";
+    /** The group of its message notifications. */
+    private static final String MESSAGES_GROUP = "eu.siacs.conversations.messages";
     /** The groups of Conversations' channels, ours included. */
     private static final Set<String> CONVERSATIONS_CHANNEL_GROUPS =
             new HashSet<>(Arrays.asList("status", "chats", "calls"));
@@ -90,6 +95,11 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
 
     @Override
     public Notification filter(final Notification notification) {
+        if (isMessage(notification) && !XmppSettings.notificationMessages(
+                AtakPreferences.getInstance(atak).getSharedPrefs())) {
+            // the Conversations app beside ATAK notifies; ATAK's contacts still count them
+            return null;
+        }
         final String channel = alertChannel(notification);
         if (channel == null && !needsIcon(notification.getSmallIcon())
                 && !actionsNeedIcons(notification)) {
@@ -118,6 +128,14 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
             Log.e(TAG, "unable to fix the icons of a notification, dropping it", e);
             return null;
         }
+    }
+
+    /** A new message's notification, or their summary: not an error or a failed delivery. */
+    private static boolean isMessage(final Notification notification) {
+        final String channel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? notification.getChannelId() : null;
+        return MESSAGES_GROUP.equals(notification.getGroup())
+                || MESSAGES_CHANNEL.equals(channel) || SILENT_MESSAGES_CHANNEL.equals(channel);
     }
 
     /**

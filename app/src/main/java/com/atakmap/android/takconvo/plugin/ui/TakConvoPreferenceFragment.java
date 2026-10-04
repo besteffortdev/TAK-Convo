@@ -128,8 +128,10 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
                 XmppSettings.KEY_NOTIFICATION_VIBRATE}) {
             ((CheckBoxPreference) findPreference(key)).setChecked(prefs.getBoolean(key, true));
         }
-        ((CheckBoxPreference) findPreference(XmppSettings.KEY_USE_ANDROID_CA_STORE))
-                .setChecked(prefs.getBoolean(XmppSettings.KEY_USE_ANDROID_CA_STORE, false));
+        for (final String key : new String[] {XmppSettings.KEY_USE_ANDROID_CA_STORE,
+                XmppSettings.KEY_NOTIFICATION_MESSAGES}) {
+            ((CheckBoxPreference) findPreference(key)).setChecked(prefs.getBoolean(key, false));
+        }
         for (final String key : new String[] {XmppSettings.KEY_DOMAIN, XmppSettings.KEY_HOST,
                 XmppSettings.KEY_PORT}) {
             final String value = prefs.getString(key, XmppSettings.KEY_PORT.equals(key)

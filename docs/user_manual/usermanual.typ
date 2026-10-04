@@ -68,8 +68,10 @@ and back again to return.
   or a location.
 - *Your nickname* follows your ATAK callsign, in your contacts' lists and in group chats. A group
   chat where someone already has your callsign keeps your previous nickname.
-- *Notifications*: new messages notify while the pane is closed. Tap one to open the chat, or
-  reply and mark as read from the notification.
+- *Notifications* are off by default: the Conversations app on your device, signed in to the
+  same account, notifies. ATAK's contacts show unread messages either way. Turned on in the
+  settings, new messages notify while the pane is closed; tap one to open the chat, or reply
+  and mark as read from the notification.
 
 Calls (audio and video) are not available inside ATAK.
 ]
@@ -148,7 +150,7 @@ them.
   inset: (x: 0.6em, y: 0.25em),
   [*Account*], [Connection enabled · Use TAK server credentials · XMPP account · Use the ATAK
     callsign as nickname],
-  [*Notifications*], [Sound · Vibration],
+  [*Notifications*], [Message notifications (off by default) · Sound · Vibration],
   [*Chat*], [Show quick messages · Quick messages],
   [*Server*], [XMPP domain · Custom host and port (only when DNS doesn't find the server) ·
     Discover channels on (your XMPP server, another server, or the public directory)],

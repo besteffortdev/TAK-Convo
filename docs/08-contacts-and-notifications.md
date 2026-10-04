@@ -152,6 +152,27 @@ posted as ATAK's.
 | Conversations' "foreground service" notification ("1 of 1 accounts connected") was posted as a plain notification on error-state changes | never posted embedded; a stale one is cancelled at start | fork, `XmppConnectionService` |
 | Messages published conversation shortcuts: ATAK's launcher would have listed XMPP contacts that open nothing | shortcuts are not published embedded | fork, `ShortcutService`, `NotificationService` |
 
+### Off by default
+
+The devices TAK Convo is meant for also run the Conversations app, signed in to the same
+account. Every message reaches both, so both would notify. Message notifications are therefore
+off unless `takconvo_notification_messages` is true (Tool Preferences › TAK Convo ›
+Notifications › Message notifications, or a `.pref`):
+
+```text
+EmbeddedNotifications.filter(n):
+    if n is a message's (group eu.siacs.conversations.messages, channel messages or
+            silent_messages) and takconvo_notification_messages is false:
+        return null                          # NotificationService.notify() posts nothing
+```
+
+Only the posting is skipped: `NotificationService` still decides and tracks them, and the
+unread counts come from the conversations, not from notifications. ATAK's contacts, its
+Contacts button and the TAK Convo button show them either way. Connection errors and failed
+deliveries still notify: the Conversations app knows nothing of TAK Convo's connection or
+sends. The sound and vibration settings depend on the setting and are greyed out while it is
+off.
+
 ### A tap
 
 ```text
@@ -245,6 +266,7 @@ the contact's chat opens the self chat.
 ```bash
 B="adb shell am broadcast -a com.atakmap.android.takconvo"
 $B.DEBUG_FAKE_CONTACT --es callsign XMPPTest        # a TAK user advertising our own JID
+$B.DEBUG_SET_PREF --es key takconvo_notification_messages --es value true  # to see them
 $B.DEBUG_FAKE_INCOMING --es body Hello             # an unread message in the self chat
 $B.DEBUG_DUMP_CONTACT                              # log: unread, XMPP unread, presence, default
 $B.DEBUG_ATAK_BROADCAST --es action com.atakmap.android.contact.CONTACT_LIST   # open Contacts

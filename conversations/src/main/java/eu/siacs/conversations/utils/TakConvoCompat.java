@@ -50,7 +50,7 @@ public final class TakConvoCompat {
 
     /** Adjusts a notification posted as ATAK's, e.g. its resource icons. */
     public interface NotificationFilter {
-        /** The notification to post, or null to drop it (notify() then logs the failure). */
+        /** The notification to post, or null to drop it. */
         Notification filter(Notification notification);
     }
 

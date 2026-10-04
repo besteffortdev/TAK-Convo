@@ -351,10 +351,13 @@ After an upstream merge, a dependency change or a change to the host:
     over the chat, the timer runs, Send delivers it, and it plays. Cancel and back discard it
     ("deleted canceled recording" in `tak convo`). A chat has no call button.
 12. Contacts and notifications, with `DEBUG_FAKE_CONTACT` and `DEBUG_FAKE_INCOMING` (see
-    [08](08-contacts-and-notifications.md#testing)): pane closed → a notification with sound
-    and "app switched into background" in `tak convo`; the contact row, the Contacts button
-    and the TAK Convo tool show the count; tapping the notification opens the chat; Reply and
-    Mark as read work; tapping the contact's XMPP connector opens the chat.
+    [08](08-contacts-and-notifications.md#testing)): with message notifications off (the
+    default), pane closed → no notification, and the contact row, the Contacts button and the
+    TAK Convo tool show the count. Turn them on (`DEBUG_SET_PREF --es key
+    takconvo_notification_messages --es value true`): a notification with sound and "app
+    switched into background" in `tak convo`; tapping the notification opens the chat; Reply
+    and Mark as read work; tapping the contact's XMPP connector opens the chat. Remove the key
+    afterwards.
 13. `dumpsys alarm` lists ATAK alarms tagged `com.atakmap.android.takconvo.DELIVER`, and
     `TakConvo.PendingIntents` logs "delivering eu.siacs.conversations.POST_CONNECTIVITY_CHANGE"
     (about a minute after the account connects) or "... PING" when they fire.

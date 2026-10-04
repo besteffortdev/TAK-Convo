@@ -160,8 +160,9 @@ system: starts ATAKActivity (CLEAR_TOP | SINGLE_TOP), ATAK comes to the front
 ATAKActivity.onNewIntent: AtakBroadcast.send(internalIntent)          # ACTION_OPEN
 
 TakConvoPlugin, on ACTION_OPEN:
-    intent = EmbeddedPendingIntents.unwrapActivity(broadcast)   # e.g. ConversationsActivity,
-                                                                #   VIEW_CONVERSATION, uuid
+    intent = engine.unwrapNotificationTap(broadcast)  # e.g. ConversationsActivity,
+                                                      #   VIEW_CONVERSATION, uuid; null without
+                                                      #   the notification's token (see 02)
     host = openChatPane()
     host.startActivity(intent)          # routed like any activity start: the chat, or the
                                         # account pane for the error notification (EditAccount)

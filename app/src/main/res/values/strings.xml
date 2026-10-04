@@ -42,9 +42,21 @@
     <string name="takconvo_channel_messages_no_vibration">Messages, without vibration</string>
     <string name="takconvo_channel_messages_no_sound">Messages, without sound</string>
     <string name="takconvo_channel_messages_silent">Messages, without sound or vibration</string>
-    <string name="takconvo_change_profile_picture">Change your profile picture</string>    <string name="takconvo_notice_untrusted">The XMPP server\'s certificate isn\'t trusted. By default TAK Convo trusts the certificate authorities of your TAK server connections: connect to your TAK server, or trust the device\'s CA store or a CA certificate file in the settings.</string>
+    <string name="takconvo_change_profile_picture">Change your profile picture</string>
+    <string name="takconvo_notice_untrusted">The XMPP server\'s certificate isn\'t trusted. By default TAK Convo trusts the certificate authorities of your TAK server connections: connect to your TAK server, or trust the device\'s CA store or a CA certificate file in the settings.</string>
     <string name="takconvo_open_settings">Settings</string>
     <string name="takconvo_sign_out_confirm">Sign out of %1$s? Its chat history stays on this device.</string>
+    <string name="takconvo_status_server_unconfirmed">Waiting for you to approve the server</string>
+    <string name="takconvo_notice_server_unconfirmed">TAK Convo\'s server settings have changed, for example by an imported .pref file or data package. Connect only if you or your administrator changed them.\n\nServer: %1$s\nSigns in with: %2$s\nExtra trusted certificates: %3$s</string>
+    <string name="takconvo_server_via">%1$s, through %2$s</string>
+    <string name="takconvo_credentials_tak">your TAK server credentials</string>
+    <string name="takconvo_credentials_login">your XMPP login</string>
+    <string name="takconvo_trust_tak">the TAK server truststores</string>
+    <string name="takconvo_trust_android">the device\'s CA store</string>
+    <string name="takconvo_trust_none">none</string>
+    <string name="takconvo_connect">Connect</string>
+    <string name="takconvo_server_notification_title">TAK Convo: approve the new server</string>
+    <string name="takconvo_server_notification_text">The XMPP server settings changed. Chats stay offline until you approve the server or change the settings back.</string>
 
     <!-- chat pane (Conversations' own screens) -->
     <string name="takconvo_not_available_in_atak">Not available inside ATAK</string>

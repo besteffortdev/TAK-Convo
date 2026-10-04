@@ -19,6 +19,8 @@ import android.view.Display;
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.android.takconvo.plugin.SensitiveLog;
 import com.atakmap.android.takconvo.plugin.config.ConversationsSettings;
+import com.atakmap.android.takconvo.plugin.config.PrivateFiles;
+import com.atakmap.android.takconvo.plugin.config.ServerIdentity;
 import com.atakmap.android.takconvo.plugin.config.TrustSources;
 import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.comms.CommsMapComponent;
@@ -53,6 +55,8 @@ public final class XmppEngine {
     private static final String TAG = "TakConvo.XmppEngine";
     /** A .pref import changes many keys at once: act once they're all in. */
     private static final long DEBOUNCE_MS = 750;
+    /** {@link PrivateFiles} name of the server the user approved. */
+    private static final String APPROVED_SERVER = "approved_server";
 
     /** ATAK preference that ATAK puts in this device's SA as contact@xmppUsername. */
     public static final String PREF_SA_XMPP_USERNAME = "saXmppUsername";
@@ -99,6 +103,7 @@ public final class XmppEngine {
         }
     };
     private final EmbeddedPendingIntents pendingIntents;
+    private final KeystoreCredentials credentials = new KeystoreCredentials();
     private volatile int unreadCount;
     private final Runnable provisionTask = this::provision;
     private final Runnable conversationsSettingsTask;
@@ -116,6 +121,12 @@ public final class XmppEngine {
     private String trustFingerprint;
     private XmppSettings.Problem lastProblem;
     private Jid provisionedJid;
+    /** Where the user agreed the credentials may go; see {@link #isApproved}. */
+    private ServerIdentity approvedServer;
+    /** The server the settings name while it waits for the user's approval. */
+    private ServerIdentity pendingServer;
+    /** The user's sign-in approves the server it connects to. */
+    private boolean approveNext;
 
     public static synchronized XmppEngine start(final Context atakContext,
             final Context pluginContext) {
@@ -134,6 +145,22 @@ public final class XmppEngine {
             instance.stop();
             instance = null;
         }
+    }
+
+    /**
+     * Deletes what TAK Convo keeps on the device: Conversations' database (messages, contacts,
+     * OMEMO keys), files and settings, its notifications, the credentials key, the approved
+     * server and the XMPP login. For ATAK's Clear Content, after {@link #shutdown}; any thread.
+     */
+    public static void wipe(final Context atakContext) {
+        final Context atak = atakContext.getApplicationContext();
+        EmbeddedNotifications.cancelAll(atak);
+        EmbeddedContext.deleteAll(atak);
+        // an earlier copy of the database can't give the password away any more
+        KeystoreCredentials.deleteKey();
+        EmbeddedContext.deleteRecursively(PrivateFiles.dir(atak));
+        XmppSettings.clearLogin();
+        Log.i(TAG, "TAK Convo's data deleted");
     }
 
     private XmppEngine(final Context atakContext, final Context pluginContext) {
@@ -176,15 +203,31 @@ public final class XmppEngine {
         TakConvoCompat.PENDING_INTENTS = pendingIntents;
         TakConvoCompat.NOTIFICATIONS = new EmbeddedNotifications(this.atakContext, pluginContext);
         TakConvoCompat.OBSERVER = observer;
+        // before the service reads the accounts
+        TakConvoCompat.CREDENTIALS = credentials;
 
         Log.d(TAG, "starting embedded Conversations engine");
         ConversationsSettings.apply(AtakPreferences.getInstance(this.atakContext).getSharedPrefs(),
                 defaultPreferences());
         service.onCreate();
+        if (credentials.sawPlaintext()) {
+            // stored by a version that didn't encrypt them
+            Log.i(TAG, "encrypting the stored credentials");
+            for (final Account account : service.getAccounts()) {
+                service.databaseBackend.updateAccount(account);
+            }
+        }
         // trust must be in place before the service connects the stored accounts: read once
         // here, on the main thread, as the plugin starts
+        approvedServer = ServerIdentity.parse(PrivateFiles.read(this.atakContext,
+                APPROVED_SERVER));
         final Loaded initial = load();
-        applyTrust(initial);
+        if (isApproved(initial.server)) {
+            applyTrust(initial.trust, initial.trustFingerprint);
+        } else {
+            // not the CAs of a server the user hasn't approved; apply() disables the accounts
+            applyTrust(null, TrustSources.fingerprint(null));
+        }
         // a new resource per start: Openfire holds the previous session for resumption and
         // doesn't answer a bind of the same resource until it drops it
         for (final Account account : service.getAccounts()) {
@@ -270,6 +313,7 @@ public final class XmppEngine {
         service.onTaskRemoved(null); // logs out and saves, as when the app is swiped away
         service.onDestroy();
         TakConvoCompat.OBSERVER = null;
+        // CREDENTIALS stays: the logouts run on and may still save their accounts
         TakConvoCompat.NOTIFICATIONS = null;
         TakConvoCompat.PENDING_INTENTS = null;
         TakConvoCompat.CHANNEL_DISCOVERY_SERVER = null;
@@ -312,16 +356,19 @@ public final class XmppEngine {
         apply(load());
     }
 
-    /** What provisioning reads: the settings, and the CAs they trust. */
+    /** What provisioning reads: the settings, the CAs they trust, the server they name. */
     private static final class Loaded {
         final XmppSettings settings;
         final X509TrustManager trust;
         final String trustFingerprint;
+        /** Null without a domain. */
+        final ServerIdentity server;
 
         Loaded(final XmppSettings settings, final X509TrustManager trust) {
             this.settings = settings;
             this.trust = trust;
             this.trustFingerprint = TrustSources.fingerprint(trust);
+            this.server = ServerIdentity.of(settings);
         }
     }
 
@@ -341,11 +388,26 @@ public final class XmppEngine {
      */
     private void apply(final Loaded loaded) {
         settings = loaded.settings;
-        final boolean trustChanged = applyTrust(loaded);
         applyChannelDiscovery();
         SensitiveLog.d(TAG, "provisioning " + settings);
 
         lastProblem = settings.problem();
+        final boolean connects = lastProblem == null
+                || lastProblem == XmppSettings.Problem.NO_TAK_CREDENTIALS;
+        if (connects && !isApproved(loaded.server)) {
+            // a .pref file can change where the credentials go: the user approves it first
+            Log.w(TAG, "not provisioning: the server settings changed");
+            SensitiveLog.d(TAG, "waiting for approval of " + loaded.server);
+            lastProblem = XmppSettings.Problem.SERVER_UNCONFIRMED;
+            pendingServer = loaded.server;
+            applyTrust(null, TrustSources.fingerprint(null));
+            disableAccountsExcept(a -> false);
+            unprovision();
+            return;
+        }
+        pendingServer = null;
+        final boolean trustChanged = applyTrust(loaded.trust, loaded.trustFingerprint);
+
         if (lastProblem == XmppSettings.Problem.NO_TAK_CREDENTIALS) {
             // the TAK credentials often come later: keep an account on the configured domain
             Log.w(TAG, "not provisioning: " + lastProblem);
@@ -413,12 +475,62 @@ public final class XmppEngine {
     }
 
     /** Makes Conversations trust the selected CAs; returns whether they changed. */
-    private boolean applyTrust(final Loaded loaded) {
-        TakConvoCompat.EXTRA_TRUST_MANAGER = loaded.trust;
-        final boolean changed = trustFingerprint != null
-                && !trustFingerprint.equals(loaded.trustFingerprint);
-        trustFingerprint = loaded.trustFingerprint;
+    private boolean applyTrust(final X509TrustManager trust, final String fingerprint) {
+        TakConvoCompat.EXTRA_TRUST_MANAGER = trust;
+        final boolean changed = trustFingerprint != null && !trustFingerprint.equals(fingerprint);
+        trustFingerprint = fingerprint;
         return changed;
+    }
+
+    /**
+     * Whether the credentials may go to {@code server}: the user approved it, or is signing in
+     * to it. Approves on its own the one an account already logs in to, the first time: that
+     * account was set up before approvals existed.
+     */
+    private boolean isApproved(final ServerIdentity server) {
+        if (server == null || server.equals(approvedServer)) {
+            return true;
+        }
+        if (approveNext || (approvedServer == null && loggedInTo(server))) {
+            approve(server);
+            return true;
+        }
+        return false;
+    }
+
+    /** Whether an enabled account has logged in to that domain, host and port. */
+    private boolean loggedInTo(final ServerIdentity server) {
+        for (final Account account : service.getAccounts()) {
+            if (!account.isOptionSet(Account.OPTION_DISABLED)
+                    && account.isOptionSet(Account.OPTION_LOGGED_IN_SUCCESSFULLY)
+                    && server.domain.equalsIgnoreCase(account.getDomain().toString())
+                    && nullToEmpty(server.host).equalsIgnoreCase(
+                            nullToEmpty(account.getHostname()))
+                    && server.port == account.getPort()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void approve(final ServerIdentity server) {
+        approvedServer = server;
+        SensitiveLog.d(TAG, "approved " + server);
+        // a few hundred bytes, on the user's tap or sign-in
+        if (!PrivateFiles.write(atakContext, APPROVED_SERVER, server.serialize())) {
+            Log.w(TAG, "the approved server will be asked again after a restart");
+        }
+    }
+
+    /** The server waiting for the user's approval, or null. */
+    public ServerIdentity getPendingServer() {
+        return pendingServer;
+    }
+
+    /** The user approves the server shown to them; provisions at once, as a sign-in does. */
+    public void approveServer(final ServerIdentity server) {
+        approve(server);
+        provisionNow();
     }
 
     /**
@@ -469,8 +581,14 @@ public final class XmppEngine {
         final Account before = getAccount();
         final String previousPassword = before == null ? null : before.getPassword();
         XmppSettings.saveLogin(username, password);
-        // at once: the account pane compares the account before and after
-        provisionNow();
+        // at once: the account pane compares the account before and after; signing in
+        // approves the server, which the account pane names
+        approveNext = true;
+        try {
+            provisionNow();
+        } finally {
+            approveNext = false;
+        }
         final Account account = getAccount();
         if (account != null && account == before
                 && Objects.equals(previousPassword, account.getPassword())
@@ -535,6 +653,11 @@ public final class XmppEngine {
 
     public XmppConnectionService getService() {
         return service;
+    }
+
+    /** The Conversations screen a tapped notification opens, or null if the tap isn't ours. */
+    public Intent unwrapNotificationTap(final Intent open, final ClassLoader classLoader) {
+        return pendingIntents.unwrapActivity(open, classLoader);
     }
 
     /** Context for a Conversations activity: ATAK's identity, the plugin's resources. */

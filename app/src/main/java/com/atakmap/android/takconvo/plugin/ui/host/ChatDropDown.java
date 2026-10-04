@@ -22,6 +22,14 @@ public final class ChatDropDown extends DropDownReceiver implements DropDown.OnS
 
     private final EmbeddedActivityHost host;
     private final View pane;
+    /** The pane's size at its last layout, and ATAK's content area then. */
+    private int paneWidth;
+    private int paneHeight;
+    private int areaWidth = -1;
+    private int areaHeight;
+    /** The pane's size as fractions of ATAK's area. */
+    private double widthFraction = PANE_FRACTION;
+    private double heightFraction = FULL_HEIGHT;
 
     /** {@code banner}: shown above the activities' screens, e.g. the connection state. */
     public ChatDropDown(final MapView mapView, final EmbeddedActivityHost host,
@@ -34,6 +42,18 @@ public final class ChatDropDown extends DropDownReceiver implements DropDown.OnS
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         layout.addView(host.getView(), new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        // resized by its edge, or by a rotation: ATAK pans for the keyboard instead
+        layout.addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop,
+                oldRight, oldBottom) -> {
+            if (right > left && bottom > top) {
+                final View area = contentArea(mapView);
+                areaWidth = area != null ? area.getWidth() : 0;
+                areaHeight = area != null ? area.getHeight() : 0;
+                paneWidth = right - left;
+                paneHeight = bottom - top;
+                host.setPaneSize(paneWidth, paneHeight);
+            }
+        });
         this.pane = layout;
     }
 
@@ -45,8 +65,17 @@ public final class ChatDropDown extends DropDownReceiver implements DropDown.OnS
         if (!isClosed() && isVisible()) {
             return;
         }
-        final int[] size = estimatePaneSize(getMapView());
-        host.setPaneSize(size[0], size[1]);
+        // until its layout gives the real size: ATAK may place it elsewhere this time, e.g.
+        // at the bottom once in portrait
+        final View area = contentArea(getMapView());
+        if (area == null || area.getWidth() != areaWidth || area.getHeight() != areaHeight) {
+            final int[] size = estimatePaneSize(getMapView());
+            host.setEstimatedPaneSize(size[0], size[1]);
+        } else {
+            host.setEstimatedPaneSize(paneWidth, paneHeight);
+        }
+        widthFraction = isPortrait() ? FULL_WIDTH : PANE_FRACTION;
+        heightFraction = isPortrait() ? PANE_FRACTION : FULL_HEIGHT;
         // ignoreBackButton: kept on ATAK's stack, closed by goBack() only
         showDropDown(pane, PANE_FRACTION, FULL_HEIGHT, FULL_WIDTH, PANE_FRACTION, true,
                 this);
@@ -57,7 +86,7 @@ public final class ChatDropDown extends DropDownReceiver implements DropDown.OnS
      * pane narrows the map view, and the display counts the system bars.
      */
     public static int[] estimatePaneSize(final MapView mapView) {
-        final View content = mapView.getRootView().findViewById(android.R.id.content);
+        final View content = contentArea(mapView);
         final DisplayMetrics metrics = mapView.getContext().getResources().getDisplayMetrics();
         int width = content != null ? content.getWidth() : 0;
         int height = content != null ? content.getHeight() : 0;
@@ -69,6 +98,11 @@ public final class ChatDropDown extends DropDownReceiver implements DropDown.OnS
         return new int[] {
                 (int) (width * (portrait ? FULL_WIDTH : PANE_FRACTION)),
                 (int) (height * (portrait ? PANE_FRACTION : FULL_HEIGHT))};
+    }
+
+    /** What ATAK divides between the map and its panes, or null. */
+    private static View contentArea(final MapView mapView) {
+        return mapView.getRootView().findViewById(android.R.id.content);
     }
 
     /** Goes back in Conversations; closes the pane when nothing is left. */
@@ -100,6 +134,26 @@ public final class ChatDropDown extends DropDownReceiver implements DropDown.OnS
 
     @Override
     public void onDropDownSizeChanged(final double width, final double height) {
+        widthFraction = width;
+        heightFraction = height;
+    }
+
+    /** The handle asks for full screen, then back, as in ATAK's samples. */
+    @Override
+    protected void onStateRequested(final int state) {
+        if (state == DROPDOWN_STATE_FULLSCREEN) {
+            if (!isPortrait() && Double.compare(widthFraction, PANE_FRACTION) == 0) {
+                resize(FULL_WIDTH - HANDLE_THICKNESS_LANDSCAPE, FULL_HEIGHT);
+            } else if (isPortrait() && Double.compare(heightFraction, PANE_FRACTION) == 0) {
+                resize(FULL_WIDTH, FULL_HEIGHT - HANDLE_THICKNESS_PORTRAIT);
+            }
+        } else if (state == DROPDOWN_STATE_NORMAL) {
+            if (isPortrait()) {
+                resize(FULL_WIDTH, PANE_FRACTION);
+            } else {
+                resize(PANE_FRACTION, FULL_HEIGHT);
+            }
+        }
     }
 
     @Override

@@ -25,11 +25,22 @@ final class PaneFrame extends FrameLayout {
     }
 
     private final Top top;
+    private final Runnable onWindowFocus;
 
-    PaneFrame(final Context context, final Top top) {
+    /** {@code onWindowFocus}: ATAK's window has the focus again, e.g. a dialog closed. */
+    PaneFrame(final Context context, final Top top, final Runnable onWindowFocus) {
         super(context);
         this.top = top;
+        this.onWindowFocus = onWindowFocus;
         setClickable(true);
+    }
+
+    @Override
+    public void onWindowFocusChanged(final boolean hasWindowFocus) {
+        super.onWindowFocusChanged(hasWindowFocus);
+        if (hasWindowFocus) {
+            onWindowFocus.run();
+        }
     }
 
     /** Already clear of the system bars: no padding for them again. */

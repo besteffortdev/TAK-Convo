@@ -11,13 +11,19 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Base64;
 
 import androidx.core.content.ContextCompat;
 
+import com.atakmap.android.takconvo.plugin.config.PrivateFiles;
 import com.atakmap.android.util.ATAKConstants;
 import com.atakmap.coremap.log.Log;
 
 import eu.siacs.conversations.utils.TakConvoCompat;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 
 /**
  * Conversations' PendingIntents, which aim at components ATAK's package doesn't have: an
@@ -37,9 +43,17 @@ public final class EmbeddedPendingIntents implements TakConvoCompat.PendingInten
     private static final String SCHEME = "takconvo";
     private static final String EXTRA_ACTION = "takconvo.action";
     private static final String EXTRA_CLASS = "takconvo.class";
+    private static final String EXTRA_TOKEN = "takconvo.token";
     private static final String CONVERSATIONS_PACKAGE = "eu.siacs.conversations.";
+    /** {@link PrivateFiles} name of {@link #token}. */
+    private static final String TOKEN_FILE = "open_token";
 
     private final Context atak;
+    /**
+     * Proves an {@link #ACTION_OPEN} comes from our notification: ATAK rebroadcasts any app's
+     * internalIntent. Kept across restarts, for the notifications still in the shade.
+     */
+    private final String token;
     /** Where delivered intents run. */
     private final Context engine;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -54,6 +68,16 @@ public final class EmbeddedPendingIntents implements TakConvoCompat.PendingInten
     EmbeddedPendingIntents(final Context atak, final Context engine) {
         this.atak = atak.getApplicationContext();
         this.engine = engine;
+        final String stored = PrivateFiles.read(this.atak, TOKEN_FILE);
+        if (stored != null && !stored.isEmpty()) {
+            token = stored;
+        } else {
+            final byte[] random = new byte[16];
+            new SecureRandom().nextBytes(random);
+            token = Base64.encodeToString(random, Base64.NO_WRAP | Base64.URL_SAFE);
+            // if it can't be stored, the taps work until ATAK restarts
+            PrivateFiles.write(this.atak, TOKEN_FILE, token);
+        }
     }
 
     void register() {
@@ -89,6 +113,7 @@ public final class EmbeddedPendingIntents implements TakConvoCompat.PendingInten
         }
         open.putExtra(EXTRA_CLASS, name);
         open.putExtra(EXTRA_ACTION, intent.getAction());
+        open.putExtra(EXTRA_TOKEN, token);
 
         final Intent front = new Intent();
         front.setComponent(ATAKConstants.getComponentName());
@@ -167,11 +192,17 @@ public final class EmbeddedPendingIntents implements TakConvoCompat.PendingInten
         }
     }
 
-    /** The activity intent of an {@link #ACTION_OPEN} broadcast, or null. */
-    public static Intent unwrapActivity(final Intent open, final ClassLoader classLoader) {
+    /** The activity intent of an {@link #ACTION_OPEN} broadcast, or null if it isn't ours. */
+    Intent unwrapActivity(final Intent open, final ClassLoader classLoader) {
         final String name = open.getStringExtra(EXTRA_CLASS);
         if (!ACTION_OPEN.equals(open.getAction()) || name == null
                 || !name.startsWith(CONVERSATIONS_PACKAGE)) {
+            return null;
+        }
+        final String received = open.getStringExtra(EXTRA_TOKEN);
+        if (received == null || !MessageDigest.isEqual(received.getBytes(StandardCharsets.UTF_8),
+                token.getBytes(StandardCharsets.UTF_8))) {
+            Log.w(TAG, "ignoring an open request that didn't come from a notification");
             return null;
         }
         final Intent intent = new Intent(open.getStringExtra(EXTRA_ACTION));
@@ -179,6 +210,7 @@ public final class EmbeddedPendingIntents implements TakConvoCompat.PendingInten
         if (extras != null) {
             extras.remove(EXTRA_CLASS);
             extras.remove(EXTRA_ACTION);
+            extras.remove(EXTRA_TOKEN);
             intent.putExtras(extras);
         }
         intent.setComponent(new ComponentName(ATAKConstants.getPackageName(), name));

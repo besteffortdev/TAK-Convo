@@ -64,8 +64,20 @@ data isn't meant for.
 - **ATAK's internal broadcasts are reachable from other apps**: ATAK's launcher activity is
   exported and rebroadcasts any `internalIntent` extra through `AtakBroadcast`. A receiver that
   acts without the user (sends, opens, imports) must not trust what it receives. Either it
-  listens on an action other apps can't know (the group chat send action has a random part,
-  see [10](10-atak-map-integration.md#map-items-to-a-group-chat)), or it checks what it gets.
+  listens on an action other apps can't know (the group chat send action and the map pick's
+  have a random part, see [10](10-atak-map-integration.md#map-items-to-a-group-chat)), or it
+  checks what it gets (a notification tap carries a token, see
+  [02](02-embedded-engine.md#pendingintents)).
+- **`.pref` files reach every preferences file**: ATAK's import writes whichever preferences
+  file a `.pref` names, and data packages import `.pref` files without asking. A value that
+  decides where credentials go, or proves something, lives elsewhere (`PrivateFiles`), and a
+  provisioned change that sends credentials somewhere new waits for the user
+  ([03](03-provisioning-and-trust.md#approving-the-server)).
+- **Secrets at rest**: credentials the plugin or Conversations store are encrypted with an
+  Android Keystore key (`KeystoreCredentials`), or stay in ATAK's credential store.
+- **Clear Content**: whatever the plugin stores must be deleted by
+  `XmppEngine.wipe` ([02](02-embedded-engine.md#ataks-clear-content)). A new store adds itself
+  there.
 - **PendingIntents**: explicit targets, immutable unless the system has to fill in the
   intent. `EmbeddedPendingIntents` keeps Conversations' own flags. Upstream makes a few
   notification actions mutable: reply, mark as read, delete, show location.

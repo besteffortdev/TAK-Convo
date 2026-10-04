@@ -24,6 +24,7 @@ import android.widget.TextView;
 import com.atakmap.android.maps.MapView;
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.android.takconvo.plugin.BuildConfig;
+import com.atakmap.android.takconvo.plugin.config.ServerIdentity;
 import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.android.takconvo.plugin.ui.host.ChatDropDown;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
@@ -44,6 +45,9 @@ import eu.siacs.conversations.xmpp.manager.HttpUploadManager;
 import eu.siacs.conversations.xmpp.manager.MessageArchiveManager;
 import eu.siacs.conversations.xmpp.manager.PepManager;
 import eu.siacs.conversations.xmpp.manager.RosterManager;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * The XMPP account pane: Conversations' {@code activity_edit_account} layout driven by
@@ -88,6 +92,8 @@ public final class AccountView implements XmppEngine.Listener {
     private final View notice;
     private final TextView noticeText;
     private final Button noticeSecondary;
+    /** What {@link #noticeSecondary} does: use an XMPP login, or approve the server. */
+    private Runnable secondaryAction;
     private final View stats;
 
     /** The fields hold the user's typing; don't overwrite them. */
@@ -189,7 +195,11 @@ public final class AccountView implements XmppEngine.Listener {
                 com.atakmap.android.takconvo.plugin.R.id.takconvo_notice_secondary);
         notice.findViewById(com.atakmap.android.takconvo.plugin.R.id.takconvo_notice_settings)
                 .setOnClickListener(v -> host.openSettings());
-        noticeSecondary.setOnClickListener(v -> useXmppLogin());
+        noticeSecondary.setOnClickListener(v -> {
+            if (secondaryAction != null) {
+                secondaryAction.run();
+            }
+        });
 
         toolbar.setTitle(com.atakmap.android.takconvo.plugin.R.string.takconvo_account_title);
         toolbar.inflateMenu(com.atakmap.android.takconvo.plugin.R.menu.takconvo_account);
@@ -499,11 +509,19 @@ public final class AccountView implements XmppEngine.Listener {
     private void showNotice(final XmppSettings settings, final XmppSettings.Problem problem,
             final Account account) {
         final boolean tak = settings == null || settings.usesTakCredentials;
+        final ServerIdentity pending = engine.getPendingServer();
         String text = null;
         boolean offerLogin = false;
+        Runnable secondary = this::useXmppLogin;
+        int secondaryText = com.atakmap.android.takconvo.plugin.R.string.takconvo_use_xmpp_login;
         if (problem == XmppSettings.Problem.DISABLED) {
             text = ui.getString(
                     com.atakmap.android.takconvo.plugin.R.string.takconvo_notice_disabled);
+        } else if (problem == XmppSettings.Problem.SERVER_UNCONFIRMED && pending != null) {
+            text = describe(pending);
+            offerLogin = true;
+            secondary = () -> approveServer(pending);
+            secondaryText = com.atakmap.android.takconvo.plugin.R.string.takconvo_connect;
         } else if (problem == XmppSettings.Problem.NO_TAK_CREDENTIALS) {
             text = ui.getString(com.atakmap.android.takconvo.plugin.R.string
                     .takconvo_notice_no_tak_credentials);
@@ -528,6 +546,46 @@ public final class AccountView implements XmppEngine.Listener {
         notice.setVisibility(text == null ? View.GONE : View.VISIBLE);
         noticeText.setText(text);
         noticeSecondary.setVisibility(offerLogin ? View.VISIBLE : View.GONE);
+        noticeSecondary.setText(secondaryText);
+        secondaryAction = secondary;
+    }
+
+    /** Where the credentials would go, for the user to approve. */
+    private String describe(final ServerIdentity server) {
+        final String connection = server.connection();
+        final String where = connection.isEmpty() ? server.domain
+                : ui.getString(com.atakmap.android.takconvo.plugin.R.string.takconvo_server_via,
+                        server.domain, connection);
+        final List<String> trust = new ArrayList<>();
+        if (server.takTrustStore) {
+            trust.add(ui.getString(
+                    com.atakmap.android.takconvo.plugin.R.string.takconvo_trust_tak));
+        }
+        if (server.androidCaStore) {
+            trust.add(ui.getString(
+                    com.atakmap.android.takconvo.plugin.R.string.takconvo_trust_android));
+        }
+        if (server.caPath != null) {
+            trust.add(server.caPath);
+        }
+        return ui.getString(
+                com.atakmap.android.takconvo.plugin.R.string.takconvo_notice_server_unconfirmed,
+                where,
+                ui.getString(server.takCredentials
+                        ? com.atakmap.android.takconvo.plugin.R.string.takconvo_credentials_tak
+                        : com.atakmap.android.takconvo.plugin.R.string.takconvo_credentials_login),
+                trust.isEmpty()
+                        ? ui.getString(
+                                com.atakmap.android.takconvo.plugin.R.string.takconvo_trust_none)
+                        : TextUtils.join(", ", trust));
+    }
+
+    private void approveServer(final ServerIdentity server) {
+        final Account before = engine.getAccount();
+        engine.approveServer(server);
+        startAttempt(before);
+        host.onSignInStarted();
+        refresh();
     }
 
     /** Shown once the account has worked. */
@@ -616,6 +674,9 @@ public final class AccountView implements XmppEngine.Listener {
                 return com.atakmap.android.takconvo.plugin.R.string.takconvo_status_no_domain;
             case INVALID_JID:
                 return com.atakmap.android.takconvo.plugin.R.string.takconvo_status_invalid_jid;
+            case SERVER_UNCONFIRMED:
+                return com.atakmap.android.takconvo.plugin.R.string
+                        .takconvo_status_server_unconfirmed;
             case NOT_SIGNED_IN:
             default:
                 return com.atakmap.android.takconvo.plugin.R.string.takconvo_status_not_signed_in;

@@ -17,6 +17,7 @@ import com.atakmap.android.contact.IndividualContact;
 import com.atakmap.android.contact.IpConnector;
 import com.atakmap.android.contact.XmppConnector;
 import com.atakmap.android.cot.CotMapComponent;
+import com.atakmap.android.data.ClearContentRegistry;
 import com.atakmap.android.ipc.AtakBroadcast;
 import com.atakmap.android.maps.MapItem;
 import com.atakmap.android.maps.MapView;
@@ -82,6 +83,9 @@ import java.util.List;
  *     [--es extra.K V ...]
  * # a file to the self chat, as ATAK's Send dialog would send it
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SEND_FILE --es path P
+ * # what ATAK's Clear Content does to TAK Convo, without clearing ATAK: stops the plugin and
+ * # deletes its chats, keys and XMPP login
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_CLEAR_CONTENT
  * </pre>
  *
  * <p>Only adb's shell can send these: the receiver requires android.permission.DUMP. The fake
@@ -112,6 +116,7 @@ public final class DebugReceiver extends BroadcastReceiver {
     public static final String ACTION_SEND_MAP_ITEM = PREFIX + "DEBUG_SEND_MAP_ITEM";
     public static final String ACTION_SEND_TO_CONTACT = PREFIX + "DEBUG_SEND_TO_CONTACT";
     public static final String ACTION_SEND_FILE = PREFIX + "DEBUG_SEND_FILE";
+    public static final String ACTION_CLEAR_CONTENT = PREFIX + "DEBUG_CLEAR_CONTENT";
 
     private static final String FAKE_UID = "TAKCONVO-DEBUG-CONTACT";
     /** Extras named extra.K become extra K of the broadcast sent. */
@@ -121,6 +126,7 @@ public final class DebugReceiver extends BroadcastReceiver {
     /** The fake TAK user's XMPP address. */
     private String fakeJid;
     private ChatSender chatSender;
+    private ClearContentRegistry.ClearContentListener clearContent;
 
     private DebugReceiver(final Context context) {
         this.context = context;
@@ -148,6 +154,7 @@ public final class DebugReceiver extends BroadcastReceiver {
         filter.addAction(ACTION_SEND_MAP_ITEM);
         filter.addAction(ACTION_SEND_TO_CONTACT);
         filter.addAction(ACTION_SEND_FILE);
+        filter.addAction(ACTION_CLEAR_CONTENT);
         // exported for adb's shell, which holds DUMP; apps can't get it
         ContextCompat.registerReceiver(context, receiver, filter, Manifest.permission.DUMP, null,
                 ContextCompat.RECEIVER_EXPORTED);
@@ -176,6 +183,10 @@ public final class DebugReceiver extends BroadcastReceiver {
             }
         } else if (ACTION_PROVISION.equals(action) && engine != null) {
             engine.provision();
+        } else if (ACTION_CLEAR_CONTENT.equals(action) && clearContent != null) {
+            // ATAK calls it from its clear content task, off the main thread
+            final ClearContentRegistry.ClearContentListener listener = clearContent;
+            new Thread(() -> listener.onClearContent(false), "TakConvo.DebugClear").start();
         } else if (ACTION_ADD_TAK_SERVER.equals(action)) {
             // as ATAK's "add TAK server" dialog does
             final String connect = intent.getStringExtra("connect");
@@ -301,6 +312,11 @@ public final class DebugReceiver extends BroadcastReceiver {
     /** The plugin's sender, for {@link #ACTION_SEND_MAP_ITEM}. */
     public void setChatSender(final ChatSender chatSender) {
         this.chatSender = chatSender;
+    }
+
+    /** What ATAK's Clear Content calls in the plugin. */
+    public void setClearContent(final ClearContentRegistry.ClearContentListener clearContent) {
+        this.clearContent = clearContent;
     }
 
     /**

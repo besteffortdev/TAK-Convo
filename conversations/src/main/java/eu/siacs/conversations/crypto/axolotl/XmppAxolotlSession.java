@@ -92,6 +92,13 @@ public class XmppAxolotlSession implements Comparable<XmppAxolotlSession> {
 			Iterator<AxolotlKey> iterator = possibleKeys.iterator();
 			while (iterator.hasNext()) {
 				AxolotlKey encryptedKey = iterator.next();
+				// TAKCONVO: protobuf 2.5.0 parses crafted keys in quadratic time, see TakConvoCompat
+				if (encryptedKey.key.length > eu.siacs.conversations.utils.TakConvoCompat.MAX_OMEMO_KEY_BYTES) {
+					if (iterator.hasNext()) {
+						continue;
+					}
+					throw new CryptoFailedException("encrypted key of " + encryptedKey.key.length + " bytes");
+				}
 				try {
 					if (encryptedKey.prekey) {
 						PreKeySignalMessage preKeySignalMessage = new PreKeySignalMessage(encryptedKey.key);

@@ -27,6 +27,7 @@ import com.atakmap.coremap.maps.coords.GeoPoint;
 import de.gultsch.common.MiniUri;
 
 import java.util.Locale;
+import java.util.UUID;
 
 /**
  * Conversations' location screens, on ATAK's map: a location shown from a chat becomes a marker
@@ -37,7 +38,9 @@ public final class MapLocations implements EmbeddedActivityHost.Redirect {
     private static final String TAG = "TakConvo.Map";
     private static final String SHOW = "eu.siacs.conversations.ui.ShowLocationActivity";
     private static final String SHARE = "eu.siacs.conversations.ui.ShareLocationActivity";
-    private static final String ACTION_PICKED = "com.atakmap.android.takconvo.LOCATION_PICKED";
+    /** Random per run: ATAK rebroadcasts any app's internalIntent (see XmppRoomContact). */
+    private static final String ACTION_PICKED =
+            "com.atakmap.android.takconvo.LOCATION_PICKED." + UUID.randomUUID();
     /** A spot map marker, what ATAK drops for a point of interest. */
     private static final String MARKER_TYPE = "b-m-p-s-m";
 

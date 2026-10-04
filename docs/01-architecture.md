@@ -76,6 +76,8 @@ flowchart TB
 | `CallsignNicknames` | `plugin.xmpp` | The ATAK callsign as XMPP display name and group chat nickname; rooms where it's taken keep theirs | [03](03-provisioning-and-trust.md#the-callsign-as-nickname) |
 | `EmbeddedConversations`, `EmbeddedXmppService` | `plugin.xmpp` | Upstream's `Application` and `Service` subclasses, attached by hand | [02](02-embedded-engine.md) |
 | `XmppSettings`, `TrustSources`, `TrustedCa` | `plugin.config` | What to connect to, with which credentials, trusting which CAs | [03](03-provisioning-and-trust.md) |
+| `ServerIdentity`, `PrivateFiles` | `plugin.config` | The server the credentials go to, which the user approves; values a `.pref` file can't write | [03](03-provisioning-and-trust.md#approving-the-server) |
+| `KeystoreCredentials` | `plugin.xmpp` | Encrypts the password and FAST token Conversations stores, with an Android Keystore key | [02](02-embedded-engine.md#credentials-in-the-database) |
 | `ConversationsSettings` | `plugin.config` | Conversations' own settings from `takconvo_conversations_*` preferences (.pref) | [03](03-provisioning-and-trust.md#conversations-own-settings) |
 | `AccountView`, `ConversationsInflater`, `TakConvoPreferenceFragment` | `plugin.ui` | Account pane (Conversations' `activity_edit_account` layout) and the tool preferences page | [03](03-provisioning-and-trust.md) |
 | `EmbeddedActivityHost`, `HostParent`, `PaneFrame`, `ChatDropDown` | `plugin.ui.host` | Run Conversations' own activities, their views shown in an ATAK drop-down | [04](04-chat-pane-activity-host.md) |
@@ -136,8 +138,10 @@ then applies what it read on the main thread ([03](03-provisioning-and-trust.md)
 
 | What | Where |
 |---|---|
-| Conversations' database, preferences, files, keys | ATAK's data directory, prefixed: `databases/takconvo_*`, `shared_prefs/takconvo_*`, `files/takconvo/`, `cache/takconvo/` |
+| Conversations' database, preferences, files, keys | ATAK's data directory, prefixed: `databases/takconvo_*`, `shared_prefs/takconvo_*`, `files/takconvo/`, `cache/takconvo/`. The account's password and FAST token are encrypted with the Keystore key `takconvo_credentials` |
 | XMPP login (when TAK credentials are not used) | ATAK's encrypted credential store, type `takconvo.xmpp` |
+| The approved server, the notification tap token | ATAK's `no_backup/takconvo_plugin/`, out of reach of `.pref` files |
+| All of the above | deleted by ATAK's Clear Content ([02](02-embedded-engine.md#ataks-clear-content)) |
 | Settings | ATAK's preferences, keys `takconvo_xmpp_*` |
 | Attachments handed to other apps, camera captures | ATAK's external cache: `Android/data/com.atakmap.app.civ/cache/takconvo/{shared,Camera}` (`shared/` is emptied at every start) |
 | This device's XMPP address | ATAK preference `saXmppUsername`, which ATAK sends in the self SA as `<contact xmppUsername=...>` |

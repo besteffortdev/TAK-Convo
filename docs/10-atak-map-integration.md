@@ -68,7 +68,8 @@ share(caller, result):
     dialog "Share a location": My position | A point on the map
     My position:        ATAKUtilities.findSelf(mapView) -> its point, CE as accuracy
     A point on the map: ATAK's MapClickTool, prompt "Tap the point to share";
-                        its callback broadcast carries the point
+                        its callback broadcast carries the point; its action has a random
+                        part per run, so another app can't answer in its place
     result: RESULT_OK with latitude, longitude[, accuracy]  # what ShareLocationActivity returns
             RESULT_CANCELED without a position or when the dialog is cancelled
 ```

@@ -39,7 +39,8 @@ Galaxy S22+ with 5.5.1.8):
 | account pane, tool preferences, `.pref` import; QR codes: show and scan; profile picture (from the account pane) | backups |
 | chat pane: chat list, chats, group chats, start chat, channel details, search; channel discovery on your XMPP server (setting) | TAK callsigns as the names of other users' XMPP contacts |
 | your ATAK callsign is your XMPP nickname, for contacts and in group chats, and follows it (setting); a group chat where someone else has it keeps your nickname there | |
-| sending/receiving with OMEMO, reactions, context menus, text selection | re-selecting resources when the pane is resized or the device rotated |
+| sending/receiving with OMEMO, reactions, context menus, text selection | |
+| the pane follows ATAK's rotation and goes full screen from its handle; the screens are rebuilt for the new size, keeping what they show | |
 | attachments: pick, upload, open with another app, camera; voice messages | some Conversations screens are allowed but untested (see docs/04) |
 | ATAK contacts: XMPP connector opens the chat, unread counts on contacts and buttons; group chats listed with the users | XMPP presence dots on contacts: implemented, untested with a real second user |
 | notifications: sound when the pane is closed, tap opens the chat, reply, mark as read; sound and vibration settings | |
@@ -129,6 +130,11 @@ A `.pref` file can set everything:
 - Conversations' own settings (`takconvo_conversations_<key>`: OMEMO, read receipts, typing
   notifications, attachment size and compression, message deletion...), whose settings screen
   the plugin's replaces.
+
+A change to where the credentials go (domain, host, port, which credentials, trusted CAs)
+waits for the user's **Connect** in the account pane
+([docs/03](docs/03-provisioning-and-trust.md#approving-the-server)): data packages apply their
+`.pref` files without asking.
 
 ## Build and install
 
@@ -291,6 +297,24 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
     diff against upstream; the doc has the procedure to move to a newer release.
 37. **Upstream Conversations has paths longer than 260 characters**: clone it with
     `core.longpaths=true` on Windows or files silently go missing.
+
+**Security**
+
+38. **A `.pref` file can write any preferences file in ATAK**, a plugin's included:
+    `PreferenceControl` opens whatever `<preference name>` says. And ATAK applies the `.pref`
+    in an imported data package without asking. What decides where credentials go, or proves a
+    request is genuine, lives in a file in ATAK's `no_backup/` instead
+    ([docs/03](docs/03-provisioning-and-trust.md#approving-the-server)).
+39. **Any app can send ATAK's internal broadcasts**: ATAK's launcher activity rebroadcasts the
+    `internalIntent` of any intent. Plugin receivers that act use an action with a random part,
+    or check a token ([docs/09](docs/09-code-guidelines.md#android)).
+40. **Plugins take part in Clear Content through `ClearContentRegistry`**: ATAK calls each
+    listener on its clear task's thread, before it clears its own credentials and preferences,
+    then quits ([docs/02](docs/02-embedded-engine.md#ataks-clear-content)).
+41. **Conversations' OMEMO goes through protobuf-java 2.5.0** (libsignal 2.6.2). Its
+    stack-overflow advisory isn't reachable (64 nesting levels at most), but crafted keys parse
+    in quadratic time; keys over 2 KiB are skipped
+    ([docs/05](docs/05-conversations-fork.md#o-omemo-keys-parsed-by-protobuf-250)).
 
 ## Repository layout
 

@@ -17,6 +17,8 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Parcelable;
+import android.util.SparseArray;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -130,22 +132,34 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             "eu.siacs.conversations.ui.ConversationsActivity",
             "eu.siacs.conversations.ui.StartConversationActivity"));
 
+    /** Not relaunched when the pane's size changes: upstream declares configChanges for it. */
+    private static final Set<String> HANDLES_SIZE_CHANGES = new HashSet<>(Arrays.asList(
+            "eu.siacs.conversations.ui.RecordingActivity"));
+
+    /** Waits for the pane to settle, e.g. while its edge is dragged, before relaunching. */
+    private static final long RELAUNCH_DELAY_MS = 400;
+    /** A first activity starts with the estimated size if the pane isn't laid out by then. */
+    private static final long WAIT_FOR_LAYOUT_MS = 500;
+    /** Smaller differences between the pane and an activity's configuration are ignored. */
+    private static final int RELAUNCH_SLACK_DP = 8;
+
     private static final class Record {
-        final Activity activity;
+        /** Replaced when relaunched for another pane size. */
+        Activity activity;
         /** Who gets the result, or null. */
         final Record caller;
         final int requestCode;
         /** Shown over the activity below instead of hiding it. */
         final boolean floating;
+        /** The pane configuration its resources were chosen for. */
+        Configuration configuration;
         View content;
         boolean started;
         boolean resumed;
         boolean stoppedBefore;
         boolean finishing;
 
-        Record(final Activity activity, final Record caller, final int requestCode,
-                final boolean floating) {
-            this.activity = activity;
+        Record(final Record caller, final int requestCode, final boolean floating) {
             this.caller = caller;
             this.requestCode = requestCode;
             this.floating = floating;
@@ -153,7 +167,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
 
         @Override
         public String toString() {
-            return activity.getClass().getSimpleName();
+            return activity != null ? activity.getClass().getSimpleName() : "(not created)";
         }
     }
 
@@ -200,7 +214,15 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
                             && previous.onActivityResult(activity, requestCode, resultCode, data);
                 }
             };
+    private final Runnable relaunchLater = this::relaunchStale;
+    /** Starts of a first activity that wait for the pane's layout, which gives its size. */
+    private final List<Runnable> waiting = new ArrayList<>();
+    private final Runnable startWaiting = this::startWaiting;
     private boolean visible;
+    /** False while the pane's size is estimated: before it is laid out, e.g. after rotating. */
+    private boolean laidOut;
+    /** Until the next layout: it relaunches at once, as the pane isn't being dragged. */
+    private boolean justShown;
     private int paneWidthPx;
     private int paneHeightPx;
     private Redirect redirect;
@@ -215,7 +237,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         this.container = new PaneFrame(atak, () -> {
             final Record top = top();
             return top == null ? null : top.activity;
-        });
+        }, () -> scheduleRelaunch(RELAUNCH_DELAY_MS));
         // ATAK is always dark, and an embedded activity can't be recreated on a theme change
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
     }
@@ -228,15 +250,41 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         this.redirect = redirect;
     }
 
-    /** Sets the size the pane is about to get, which selects the activities' resources. */
+    /**
+     * Sets the size the pane is about to get, before it is shown: until its layout, a first
+     * activity waits and none is relaunched.
+     */
+    public void setEstimatedPaneSize(final int widthPx, final int heightPx) {
+        laidOut = false;
+        paneWidthPx = widthPx;
+        paneHeightPx = heightPx;
+    }
+
+    /**
+     * Sets the pane's size after a layout. The shown activities are relaunched for it at once
+     * after it was shown, otherwise when it stops changing, e.g. while its edge is dragged.
+     */
     public void setPaneSize(final int widthPx, final int heightPx) {
-        this.paneWidthPx = widthPx;
-        this.paneHeightPx = heightPx;
+        final boolean justShown = this.justShown || !laidOut;
+        this.justShown = false;
+        laidOut = true;
+        if (!waiting.isEmpty()) {
+            // not during the layout
+            handler.post(startWaiting);
+        }
+        if (widthPx != paneWidthPx || heightPx != paneHeightPx) {
+            paneWidthPx = widthPx;
+            paneHeightPx = heightPx;
+            Log.d(TAG, "pane size " + widthPx + "x" + heightPx);
+        } else if (!justShown) {
+            return;
+        }
+        scheduleRelaunch(justShown ? 0 : RELAUNCH_DELAY_MS);
     }
 
     /** Starts the chat list unless something is shown already. */
     public void showMain() {
-        if (!stack.isEmpty()) {
+        if (!isEmpty()) {
             return;
         }
         final Intent intent = new Intent(Intent.ACTION_MAIN);
@@ -260,7 +308,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     }
 
     public boolean isEmpty() {
-        return stack.isEmpty();
+        return stack.isEmpty() && waiting.isEmpty();
     }
 
     /** Hidden activities are stopped, not destroyed. */
@@ -269,6 +317,9 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             return;
         }
         this.visible = visible;
+        // ATAK lays a pane out after showing it, also when it was hidden by another
+        justShown = visible;
+        relaunchStale();
         settleShown();
     }
 
@@ -296,6 +347,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     /** Destroys every activity; the host can be used again. */
     public void destroy() {
         handler.removeCallbacksAndMessages(null);
+        waiting.clear();
         detachFromAtak();
         while (!stack.isEmpty()) {
             final Record record = stack.remove(stack.size() - 1);
@@ -352,6 +404,14 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             deliverResult(caller, requestCode, Activity.RESULT_CANCELED, null);
             return;
         }
+        if (!laidOut && stack.isEmpty()) {
+            // its resources are picked for the pane's real size, known one frame later
+            if (waiting.isEmpty()) {
+                handler.postDelayed(startWaiting, WAIT_FOR_LAYOUT_MS);
+            }
+            waiting.add(() -> start(caller, intent, requestCode));
+            return;
+        }
 
         final Record existing = findByClass(name);
         if (existing != null && (SINGLE_INSTANCE.contains(name)
@@ -360,6 +420,9 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             while (top() != existing) {
                 final Record above = stack.remove(stack.size() - 1);
                 guarded(above, "destroy", () -> destroy(above));
+            }
+            if (canRelaunch() && isStale(existing, paneConfiguration()) && !relaunch(existing)) {
+                return;
             }
             guarded(existing, "new intent", () -> {
                 existing.content.setVisibility(View.VISIBLE);
@@ -419,55 +482,205 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             listener.onHostEmpty();
             return;
         }
+        relaunchStale();
         settleShown();
         listener.onTopFinished(record.activity);
     }
 
     private Record create(final String className, final Intent intent, final Record caller,
             final int requestCode) throws Exception {
+        // before the record is on the stack: the observer settles the stack at once
         attachToAtak();
-        final Class<? extends Activity> cls =
-                plugin.getClassLoader().loadClass(className).asSubclass(Activity.class);
-        final Context base = engine.newUiContext(atak.getWindowManager().getDefaultDisplay(),
-                paneConfiguration());
-        intent.setComponent(new ComponentName(atak.getPackageName(), className));
-        intent.setExtrasClassLoader(plugin.getClassLoader());
-        final boolean floating = FLOATING.contains(className);
-        final ActivityInfo info = new ActivityInfo();
-        info.applicationInfo = atak.getApplicationInfo();
-        info.packageName = atak.getPackageName();
-        info.name = className;
-        info.theme = floating ? R.style.Theme_Conversations3_Dialog
-                : R.style.Theme_Conversations3;
-        info.flags = ActivityInfo.FLAG_HARDWARE_ACCELERATED;
-
-        Log.d(TAG, "creating " + className);
-        final Activity activity = instrumentation.newActivity(cls, base, null,
-                engine.getApplication(), intent, info, "", parent, className, null);
-        activity.setTheme(info.theme);
-        final Record record = new Record(activity, caller, requestCode, floating);
+        final Record record = new Record(caller, requestCode, FLOATING.contains(className));
         // before onCreate, which may start or finish activities
         stack.add(record);
         boolean created = false;
         try {
-            instrumentation.callActivityOnCreate(activity, null);
-            instrumentation.callActivityOnPostCreate(activity, null);
-            final View content = takeContent(activity);
-            record.content = floating ? floatOver(activity, content) : content;
+            launch(record, className, intent, null);
             created = true;
         } finally {
             if (!created) {
                 stack.remove(record);
             }
         }
+        container.addView(record.content, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        return record;
+    }
+
+    /** What a relaunched activity gets from the one it replaces. */
+    private static final class Saved {
+        final Bundle state = new Bundle();
+        /** The views' state, which the activity's own window would have kept. */
+        final SparseArray<Parcelable> views = new SparseArray<>();
+        int focusedId = View.NO_ID;
+    }
+
+    /** Creates the record's activity, from {@code saved} when it is relaunched. */
+    private void launch(final Record record, final String className, final Intent intent,
+            final Saved saved) throws Exception {
+        final Class<? extends Activity> cls =
+                plugin.getClassLoader().loadClass(className).asSubclass(Activity.class);
+        record.configuration = paneConfiguration();
+        final Context base = engine.newUiContext(atak.getWindowManager().getDefaultDisplay(),
+                record.configuration);
+        intent.setComponent(new ComponentName(atak.getPackageName(), className));
+        intent.setExtrasClassLoader(plugin.getClassLoader());
+        final ActivityInfo info = new ActivityInfo();
+        info.applicationInfo = atak.getApplicationInfo();
+        info.packageName = atak.getPackageName();
+        info.name = className;
+        info.theme = record.floating ? R.style.Theme_Conversations3_Dialog
+                : R.style.Theme_Conversations3;
+        info.flags = ActivityInfo.FLAG_HARDWARE_ACCELERATED;
+
+        Log.d(TAG, (saved == null ? "creating " : "relaunching ") + className + " for "
+                + record.configuration.screenWidthDp + "x"
+                + record.configuration.screenHeightDp + " dp");
+        // nothing retained (ViewModels, retained fragments): handing that over is hidden API
+        final Activity activity = instrumentation.newActivity(cls, base, null,
+                engine.getApplication(), intent, info, "", parent, className, null);
+        activity.setTheme(info.theme);
+        record.activity = activity;
+        record.content = null;
+        record.started = false;
+        record.resumed = false;
+        record.stoppedBefore = false;
+        final Bundle state = saved == null ? null : saved.state;
+        instrumentation.callActivityOnCreate(activity, state);
+        if (saved != null) {
+            // in the system's order: started, then the saved state restored
+            start(record);
+            instrumentation.callActivityOnRestoreInstanceState(activity, state);
+        }
+        instrumentation.callActivityOnPostCreate(activity, state);
+        final View content = takeContent(activity);
+        if (saved != null) {
+            content.restoreHierarchyState(saved.views);
+            final View focused = content.findViewById(saved.focusedId);
+            if (focused != null) {
+                focused.requestFocus();
+            }
+        }
+        record.content = record.floating ? floatOver(activity, content) : content;
         // carried over from the activity's own window, which is never shown
         if ((activity.getWindow().getAttributes().flags
                 & WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0) {
             record.content.setKeepScreenOn(true);
         }
-        container.addView(record.content, new FrameLayout.LayoutParams(
+    }
+
+    // --- the pane's size ---
+
+    /** Starts what waited for the pane's layout; with the estimated size if it didn't come. */
+    private void startWaiting() {
+        handler.removeCallbacks(startWaiting);
+        if (waiting.isEmpty()) {
+            return;
+        }
+        laidOut = true;
+        final List<Runnable> starts = new ArrayList<>(waiting);
+        waiting.clear();
+        for (final Runnable start : starts) {
+            start.run();
+        }
+        if (stack.isEmpty()) {
+            listener.onHostEmpty();
+        }
+    }
+
+    private void scheduleRelaunch(final long delayMs) {
+        handler.removeCallbacks(relaunchLater);
+        handler.postDelayed(relaunchLater, delayMs);
+    }
+
+    /**
+     * Not while the pane's size is estimated, nor while a dialog or menu has ATAK's focus: it
+     * would stay open, acting on the activity replaced. The pane tells when the focus is back.
+     */
+    private boolean canRelaunch() {
+        return visible && laidOut && atak.hasWindowFocus();
+    }
+
+    /**
+     * Relaunches the shown activities whose resources were chosen for another pane size; the
+     * hidden ones are relaunched when shown again, as the system does.
+     */
+    private void relaunchStale() {
+        handler.removeCallbacks(relaunchLater);
+        if (!canRelaunch()) {
+            return;
+        }
+        final Configuration current = paneConfiguration();
+        final List<Record> shown = new ArrayList<>();
+        for (int i = stack.size() - 1; i >= 0; i--) {
+            shown.add(stack.get(i));
+            if (!stack.get(i).floating) {
+                break;
+            }
+        }
+        // bottom up, so that a result goes to an activity that is already relaunched
+        for (int i = shown.size() - 1; i >= 0; i--) {
+            final Record r = shown.get(i);
+            if (stack.contains(r) && isStale(r, current)) {
+                relaunch(r);
+            }
+        }
+    }
+
+    private static boolean isStale(final Record r, final Configuration current) {
+        final Configuration c = r.configuration;
+        if (c == null || r.finishing || current.screenWidthDp == 0
+                || HANDLES_SIZE_CHANGES.contains(r.activity.getClass().getName())) {
+            return false;
+        }
+        return c.orientation != current.orientation
+                || Math.abs(c.screenWidthDp - current.screenWidthDp) > RELAUNCH_SLACK_DP
+                || Math.abs(c.screenHeightDp - current.screenHeightDp) > RELAUNCH_SLACK_DP;
+    }
+
+    /**
+     * Replaces the record's activity with a new one for the pane's configuration, from its
+     * saved state, as the system relaunches an activity on a configuration change: the record
+     * stays, so results still reach it. Returns false if it failed and the record is gone.
+     */
+    private boolean relaunch(final Record r) {
+        final Activity old = r.activity;
+        final int index = container.indexOfChild(r.content);
+        Saved saved = new Saved();
+        try {
+            // the views first: stopping the chat hides the keyboard
+            final View focused = r.content.findFocus();
+            saved.focusedId = focused != null ? focused.getId() : View.NO_ID;
+            stop(r);
+            instrumentation.callActivityOnSaveInstanceState(old, saved.state);
+            r.content.saveHierarchyState(saved.views);
+        } catch (final Exception | LinkageError e) {
+            Log.e(TAG, "unable to save " + r + "; relaunching it from its intent", e);
+            saved = null;
+        }
+        guarded(r, "destroy", () -> destroy(r));
+        try {
+            launch(r, old.getClass().getName(), old.getIntent(), saved);
+        } catch (final Exception | LinkageError e) {
+            Log.e(TAG, "unable to relaunch " + old.getClass().getName(), e);
+            toastNotAvailable();
+            stack.remove(r);
+            deliverResult(r.caller, r.requestCode, Activity.RESULT_CANCELED, null);
+            if (stack.isEmpty()) {
+                listener.onHostEmpty();
+            } else {
+                settleShown();
+            }
+            return false;
+        }
+        // where the old one was, below what floats over it (-1: on top)
+        container.addView(r.content, index, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        return record;
+        if (!r.finishing) {
+            guarded(r, "resume", () -> settle(r));
+        }
+        return true;
     }
 
     /** Wraps the content like a dialog over a dimmed pane; touches outside do nothing. */
@@ -493,12 +706,15 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         return scrim;
     }
 
-    /** Dark, scaled ({@link UiScale}) and sized like the pane, not the screen. */
+    /**
+     * Dark, scaled ({@link UiScale}) and sized like the pane, not the screen: the whole pane,
+     * like an activity's window, so that the banner above the activities changes nothing.
+     */
     private Configuration paneConfiguration() {
         final Configuration override = UiScale.override(atak);
         final float density = UiScale.density(atak);
-        final int width = container.getWidth() > 0 ? container.getWidth() : paneWidthPx;
-        final int height = container.getHeight() > 0 ? container.getHeight() : paneHeightPx;
+        final int width = paneWidthPx;
+        final int height = paneHeightPx;
         if (width > 0 && height > 0) {
             override.screenWidthDp = Math.round(width / density);
             override.screenHeightDp = Math.round(height / density);

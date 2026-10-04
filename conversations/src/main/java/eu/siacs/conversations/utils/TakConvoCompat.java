@@ -73,6 +73,33 @@ public final class TakConvoCompat {
 
     public static volatile Observer OBSERVER = null;
 
+    /** Encrypts the credentials an account stores in the database: password, FAST token. */
+    public interface CredentialCipher {
+        String encrypt(String value);
+
+        /** Also reads a value stored before encryption. */
+        String decrypt(String stored);
+    }
+
+    public static volatile CredentialCipher CREDENTIALS = null;
+
+    /**
+     * The largest OMEMO key element processed. protobuf-java 2.5.0, which libsignal parses
+     * them with, takes quadratic time on crafted input (CVE-2021-22569): 256 KiB took seconds.
+     * Real ones are about 200 bytes.
+     */
+    public static final int MAX_OMEMO_KEY_BYTES = 2048;
+
+    public static String encryptCredential(final String value) {
+        final CredentialCipher cipher = CREDENTIALS;
+        return EMBEDDED && cipher != null ? cipher.encrypt(value) : value;
+    }
+
+    public static String decryptCredential(final String stored) {
+        final CredentialCipher cipher = CREDENTIALS;
+        return EMBEDDED && cipher != null ? cipher.decrypt(stored) : stored;
+    }
+
     /** A position written in a message, e.g. an MGRS grid reference: text from start to end. */
     public record Coordinates(int start, int end, double latitude, double longitude) {}
 

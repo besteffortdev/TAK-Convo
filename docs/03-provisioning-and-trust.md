@@ -4,8 +4,8 @@ The user types nothing XMPP-specific: the XMPP domain arrives in a `.pref` file 
 in a mission package), the login reuses the TAK server's username and password, and the
 server's certificate is checked against the CAs ATAK already trusts for its TAK servers.
 
-Classes: `plugin/config/XmppSettings`, `ConversationsSettings`, `TrustSources`, `TrustedCa`;
-`plugin/xmpp/XmppEngine`, `CallsignNicknames`;
+Classes: `plugin/config/XmppSettings`, `ConversationsSettings`, `TrustSources`, `TrustedCa`,
+`ServerIdentity`, `PrivateFiles`; `plugin/xmpp/XmppEngine`, `CallsignNicknames`;
 `plugin/ui/TakConvoPreferenceFragment`, `AccountView`.
 
 ## Settings
@@ -143,8 +143,12 @@ provisionNow():                                # sign-in and sign-out: the accou
     ++provisionRun; apply(load())              #   compares the account before and after
 
 XmppEngine.apply(loaded):                      # main thread
-    settings = loaded.settings; trustChanged = applyTrust(loaded)
+    settings = loaded.settings
     problem  = settings.problem()
+    if problem is null or NO_TAK_CREDENTIALS, and loaded.server isn't approved (next section):
+        problem = SERVER_UNCONFIRMED; trust nothing extra; disable all accounts
+        unprovision(); return
+    trustChanged = applyTrust(loaded)
     if problem == NO_TAK_CREDENTIALS:
         # TAK credentials often arrive after the plugin starts: keep the account on the
         # configured domain as it is, disable the others
@@ -180,6 +184,55 @@ keys at once):
 
 `signIn(user, password)` stores the XMPP login and provisions; `signOut()` clears it, empties
 the account's password and provisions, which disables the account.
+
+## Approving the server
+
+ATAK applies a `.pref` file found in an imported data package without asking (its
+`pref_import_pref_action` defaults to allow), and anyone who can send the device a data
+package can make it import one. Without a check, a `.pref` setting `takconvo_xmpp_domain` (and
+a CA to trust) would make TAK Convo send the TAK server password, in SASL PLAIN, to a server of
+the sender's choosing. So the credentials go only to a server the user approved:
+
+```text
+ServerIdentity.of(settings):     # read with the settings, on the provisioning thread
+    credentials: TAK or XMPP login
+    domain (the JID's), host, port
+    trust: TAK truststores on/off, Android CA store on/off, CA file path and its SHA-256
+
+isApproved(server):
+    no domain, or equal to the approved one        -> yes
+    the user is signing in (login form)            -> approve it, yes
+    nothing approved yet, and an enabled account has logged in to that domain, host and
+    port                                           -> approve it, yes    # set up before this check
+    otherwise                                      -> no: SERVER_UNCONFIRMED
+```
+
+While a server waits:
+
+- every account is disabled and no extra CA is trusted, so nothing connects;
+- an ATAK notification ("approve the new server") opens the account pane;
+- the account pane names the server, how it signs in and the extra CAs it trusts, with
+  **Connect** (`XmppEngine.approveServer`, then provisions at once, as a sign-in does).
+
+Setting the values back to the approved ones reconnects without a question: approval is a
+comparison, not a state to clear. A first setup from a `.pref` file therefore asks once too.
+Changes made in the tool preferences ask as well: the check can't tell who changed a value.
+
+The approved server is stored in a file, `no_backup/takconvo_plugin/approved_server` in ATAK's
+data directory (`PrivateFiles`), not in a preferences file: ATAK's `.pref` import writes any
+preferences file a `<preference name="...">` names (`PreferenceControl.loadSettings` calls
+`getSharedPreferences(name)`), the plugin's own and Conversations' included.
+
+What a `.pref` file can still do:
+
+- **Conversations' own settings**: the supported ones through `takconvo_conversations_*`, and
+  any of them by naming Conversations' preferences file (`takconvo_<package>_preferences`). The
+  ones that matter for security (OMEMO, blind trust, system CAs, TLS 1.3) are supported
+  settings anyway.
+- **Add a TAK server with its CA**: with "Use TAK server truststore" on, that CA is trusted for
+  XMPP as well. Using it takes an attacker on the network path too, and the server list shows
+  the new server.
+- **Turn TAK Convo off** (`takconvo_xmpp_enabled`), as it can turn off any ATAK feature.
 
 ## Trust
 
@@ -293,6 +346,8 @@ refresh():
                       until the account connects or the user signs in or reconnects again
     TLS_ERROR_UNTRUSTED: the notice explains the trust sources (Conversations would ask
                       whether to trust the certificate; here the settings decide)
+    SERVER_UNCONFIRMED: the notice names the server waiting for approval, with Connect
+                      ("Approving the server" above)
 
 signIn() / Reconnect:
     engine.signIn(...)                 # reconnects even when nothing changed

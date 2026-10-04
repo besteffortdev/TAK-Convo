@@ -9,6 +9,8 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -16,10 +18,12 @@ import android.widget.TextView;
 
 import com.atak.plugins.impl.PluginContextProvider;
 import com.atak.plugins.impl.PluginLayoutInflater;
+import com.atakmap.android.data.ClearContentRegistry;
 import com.atakmap.android.data.URIContentManager;
 import com.atakmap.android.ipc.AtakBroadcast;
 import com.atakmap.android.maps.MapView;
 import com.atakmap.android.preference.AtakPreferences;
+import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.android.takconvo.plugin.contacts.GroupChatSends;
 import com.atakmap.android.takconvo.plugin.contacts.XmppContacts;
 import com.atakmap.android.takconvo.plugin.debug.DebugReceiver;
@@ -33,6 +37,7 @@ import com.atakmap.android.takconvo.plugin.ui.host.ChatDropDown;
 import com.atakmap.android.takconvo.plugin.ui.host.EmbeddedActivityHost;
 import com.atakmap.android.takconvo.plugin.xmpp.EmbeddedPendingIntents;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
+import com.atakmap.android.util.NotificationUtil;
 import com.atakmap.app.SettingsActivity;
 import com.atakmap.app.preferences.ToolsPreferenceFragment;
 import com.atakmap.coremap.log.Log;
@@ -50,6 +55,8 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import gov.tak.api.plugin.IPlugin;
 import gov.tak.api.plugin.IServiceController;
@@ -69,6 +76,8 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     public static final String ACTION_SHOW_CHAT = "com.atakmap.android.takconvo.SHOW_CHAT";
     /** AtakBroadcast that acts as back on the chat pane. */
     public static final String ACTION_CHAT_BACK = "com.atakmap.android.takconvo.CHAT_BACK";
+    /** How long a Clear Content waits for the engine to stop before deleting its data. */
+    private static final long WIPE_STOP_TIMEOUT_S = 15;
 
     IServiceController serviceController;
     Context pluginContext;
@@ -99,6 +108,14 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     /** The profile picture screen returns to the account pane. */
     private boolean profilePictureFromAccount;
     private final StringBuilder log = new StringBuilder();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    /** Between onStart and stopAll(). Main thread. */
+    private boolean running;
+    /** ATAK's notification asking to approve the server, while it's posted. */
+    private int serverNotificationId;
+    private boolean serverNotified;
+    private final ClearContentRegistry.ClearContentListener clearContentListener =
+            clearMaps -> wipe();
 
     private final BroadcastReceiver showReceiver = new BroadcastReceiver() {
         @Override
@@ -108,8 +125,8 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
                 showChat();
             } else if (EmbeddedPendingIntents.ACTION_OPEN.equals(action)) {
                 // a notification was tapped
-                final Intent activity = EmbeddedPendingIntents.unwrapActivity(intent,
-                        pluginContext.getClassLoader());
+                final Intent activity = engine == null ? null
+                        : engine.unwrapNotificationTap(intent, pluginContext.getClassLoader());
                 if (activity != null) {
                     showChat(activity);
                 }
@@ -203,6 +220,17 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         if (uiService != null) {
             uiService.addToolbarItem(toolbarItem);
         }
+        serverNotificationId = NotificationUtil.getInstance().reserveNotifyId();
+        // also without an engine: the data of earlier runs is on the device
+        ClearContentRegistry.getInstance().registerListener(clearContentListener);
+        if (debugReceiver != null) {
+            debugReceiver.setClearContent(clearContentListener);
+        }
+        running = true;
+        if (engine != null) {
+            // the settings may already wait for the user's approval
+            notifyServerApproval();
+        }
     }
 
     /** Locations on ATAK's map, quick messages, imports, and the Send dialog. See docs/10. */
@@ -236,6 +264,51 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
 
     @Override
     public void onStop() {
+        ClearContentRegistry.getInstance().unregisterListener(clearContentListener);
+        stopAll();
+    }
+
+    /**
+     * ATAK's Clear Content, on its background task: TAK Convo's chats, keys and credentials go
+     * too. ATAK clears its own credentials and preferences after this, then quits. See docs/02.
+     */
+    private void wipe() {
+        Log.i(TAG, "Clear Content: deleting TAK Convo's data");
+        final CountDownLatch stopped = new CountDownLatch(1);
+        // the engine and the panes live on the main thread
+        mainHandler.post(() -> {
+            try {
+                stopAll();
+            } catch (final RuntimeException | LinkageError e) {
+                Log.e(TAG, "unable to stop TAK Convo for Clear Content", e);
+            } finally {
+                stopped.countDown();
+            }
+        });
+        try {
+            if (!stopped.await(WIPE_STOP_TIMEOUT_S, TimeUnit.SECONDS)) {
+                Log.w(TAG, "TAK Convo didn't stop in time, deleting its data anyway");
+            }
+        } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        try {
+            XmppEngine.wipe(MapView.getMapView().getContext());
+        } catch (final RuntimeException | LinkageError e) {
+            Log.e(TAG, "unable to delete all of TAK Convo's data", e);
+        }
+    }
+
+    /** Stops everything onStart started; once, whether ATAK stops the plugin or wipe() does. */
+    private void stopAll() {
+        if (!running) {
+            return;
+        }
+        running = false;
+        if (serverNotified) {
+            NotificationUtil.getInstance().clearNotification(serverNotificationId);
+            serverNotified = false;
+        }
         AtakBroadcast.getInstance().unregisterReceiver(showReceiver);
         ToolsPreferenceFragment.unregister(TakConvoPreferenceFragment.TOOL_KEY);
         stopMapIntegration();
@@ -274,8 +347,17 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
 
         if (uiService != null) {
+            // they show the stopped engine's state
+            for (final Pane pane : new Pane[] {accountPane, testPane}) {
+                if (pane != null && uiService.isPaneVisible(pane)) {
+                    uiService.closePane(pane);
+                }
+            }
             uiService.removeToolbarItem(toolbarItem);
         }
+        accountPane = null;
+        accountView = null;
+        testPane = null;
     }
 
     /** The tool icon; a drawable of its own for each user, which may tint it. */
@@ -524,6 +606,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             closeChatPane();
         }
         showChatIfSignedIn(account);
+        notifyServerApproval();
         final String status = describe(engine);
         if (!status.equals(lastStatus)) {
             lastStatus = status;
@@ -534,6 +617,29 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
             collectMessages(engine);
             statusView.setText(status);
             logView.setText(log);
+        }
+    }
+
+    /**
+     * The chats go offline when the server settings change, e.g. through a data package: a
+     * notification says so, and its tap shows the account pane, which names the server.
+     */
+    private void notifyServerApproval() {
+        final boolean waiting = running
+                && engine.getProblem() == XmppSettings.Problem.SERVER_UNCONFIRMED;
+        if (waiting == serverNotified) {
+            return;
+        }
+        serverNotified = waiting;
+        if (waiting) {
+            final String title =
+                    pluginContext.getString(R.string.takconvo_server_notification_title);
+            NotificationUtil.getInstance().postNotification(serverNotificationId,
+                    NotificationUtil.GeneralIcon.NETWORK_ERROR.getID(), title, title,
+                    pluginContext.getString(R.string.takconvo_server_notification_text),
+                    new Intent(TakConvoPreferenceFragment.ACTION_SHOW_ACCOUNT), true);
+        } else {
+            NotificationUtil.getInstance().clearNotification(serverNotificationId);
         }
     }
 

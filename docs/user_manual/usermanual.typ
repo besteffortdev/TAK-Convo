@@ -36,6 +36,10 @@ Your administrator gives you a settings file (`.pref`), on its own or in a data 
 the data package in ATAK, or import the file in *Settings › Tool Preferences › TAK Convo ›
 Import settings file (.pref)*.
 
+When a settings file names a new server, TAK Convo asks before sending your password there: a
+notification says the chats are offline, and the account screen names the server with
+*Connect*. Connect only if you or your administrator made the change.
+
 == Signing in
 Tap the TAK Convo button (a speech bubble) in ATAK's toolbar or in the Tools menu. TAK Convo
 signs in with the username and password of your TAK server connection, so connect to your TAK
@@ -54,7 +58,8 @@ file.
 #tak-slide[
 = Chats
 The chats open in a pane beside the map, like ATAK's own tools. *Back* goes back one screen,
-and closes the pane from the chat list.
+and closes the pane from the chat list. Drag the pane's handle toward the map for full screen,
+and back again to return.
 
 - *Start a chat*: the *+* button, then an XMPP address, or create or join a group chat.
   *Discover channels* lists the group chats of your XMPP server.
@@ -151,4 +156,7 @@ them.
     certificate],
   [*Provisioning*], [Import settings file (.pref)],
 )
+
+ATAK's *Clear Content* also deletes TAK Convo's chats, received files, encryption keys and
+login from the device. The messages stay on the server.
 ]

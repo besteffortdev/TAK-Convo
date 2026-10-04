@@ -12,8 +12,8 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-10-02 (smaller empty chat list hint) it is **51 modified files, 2 added files, 2
-removed manifests** (127 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
+As of 2026-10-03 (credentials encrypted, OMEMO key size) it is **53 modified files, 2 added
+files, 2 removed manifests** (132 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
 comment: `grep -rn TAKCONVO conversations/src`. When codeberg is unreachable,
 `UPSTREAM_DIR=<a checkout of the tag> tools/fork-diff.sh` compares with a local clone.
 
@@ -264,6 +264,42 @@ What ties the chats to ATAK's map (see [10](10-atak-map-integration.md)). Each c
 | `res/layout/fragment_conversation.xml` | `quick_messages_scroll` (a `HorizontalScrollView`, gone by default) with the `ChipGroup` `quick_messages`, above `message_input_box`; `snackbar` is above it instead of above the input box. |
 | `res/menu/fragment_conversation.xml` | Item `action_show_on_map` (location pin icon, hidden by default). |
 | `res/values/takconvo_strings.xml` | **New.** `takconvo_show_on_map`. |
+
+### N. Credentials stored encrypted
+
+The `accounts` table holds the password (with TAK credentials, the TAK server's) and the
+SASL2 FAST token. Inside ATAK both go through `TakConvoCompat.CREDENTIALS`, which the plugin
+sets to an Android Keystore cipher ([02](02-embedded-engine.md#credentials-in-the-database)).
+Unset outside ATAK: stored as upstream stores them.
+
+| File | Change |
+|---|---|
+| `java/eu/siacs/conversations/utils/TakConvoCompat.java` | Interface `CredentialCipher` (`encrypt`, `decrypt`), hook `CREDENTIALS`, helpers `encryptCredential`, `decryptCredential`. |
+| `java/eu/siacs/conversations/entities/Account.java` | `fromCursor`: `decryptCredential` around the `password` and `fast_token` columns. `getContentValues`: `encryptCredential` around both. |
+
+Backups (`ExportBackupWorker`) read the table directly, but they run from Conversations'
+settings screen, which isn't available inside ATAK.
+
+### O. OMEMO keys parsed by protobuf 2.5.0
+
+libsignal 2.6.2 parses each received OMEMO key with protobuf-java 2.5.0, as upstream does.
+A scan of the packaged libraries (OSV, `civReleaseRuntimeClasspath`) found advisories against
+no other library. Tested on the PC against the two jars:
+
+- **CVE-2024-7254** (stack overflow from nested groups): not reachable. libsignal's messages
+  use protobuf's full runtime, where unknown groups go through `CodedInputStream.readGroup`
+  and its limit of 64 levels; 100 000 levels end in `InvalidMessageException`, which
+  `processReceiving` already handles.
+- **CVE-2021-22569** (alternating unknown fields): parse time grows with the square of the
+  size: 64 KiB took 0.3 s, 256 KiB 3.9 s on a desktop, longer on a phone, on the thread that
+  processes the account's stanzas. Any sender can put such a key in a message.
+
+| File | Change |
+|---|---|
+| `java/eu/siacs/conversations/utils/TakConvoCompat.java` | `MAX_OMEMO_KEY_BYTES = 2048`. Real keys are about 200 bytes; a crafted 2 KiB one parses in 0.3 to 0.7 ms on the desktop. |
+| `java/eu/siacs/conversations/crypto/axolotl/XmppAxolotlSession.java` | `processReceiving`: a larger key is skipped like an undecryptable one (the next key is tried, the last one fails with `CryptoFailedException`). Applies outside ATAK too. |
+
+Upgrading protobuf would mean regenerating libsignal's 2.5-generated classes.
 
 ## What the plugin relies on
 

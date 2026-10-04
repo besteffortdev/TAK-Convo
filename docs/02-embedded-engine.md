@@ -95,11 +95,14 @@ XmppEngine.start(atakContext, pluginContext):          # once per process
     TakConvoCompat.PENDING_INTENTS = EmbeddedPendingIntents   # see "PendingIntents" below
     TakConvoCompat.NOTIFICATIONS   = EmbeddedNotifications    # see 08
     TakConvoCompat.OBSERVER        = observer                 # see "Changes and threads"
+    TakConvoCompat.CREDENTIALS     = KeystoreCredentials      # see "Credentials in the database"
     nicknames = new CallsignNicknames(...)             # see 03, the callsign as nickname
     ConversationsSettings.apply(ATAK's prefs, Conversations' prefs)   # .pref-set, see 03
     service.onCreate()                                 # opens the DB, loads accounts
-    initial = load(); applyTrust(initial)              # before anything connects, see 03;
-                                                       #   on the main thread, this once
+    if a credential was read unencrypted: save every account again    # encrypts it
+    approvedServer = PrivateFiles "approved_server"    # see 03, approving the server
+    initial = load()                                   # on the main thread, this once
+    applyTrust(initial if its server is approved)      # before anything connects, see 03
     for account in service.accounts:
         account.resource = "TAK Convo." + random(3)    # see "resource" below
     service.onStartCommand(null)                       # connects enabled accounts
@@ -116,6 +119,7 @@ XmppEngine.shutdown():
     service.onTaskRemoved(null)                        # logs out and saves, as on swipe-away
     service.onDestroy()
     TakConvoCompat.OBSERVER = NOTIFICATIONS = PENDING_INTENTS = null
+    # CREDENTIALS stays: the logouts run on other threads and may still save their account
     stop receiving delivered PendingIntents
 ```
 
@@ -193,7 +197,7 @@ Conversations' classes:
 ```text
 getActivity(ctx, code, intent, flags):              # a notification tap
     if intent isn't aimed at eu.siacs.conversations.*: return PendingIntent.getActivity(...)
-    open  = Intent(ACTION_OPEN) + intent's extras + {class, action}
+    open  = Intent(ACTION_OPEN) + intent's extras + {class, action, token}
     front = Intent(component = ATAK's main activity, CLEAR_TOP | SINGLE_TOP,
                    action = "OPEN:" + class + ":" + action)   # keeps PendingIntents apart
     front.internalIntent = open          # ATAKActivity.onNewIntent rebroadcasts it in-process
@@ -221,3 +225,63 @@ action, and PendingIntents stay as distinct as their original targets were (a Pe
 identity includes its data). ATAK's own notifications use the same `internalIntent`
 mechanism (`NotificationUtil`), so a tap behaves like a GeoChat one: ATAK comes to the front
 and the plugin shows the chat. See [08](08-contacts-and-notifications.md).
+
+ATAK's launcher activity rebroadcasts the `internalIntent` of any app's intent, so any app
+could send `ACTION_OPEN` and have the chat pane start a Conversations screen of its choosing,
+with its extras. The `token` extra keeps that out: 16 random bytes made once per installation,
+kept in `no_backup/takconvo_plugin/open_token` (a `.pref` file can't write there, see
+[03](03-provisioning-and-trust.md#approving-the-server)). `unwrapActivity` drops an
+`ACTION_OPEN` without it. Kept across restarts, so the notifications left in the shade still
+open their chat.
+
+## Credentials in the database
+
+Conversations stores each account's password, and its SASL2 FAST token, in its `accounts`
+table. With TAK credentials that is the TAK server password, in ATAK's data directory, where
+any copy of that directory shows it (a backup, `run-as` on a debuggable ATAK, a rooted phone). The fork hands both columns to
+`TakConvoCompat.CREDENTIALS` (see [05](05-conversations-fork.md#n-credentials-stored-encrypted)):
+
+```text
+KeystoreCredentials (plugin):
+    key: AES-256-GCM "takconvo_credentials" in the Android Keystore, made on first use; it
+         never leaves the Keystore (or the secure hardware behind it)
+    encrypt(value): "takconvo-gcm1:" + base64(iv + ciphertext)
+                    if that fails: "" (never in clear; provisioning has the original)
+    decrypt(stored): without the prefix: stored before encryption, returned as it is and
+                     noted, so the engine saves every account again at start
+                     if that fails (the key is gone): "", and provisioning sets it again
+```
+
+The originals stay in ATAK's own encrypted credential store (TAK server logins and the
+`takconvo.xmpp` login), so losing the stored copy only means waiting for provisioning. The
+copy is needed at all because, at ATAK start-up, the TAK credentials often aren't available
+yet: the stored account connects without them.
+
+## ATAK's Clear Content
+
+ATAK's **Clear Content** deletes ATAK's data, then quits. Plugins take part through `ClearContentRegistry`: ATAK's `ClearContentTask` calls each
+listener on its background thread, before it clears ATAK's credential store and preferences.
+`TakConvoPlugin` registers one at start, even without an engine:
+
+```text
+wipe():                                    # ClearContentTask's thread
+    on the main thread, waiting up to 15 s: stopAll()      # as onStop: panes, contacts,
+                                                           #   map integration, engine logout
+    XmppEngine.wipe():
+        cancel Conversations' notifications                # they show message text
+        EmbeddedContext.deleteAll():                       # ATAK's data dir, takconvo prefix
+            databases takconvo_*                           # messages, contacts, OMEMO keys
+            shared_prefs takconvo_*.xml                    # Conversations' and ours
+            files/, cache/, no_backup/ takconvo, app_takconvo_*
+            Android/data/<package>/files|cache/takconvo    # received files, avatars
+        delete the Keystore key                            # earlier copies stay unreadable
+        delete no_backup/takconvo_plugin                   # approved server, open token
+        delete the takconvo.xmpp login
+```
+
+After it, ATAK clears its preferences (the `takconvo_*` settings among them) and its
+credential store, then quits. The account and its messages on the server are untouched: the
+server's archive (MAM) brings history back if the device signs in again. Files saved to shared
+storage (Conversations' `use_shared_storage`, off and not a supported setting) aren't tracked
+and stay. `DEBUG_CLEAR_CONTENT` runs the same listener without clearing ATAK
+([07](07-development-and-testing.md#debug-broadcasts)).

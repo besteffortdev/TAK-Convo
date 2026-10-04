@@ -96,7 +96,9 @@ public final class XmppSettings {
         NO_TAK_CREDENTIALS,
         NOT_SIGNED_IN,
         NO_DOMAIN,
-        INVALID_JID
+        INVALID_JID,
+        /** The server settings changed, e.g. by a .pref file: the user confirms first. */
+        SERVER_UNCONFIRMED
     }
 
     public final boolean enabled;

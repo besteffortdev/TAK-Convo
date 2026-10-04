@@ -167,7 +167,9 @@ public class Account extends AbstractEntity implements AvatarService.Avatar {
         return new Account(
                 cursor.getString(cursor.getColumnIndexOrThrow(UUID)),
                 jid,
-                cursor.getString(cursor.getColumnIndexOrThrow(PASSWORD)),
+                // TAKCONVO: stored encrypted, see TakConvoCompat.CREDENTIALS
+                eu.siacs.conversations.utils.TakConvoCompat.decryptCredential(
+                        cursor.getString(cursor.getColumnIndexOrThrow(PASSWORD))),
                 cursor.getInt(cursor.getColumnIndexOrThrow(OPTIONS)),
                 cursor.getString(cursor.getColumnIndexOrThrow(ROSTERVERSION)),
                 Keys.parse(cursor.getString(cursor.getColumnIndexOrThrow(KEYS))),
@@ -181,7 +183,8 @@ public class Account extends AbstractEntity implements AvatarService.Avatar {
                 cursor.getString(cursor.getColumnIndexOrThrow(PINNED_MECHANISM)),
                 cursor.getString(cursor.getColumnIndexOrThrow(PINNED_CHANNEL_BINDING)),
                 cursor.getString(cursor.getColumnIndexOrThrow(FAST_MECHANISM)),
-                cursor.getString(cursor.getColumnIndexOrThrow(FAST_TOKEN)));
+                eu.siacs.conversations.utils.TakConvoCompat.decryptCredential( // TAKCONVO
+                        cursor.getString(cursor.getColumnIndexOrThrow(FAST_TOKEN))));
     }
 
     // TODO remove this method and call HttpUploadManager directly i
@@ -463,7 +466,9 @@ public class Account extends AbstractEntity implements AvatarService.Avatar {
         values.put(UUID, uuid);
         values.put(USERNAME, jid.getLocal());
         values.put(SERVER, jid.getDomain().toString());
-        values.put(PASSWORD, password);
+        values.put( // TAKCONVO: stored encrypted, see TakConvoCompat.CREDENTIALS
+                PASSWORD,
+                eu.siacs.conversations.utils.TakConvoCompat.encryptCredential(password));
         values.put(OPTIONS, options);
         values.put(KEYS, Services.GSON.toJson(this.keys));
         values.put(ROSTERVERSION, rosterVersion);
@@ -477,7 +482,9 @@ public class Account extends AbstractEntity implements AvatarService.Avatar {
         values.put(PINNED_MECHANISM, pinnedMechanism);
         values.put(PINNED_CHANNEL_BINDING, pinnedChannelBinding);
         values.put(FAST_MECHANISM, this.fastMechanism);
-        values.put(FAST_TOKEN, this.fastToken);
+        values.put( // TAKCONVO
+                FAST_TOKEN,
+                eu.siacs.conversations.utils.TakConvoCompat.encryptCredential(this.fastToken));
         return values;
     }
 

@@ -270,10 +270,13 @@ its own. So `goBack()` closes it explicitly: `closeDropDown()` passes the flag a
 ```text
 ChatDropDown.show():
     if open and visible: return
-    host.setPaneSize(estimatePaneSize(mapView))
+    host.setEstimatedPaneSize(ATAK's area unchanged since the last layout ? last size
+                                                                      : estimatePaneSize())
     showDropDown(pane, 0.4, FULL_HEIGHT, FULL_WIDTH, 0.4, ignoreBackButton = true, this)
                                        # pane: the connection banner above the host's view
 ```
+
+Its size until the next layout is only estimated, see "When the pane changes size".
 
 `show()` is also how the plugin reaches a pane that is open but **hidden under another
 drop-down**: the account pane opened from a chat's menu, whose avatar then opens the profile
@@ -394,7 +397,7 @@ request for `READ_CONTACTS` (undeclared by ATAK → denied) together with `CAMER
 paneConfiguration():
     uiMode = NIGHT_YES                                   # ATAK is always dark
     densityDpi = ATAK's densityDpi × UiScale.FACTOR (0.9)
-    if pane size is known:
+    if pane size is known:                               # the whole pane, banner included
         screenWidthDp, screenHeightDp = pane size / scaled density
         smallestScreenWidthDp = min(...); orientation from the pane's shape
 ```
@@ -406,20 +409,76 @@ alike: text, icons, touch targets. 0.8 turned out a bit small; 0.9 it is.
 The pane takes 40 % of the map (`ChatDropDown.PANE_FRACTION`: its width in landscape, its
 height in portrait), and so does the account pane. Resources are chosen for the **pane's**
 size, not the screen's, so a side pane on a tablet gets Conversations' phone layouts. On the
-480 dpi S23 in landscape the pane is about 325 dp wide at the scaled density. The first
-activity is created before the pane is laid out, so `ChatDropDown.estimatePaneSize` estimates
-the size: 40 % (or all) of ATAK's **content area** (`android.R.id.content`), which ATAK divides
-between the map and its panes. The map view would do while no pane is open, but another open
-pane (the account pane) narrows it. The display's
-size was too large: it counts the system bars, and it once put a 350 dp pane in Conversations'
-`w384dp` bucket, where a voice message's player was wider than its bubble. The host also sets
-`AppCompatDelegate.setDefaultNightMode(MODE_NIGHT_YES)`,
+480 dpi S23 in landscape the pane is 839 × 840 px, 311 × 311 dp at the scaled density. The
+size is the whole drop-down, like an activity's window: the connection banner above the
+activities shows and hides without changing it.
+
+The host also sets `AppCompatDelegate.setDefaultNightMode(MODE_NIGHT_YES)`,
 because AppCompat would otherwise follow the device and an embedded activity can't
 `recreate()`. That setting is process-wide: it would also affect another AppCompat plugin in
 ATAK.
 
-The configuration is fixed when an activity is created: resizing the pane or rotating the
-device lays the views out again but doesn't re-select resources.
+### When the pane changes size
+
+The pane changes size when it is rotated with ATAK, when its handle takes it full screen and
+back, and when ATAK places it elsewhere: opened in portrait, it is at the bottom, 400 × 309 dp
+on the S23. Android relaunches an activity whose configuration changes: it saves its state,
+destroys it and creates it again with that state. The host does the same.
+
+```text
+ChatDropDown: after each layout of the pane     -> host.setPaneSize(w, h)
+              ATAK's handle (onStateRequested)  -> resize(full screen - handle) or back to 0.4
+
+setPaneSize(w, h):
+    start what waited for the layout
+    relaunch the shown activities: at once if the pane was just shown, else 400 ms after the
+        last change (the size is still changing)
+
+relaunchStale():                    # also when the pane shows again, and when the top finishes
+    not while: hidden, the size only estimated, ATAK's window without focus (a dialog or menu)
+    for the shown activities (the top one, and those a floating one shows), bottom up:
+        if orientation or width or height differs by more than 8 dp: relaunch(record)
+
+relaunch(record):
+    keep the focused view's id; stop
+    callActivityOnSaveInstanceState(state); content.saveHierarchyState(views)
+    destroy; create a new activity in the same record, with the old one's intent:
+        onCreate(state), onStart, onRestoreInstanceState(state), onPostCreate(state)
+        content.restoreHierarchyState(views); focus the view kept
+    put its content where the old one was; settle
+```
+
+The record stays the same, so a result for the old activity (a permission, a picked file, a
+point picked on the map) reaches the new one. Hidden activities are relaunched only when they
+show again, as on Android. `RecordingActivity` isn't relaunched: upstream declares
+`configChanges` for it, so a recording continues.
+
+- **Saved state.** All of Conversations' activities save theirs, as they must on a phone that
+  rotates: the chat comes back with its scroll position, draft and attachments. The window of
+  an embedded activity no longer holds its views, so the host saves and restores their state
+  itself, as the window would.
+- **Retained objects aren't handed over.** Android passes the old activity's ViewModels and
+  retained fragments to the new one, through `retainNonConfigurationInstances()` and
+  `mChangingConfigurations`. Both are hidden API that ATAK's target SDK 35 denies
+  (max-target-o), so the new activity starts from its saved state only. Because the old one
+  doesn't know it is being relaunched, the chat hides the keyboard and stops a playing voice
+  message.
+- **Not under a dialog or menu.** Dialogs are ATAK windows (see "The parent activity"): a
+  dialog left open would act on the activity replaced. Two of Conversations' dialogs (adding a
+  contact, creating a group chat) also keep their listener only when retained. The host waits
+  until ATAK's window has the focus again; `PaneFrame` reports it.
+- **The first activity waits for the layout.** Before its first layout, and when ATAK's area
+  changed while it was closed, the pane's size is only estimated: 40 % (or all) of ATAK's
+  content area (`android.R.id.content`). On the S23 that gave 347 × 400 dp for a 311 × 311 dp
+  pane: ATAK's panes leave out its toolbar and the screen's cutout. The first activity is
+  created one frame later, after the layout, or with the estimate after 500 ms. The display's
+  size is worse: it counts the system bars, and it once put a 350 dp pane in Conversations'
+  `w384dp` bucket, where a voice message's player was wider than its bubble. The account pane
+  still uses the estimate: it is the plugin's own view, sized once.
+
+ATAK on a phone stays in landscape unless its `atakControlForcePortrait` setting is on. Changed
+while ATAK runs, ATAK keeps an open pane where it was (a side pane 160 dp wide in portrait)
+until it is opened again, and its own layout is off until ATAK restarts.
 
 ## Files handed to other apps
 

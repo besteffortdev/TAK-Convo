@@ -245,6 +245,7 @@ delivered.
 | `DEBUG_SEND_MAP_ITEM` | `uid` (a map item's) | sends to the self chat what a group chat gets from ATAK's send list: a line naming the item, and a data package of it ([10](10-atak-map-integration.md#map-items-to-a-group-chat)) |
 | `DEBUG_SEND_TO_CONTACT` | `uid` (a contact's), `extra.<key>` | does what ATAK's send list does for a contact whose IP connector names a broadcast (a group chat's `takconvo.room:<address>`); without extras nothing is sent, `GroupChatSends` only warns |
 | `DEBUG_SEND_FILE` | `path` | sends a file to the self chat, as ATAK's Send dialog would |
+| `DEBUG_CLEAR_CONTENT` | | does to TAK Convo what ATAK's Clear Content does, without clearing ATAK: stops the plugin and deletes its data, keys and XMPP login ([02](02-embedded-engine.md#ataks-clear-content)). Back up first (see the checklist) |
 
 ```bash
 adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_CHAT
@@ -384,7 +385,62 @@ After an upstream merge, a dependency change or a change to the host:
     - `DEBUG_SEND_FILE` with a file in ATAK's app storage (`run-as` into `files/`, path by
       `/data/data/...` and `/data/user/0/...`) logs "refusing to send a file from ATAK's
       private storage". A file in `/sdcard/atak` is sent.
-17. `adb logcat -b crash` is empty.
+    - `DEBUG_ATAK_BROADCAST` with `action` `com.atakmap.android.takconvo.OPEN`,
+      `extra.takconvo.class` `eu.siacs.conversations.ui.ConversationsActivity` (with or
+      without a made-up `extra.takconvo.token`) logs "ignoring an open request that didn't
+      come from a notification". A real notification's tap still opens its chat. The same
+      with `com.atakmap.android.takconvo.LOCATION_PICKED` and `extra.point` while Location ›
+      A point on the map waits: nothing is shared; the tap on the map still is.
+17. Approving the server ([03](03-provisioning-and-trust.md#approving-the-server)), with
+    `.pref` files imported by `DEBUG_IMPORT_PREF`:
+    - after installing over a version without approvals, the engine logs "encrypting the
+      stored credentials" and "approved {...}", and `no_backup/takconvo_plugin/approved_server`
+      exists; the `accounts` table's `password` starts with `takconvo-gcm1:`; after a
+      restart the account comes online without "updating account" (it decrypted);
+    - a `.pref` with `<preference name="takconvo_s4_probe">` creates
+      `shared_prefs/takconvo_s4_probe.xml` (why approval is a file);
+    - `takconvo_xmpp_use_tak_credentials` true and `takconvo_xmpp_domain` `s4-test.invalid`:
+      "waiting for approval", the account disabled, `saXmppUsername` cleared, the notification
+      "approve the new server"; its tap opens the account pane naming `s4-test.invalid` and
+      "your TAK server credentials". Don't tap Connect there. A `.pref` with the old values
+      reconnects without a question and the notification goes;
+    - `takconvo_xmpp_use_android_ca_store` true: the notice lists "the device's CA store";
+      **Connect** approves it and the account comes online. Remove the key and approve again
+      to end where you started.
+18. Clear Content ([02](02-embedded-engine.md#ataks-clear-content)). It deletes the history and
+    the XMPP login, so back up first, with ATAK stopped:
+    ```bash
+    adb shell am force-stop com.atakmap.app.civ
+    adb exec-out run-as com.atakmap.app.civ tar -cf - . > atak-data.tar
+    adb exec-out run-as com.atakmap.app.civ tar -cf - \
+        -C /storage/emulated/0/Android/data/com.atakmap.app.civ/cache takconvo > ext.tar
+    ```
+    Start ATAK, post a notification (`DEBUG_FAKE_INCOMING`), then `DEBUG_CLEAR_CONTENT`: the
+    plugin logs "Clear Content: deleting TAK Convo's data" then "TAK Convo's data deleted";
+    the notification goes; `databases/takconvo_*`, `shared_prefs/takconvo_*`,
+    `files|cache|no_backup/takconvo*`, `app_takconvo_*` and the external `cache/takconvo` are
+    gone and stay gone; ATAK keeps running. Restarted, the plugin is `NOT_SIGNED_IN` (the
+    login went too). To restore: force-stop ATAK, delete what `find . ! -type d` lists that
+    the tar doesn't (stale database journals would otherwise meet the restored databases),
+    `adb exec-in run-as com.atakmap.app.civ tar -xf - < atak-data.tar` (and the external
+    tar with `-C` its directory), start ATAK. The stored password can't be decrypted any more
+    (`AEADBadTagException`: the key went with the wipe); provisioning sets it again from the
+    restored credential store and the account comes online.
+19. The pane's size ([04](04-chat-pane-activity-host.md#when-the-pane-changes-size)), with
+    `TakConvo.Host`:
+    - opening the pane logs "pane size", then "creating ... for W x H dp" for that size (311 ×
+      311 dp on the S23), and no relaunch; closing and reopening it relaunches nothing;
+    - dragging the handle toward the map takes it full screen (738 × 311 dp on the S23),
+      dragging it back restores it: each time, one "relaunching ..." 400 ms later;
+    - ATAK only rotates with its `atakControlForcePortrait` setting: import a `.pref` setting it
+      to `true` (as a `java.lang.Boolean`). With a chat open and a draft typed, the chat comes
+      back for the new size with the same scroll position and draft. Reopened in portrait, the
+      pane is at the bottom and relaunched at once. With the chat list's ⋮ menu open while it
+      rotates, nothing is relaunched until the menu closes. With the account pane over the
+      chat pane while it rotates, the chat pane is relaunched when it shows again;
+    - remove the setting (`DEBUG_SET_PREF --es key atakControlForcePortrait`), restart ATAK (its
+      own layout is off after the change) and clear the draft.
+20. `adb logcat -b crash` is empty.
 
 ## Gotchas
 

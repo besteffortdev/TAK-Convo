@@ -12,10 +12,13 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.DatabaseErrorHandler;
 import android.database.sqlite.SQLiteDatabase;
+import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.view.Display;
+
+import com.atakmap.coremap.log.Log;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -33,6 +36,7 @@ import java.util.WeakHashMap;
  */
 final class EmbeddedContext extends ContextWrapper {
 
+    private static final String TAG = "TakConvo.Context";
     private static final String PREFIX = "takconvo_";
     private static final String DIR = "takconvo";
     /** Context.AUTOFILL_MANAGER_SERVICE, hidden in the SDK. */
@@ -266,6 +270,60 @@ final class EmbeddedContext extends ContextWrapper {
     @Override
     public boolean deleteFile(final String name) {
         return getFileStreamPath(name).delete();
+    }
+
+    /**
+     * Deletes everything stored through these contexts: Conversations' databases (messages,
+     * OMEMO keys), settings and files, in and outside ATAK's data directory. Once the engine
+     * has stopped; any thread.
+     */
+    static void deleteAll(final Context atak) {
+        final Context app = atak.getApplicationContext();
+        for (final String name : app.databaseList()) {
+            if (name.startsWith(PREFIX)) {
+                // with its journal
+                app.deleteDatabase(name);
+            }
+        }
+        final File dataDir = new File(app.getApplicationInfo().dataDir);
+        final File[] prefs = new File(dataDir, "shared_prefs").listFiles();
+        for (final File file : prefs == null ? new File[0] : prefs) {
+            final String name = file.getName();
+            if (!name.startsWith(PREFIX)) {
+                continue;
+            }
+            if (name.endsWith(".xml") && Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                // also drops the copy in memory, which a later write would save again
+                app.deleteSharedPreferences(name.substring(0, name.length() - 4));
+            } else {
+                deleteRecursively(file);
+            }
+        }
+        final File[] dirs = dataDir.listFiles();
+        for (final File dir : dirs == null ? new File[0] : dirs) {
+            if (dir.getName().startsWith("app_" + PREFIX)) {
+                // getDir's
+                deleteRecursively(dir);
+            }
+        }
+        for (final File base : new File[] {app.getFilesDir(), app.getNoBackupFilesDir(),
+                app.getCacheDir(), app.getExternalFilesDir(null), app.getExternalCacheDir()}) {
+            if (base != null) {
+                deleteRecursively(new File(base, DIR));
+            }
+        }
+    }
+
+    static void deleteRecursively(final File file) {
+        final File[] children = file.listFiles();
+        if (children != null) {
+            for (final File child : children) {
+                deleteRecursively(child);
+            }
+        }
+        if (file.exists() && !file.delete()) {
+            Log.w(TAG, "unable to delete " + file);
+        }
     }
 
     private static File sub(final File base) {

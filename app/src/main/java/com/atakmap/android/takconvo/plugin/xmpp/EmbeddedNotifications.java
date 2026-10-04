@@ -15,6 +15,7 @@ import android.graphics.drawable.Icon;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.os.Build;
+import android.service.notification.StatusBarNotification;
 import android.util.SparseArray;
 
 import com.atakmap.android.preference.AtakPreferences;
@@ -23,6 +24,10 @@ import com.atakmap.coremap.log.Log;
 
 import eu.siacs.conversations.R;
 import eu.siacs.conversations.utils.TakConvoCompat;
+
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Fixes Conversations' notifications for ATAK: resource icons become bitmaps (as ATAK's they
@@ -35,6 +40,11 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
     private static final int ICON_DP = 24;
     /** Conversations' alerting message channel. */
     private static final String MESSAGES_CHANNEL = "messages";
+    /** The groups of Conversations' channels, ours included. */
+    private static final Set<String> CONVERSATIONS_CHANNEL_GROUPS =
+            new HashSet<>(Arrays.asList("status", "chats", "calls"));
+    /** Conversations' notification groups, e.g. its messages'. */
+    private static final String CONVERSATIONS_GROUP_PREFIX = "eu.siacs.conversations.";
 
     private final Context atak;
     private final Context plugin;
@@ -49,6 +59,33 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
         this.theme = resources.newTheme();
         // for the icons' tints
         theme.applyStyle(R.style.Theme_Conversations3, true);
+    }
+
+    /** Cancels what Conversations posted: messages show their text. Any thread. */
+    static void cancelAll(final Context atak) {
+        final NotificationManager manager = atak.getSystemService(NotificationManager.class);
+        if (manager == null) {
+            return;
+        }
+        for (final StatusBarNotification posted : manager.getActiveNotifications()) {
+            if (isConversations(manager, posted.getNotification())) {
+                manager.cancel(posted.getTag(), posted.getId());
+            }
+        }
+    }
+
+    private static boolean isConversations(final NotificationManager manager,
+            final Notification notification) {
+        final String group = notification.getGroup();
+        if (group != null && group.startsWith(CONVERSATIONS_GROUP_PREFIX)) {
+            return true;
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || notification.getChannelId() == null) {
+            return false;
+        }
+        final NotificationChannel channel =
+                manager.getNotificationChannel(notification.getChannelId());
+        return channel != null && CONVERSATIONS_CHANNEL_GROUPS.contains(channel.getGroup());
     }
 
     @Override

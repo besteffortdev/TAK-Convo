@@ -350,7 +350,7 @@ and notifications, and the code guidelines (error handling, logging, style).
 
 `conversations/` is Conversations by Daniel Gultsch and contributors, GPLv3
 ([conversations/LICENSE](conversations/LICENSE)). The plugin APK includes it and is distributed
-under the GPLv3. The plugin's icons are Conversations' launcher icons. The plugin skeleton
+under the GPLv3 ([LICENSE](LICENSE)). The plugin's icons are Conversations' launcher icons. The plugin skeleton
 comes from the ATAK-CIV SDK's plugin template.
 
 ## Contact

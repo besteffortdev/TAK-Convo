@@ -30,12 +30,15 @@ import com.atakmap.app.SettingsActivity;
 import com.atakmap.app.preferences.PreferenceControl;
 import com.atakmap.comms.CommsMapComponent;
 import com.atakmap.comms.CotService;
+import com.atakmap.comms.NetConnectString;
 import com.atakmap.coremap.cot.event.CotDetail;
 import com.atakmap.coremap.cot.event.CotEvent;
 import com.atakmap.coremap.cot.event.CotPoint;
 import com.atakmap.coremap.log.Log;
 import com.atakmap.coremap.maps.coords.GeoPoint;
 import com.atakmap.coremap.maps.time.CoordinatedTime;
+import com.atakmap.net.AtakAuthenticationCredentials;
+import com.atakmap.net.AtakAuthenticationDatabase;
 
 import eu.siacs.conversations.entities.Conversation;
 import eu.siacs.conversations.entities.Message;
@@ -64,6 +67,8 @@ import java.util.List;
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SEND --es to J --es body B
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_ADD_TAK_SERVER \
  *     --es connect host:8089:ssl --es user U --es pass P
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_REMOVE_TAK_SERVER \
+ *     --es connect host:8089:ssl
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_ACCOUNT
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_OPEN_SETTINGS
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_CHAT
@@ -106,6 +111,7 @@ public final class DebugReceiver extends BroadcastReceiver {
     public static final String ACTION_APP_CONFIG = PREFIX + "DEBUG_APP_CONFIG";
     public static final String ACTION_SEND = PREFIX + "DEBUG_SEND";
     public static final String ACTION_ADD_TAK_SERVER = PREFIX + "DEBUG_ADD_TAK_SERVER";
+    public static final String ACTION_REMOVE_TAK_SERVER = PREFIX + "DEBUG_REMOVE_TAK_SERVER";
     public static final String ACTION_DUMP_SELF_SA = PREFIX + "DEBUG_DUMP_SELF_SA";
     public static final String ACTION_IMPORT_PREF = PREFIX + "DEBUG_IMPORT_PREF";
     public static final String ACTION_SHOW_ACCOUNT = PREFIX + "DEBUG_SHOW_ACCOUNT";
@@ -145,6 +151,7 @@ public final class DebugReceiver extends BroadcastReceiver {
         filter.addAction(ACTION_APP_CONFIG);
         filter.addAction(ACTION_SEND);
         filter.addAction(ACTION_ADD_TAK_SERVER);
+        filter.addAction(ACTION_REMOVE_TAK_SERVER);
         filter.addAction(ACTION_DUMP_SELF_SA);
         filter.addAction(ACTION_IMPORT_PREF);
         filter.addAction(ACTION_SHOW_ACCOUNT);
@@ -215,6 +222,16 @@ public final class DebugReceiver extends BroadcastReceiver {
             cot.setCredentialsForStream(connect, intent.getStringExtra("user"),
                     intent.getStringExtra("pass"));
             Log.d(TAG, "added TAK server " + connect);
+        } else if (ACTION_REMOVE_TAK_SERVER.equals(action)) {
+            final String connect = intent.getStringExtra("connect");
+            CommsMapComponent.getInstance().getCotService().removeStreaming(connect, true);
+            // and the password DEBUG_ADD_TAK_SERVER stored for it
+            final NetConnectString ncs = NetConnectString.fromString(connect);
+            if (ncs != null) {
+                AtakAuthenticationDatabase.delete(AtakAuthenticationCredentials.TYPE_COT_SERVICE,
+                        ncs.getHost());
+            }
+            Log.d(TAG, "removed TAK server " + connect);
         } else if (ACTION_IMPORT_PREF.equals(action)) {
             // ATAK's .pref import, as mission packages use it
             final String path = intent.getStringExtra("path");

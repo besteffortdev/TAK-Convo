@@ -24,6 +24,7 @@ import android.widget.TextView;
 import com.atakmap.android.maps.MapView;
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.android.takconvo.plugin.BuildConfig;
+import com.atakmap.android.takconvo.plugin.Guard;
 import com.atakmap.android.takconvo.plugin.config.ServerIdentity;
 import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.android.takconvo.plugin.ui.host.ChatDropDown;
@@ -68,6 +69,7 @@ public final class AccountView implements XmppEngine.Listener {
         void editProfilePicture();
     }
 
+    private static final String TAG = "TakConvo.Account";
     /** Masked stand-in for a stored password. */
     private static final String PASSWORD_PLACEHOLDER = "xxxxxxxx";
     /** After this, a sign-in shows the account's state whatever it is. */
@@ -338,7 +340,13 @@ public final class AccountView implements XmppEngine.Listener {
 
     // --- state ---
 
+    /** Shows the account's state; from clicks, timeouts and engine changes. */
     private void refresh() {
+        // it reads the connection's managers, which change on Conversations' threads
+        Guard.run(TAG, "show the account", this::showState);
+    }
+
+    private void showState() {
         final XmppSettings settings = engine.getSettings();
         final XmppSettings.Problem problem = engine.getProblem();
         final Account account = engine.getAccount();
@@ -570,12 +578,18 @@ public final class AccountView implements XmppEngine.Listener {
         if (server.caPath != null) {
             trust.add(server.caPath);
         }
+        final String credentials = !server.takCredentials
+                ? ui.getString(
+                        com.atakmap.android.takconvo.plugin.R.string.takconvo_credentials_login)
+                : server.takServer == null
+                        ? ui.getString(com.atakmap.android.takconvo.plugin.R.string
+                                .takconvo_credentials_tak)
+                        : ui.getString(com.atakmap.android.takconvo.plugin.R.string
+                                .takconvo_credentials_tak_server, server.takServer);
         return ui.getString(
                 com.atakmap.android.takconvo.plugin.R.string.takconvo_notice_server_unconfirmed,
                 where,
-                ui.getString(server.takCredentials
-                        ? com.atakmap.android.takconvo.plugin.R.string.takconvo_credentials_tak
-                        : com.atakmap.android.takconvo.plugin.R.string.takconvo_credentials_login),
+                credentials,
                 trust.isEmpty()
                         ? ui.getString(
                                 com.atakmap.android.takconvo.plugin.R.string.takconvo_trust_none)

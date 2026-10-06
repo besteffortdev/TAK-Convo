@@ -26,6 +26,7 @@ import eu.siacs.conversations.entities.Account;
 import eu.siacs.conversations.xmpp.Jid;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -46,7 +47,8 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
     private static final String KEY_MANAGED = "takconvo_managed";
     /** The settings on this page an MDM can set. */
     private static final String[] MANAGEABLE = {XmppSettings.KEY_ENABLED,
-            XmppSettings.KEY_USE_TAK_CREDENTIALS, XmppSettings.KEY_USE_CALLSIGN,
+            XmppSettings.KEY_USE_TAK_CREDENTIALS, XmppSettings.KEY_TAK_SERVER,
+            XmppSettings.KEY_USE_CALLSIGN,
             XmppSettings.KEY_NOTIFICATION_MESSAGES, XmppSettings.KEY_NOTIFICATION_SOUND,
             XmppSettings.KEY_NOTIFICATION_VIBRATE, XmppSettings.KEY_SHOW_QUICK_MESSAGES,
             XmppSettings.KEY_QUICK_MESSAGES, XmppSettings.KEY_DOMAIN, XmppSettings.KEY_HOST,
@@ -106,6 +108,10 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
                 return true;
             });
         }
+        findPreference(XmppSettings.KEY_TAK_SERVER).setOnPreferenceChangeListener((p, value) -> {
+            showTakServerSummary(String.valueOf(value));
+            return true;
+        });
         findPreference(XmppSettings.KEY_CHANNEL_DISCOVERY).setOnPreferenceChangeListener(
                 (p, value) -> {
                     showChannelDiscovery(XmppSettings.ChannelDiscovery.parse(
@@ -168,6 +174,7 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
             caPicker.setEnabled(true);
         }
         findPreference(KEY_ACCOUNT).setSummary(accountSummary());
+        showTakServers(prefs.getString(XmppSettings.KEY_TAK_SERVER, ""));
 
         final XmppSettings.ChannelDiscovery discovery = XmppSettings.ChannelDiscovery.parse(
                 prefs.getString(XmppSettings.KEY_CHANNEL_DISCOVERY, null));
@@ -183,6 +190,7 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
                 findPreference(key).setEnabled(false);
             }
         }
+        keepDependents(XmppSettings.KEY_USE_TAK_CREDENTIALS, XmppSettings.KEY_TAK_SERVER);
         keepDependents(XmppSettings.KEY_NOTIFICATION_MESSAGES,
                 XmppSettings.KEY_NOTIFICATION_SOUND, XmppSettings.KEY_NOTIFICATION_VIBRATE);
         keepDependents(XmppSettings.KEY_SHOW_QUICK_MESSAGES, XmppSettings.KEY_QUICK_MESSAGES);
@@ -210,6 +218,46 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
     private static boolean managed(final String key) {
         final XmppEngine engine = XmppEngine.get();
         return engine != null && engine.isManaged(key);
+    }
+
+    /**
+     * Offers Automatic and ATAK's TAK servers; the one set stays listed, also when ATAK
+     * doesn't have it (yet).
+     */
+    private void showTakServers(final String value) {
+        final String current = value == null ? "" : value.trim();
+        final List<CharSequence> entries = new ArrayList<>();
+        final List<CharSequence> values = new ArrayList<>();
+        entries.add(pluginContext.getString(R.string.takconvo_pref_tak_server_auto));
+        values.add("");
+        String selected = current.isEmpty() ? "" : null;
+        for (final String host : XmppSettings.takServerHosts()) {
+            entries.add(host);
+            values.add(host);
+            if (host.equalsIgnoreCase(current)) {
+                selected = host;
+            }
+        }
+        if (selected == null) {
+            entries.add(pluginContext.getString(R.string.takconvo_pref_tak_server_missing,
+                    current));
+            values.add(current);
+            selected = current;
+        }
+        final ListPreference p = (ListPreference) findPreference(XmppSettings.KEY_TAK_SERVER);
+        p.setEntries(entries.toArray(new CharSequence[0]));
+        p.setEntryValues(values.toArray(new CharSequence[0]));
+        if (!selected.equals(p.getValue())) {
+            // setValue stores it: not when unset, a managed default is the key's absence
+            p.setValue(selected);
+        }
+        showTakServerSummary(selected);
+    }
+
+    private void showTakServerSummary(final String host) {
+        findPreference(XmppSettings.KEY_TAK_SERVER).setSummary(host == null || host.isEmpty()
+                ? pluginContext.getString(R.string.takconvo_pref_tak_server_auto_summary)
+                : host);
     }
 
     /** Shows the choice; the server field is enabled for "another server" only. */

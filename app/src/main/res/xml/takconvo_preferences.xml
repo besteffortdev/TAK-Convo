@@ -24,6 +24,16 @@
         android:summary="@string/takconvo_pref_use_tak_summary"
         android:title="@string/takconvo_pref_use_tak" />
 
+    <!-- entries: Automatic, then ATAK's TAK servers, added by the fragment -->
+    <com.atakmap.android.gui.PanListPreference
+        android:defaultValue=""
+        android:dependency="takconvo_xmpp_use_tak_credentials"
+        android:dialogTitle="@string/takconvo_pref_tak_server"
+        android:entries="@array/takconvo_tak_server_entries"
+        android:entryValues="@array/takconvo_tak_server_values"
+        android:key="takconvo_xmpp_tak_server"
+        android:title="@string/takconvo_pref_tak_server" />
+
     <com.atakmap.android.gui.PanPreference
         android:key="takconvo_account"
         android:title="@string/takconvo_pref_account" />

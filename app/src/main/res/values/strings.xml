@@ -52,6 +52,7 @@
     <string name="takconvo_notice_server_unconfirmed">TAK Convo\'s server settings have changed, for example by an imported .pref file or data package. Connect only if you or your administrator changed them.\n\nServer: %1$s\nSigns in with: %2$s\nExtra trusted certificates: %3$s</string>
     <string name="takconvo_server_via">%1$s, through %2$s</string>
     <string name="takconvo_credentials_tak">your TAK server credentials</string>
+    <string name="takconvo_credentials_tak_server">the credentials of TAK server %1$s</string>
     <string name="takconvo_credentials_login">your XMPP login</string>
     <string name="takconvo_trust_tak">the TAK server truststores</string>
     <string name="takconvo_trust_android">the device\'s CA store</string>
@@ -101,6 +102,10 @@
     <string name="takconvo_pref_enabled_summary">Connect to the XMPP server and advertise this device\'s XMPP address to other TAK users</string>
     <string name="takconvo_pref_use_tak">Use TAK server credentials</string>
     <string name="takconvo_pref_use_tak_summary">Log in with the username and password of your TAK server connection. Clear to sign in with an XMPP account instead.</string>
+    <string name="takconvo_pref_tak_server">TAK server for the credentials</string>
+    <string name="takconvo_pref_tak_server_auto">Automatic</string>
+    <string name="takconvo_pref_tak_server_auto_summary">Automatic: a TAK server on the XMPP server\'s domain, otherwise another one, connected ones first</string>
+    <string name="takconvo_pref_tak_server_missing">%1$s (not among ATAK\'s TAK servers)</string>
     <string name="takconvo_pref_account">XMPP account</string>
     <string name="takconvo_pref_cat_server">Server</string>
     <string name="takconvo_pref_domain">XMPP domain</string>

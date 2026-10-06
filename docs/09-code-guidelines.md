@@ -20,9 +20,14 @@ The project is Java. Kotlin's conventions are listed too, for any Kotlin added l
 **The plugin's one deliberate exception**: code that calls into Conversations or ATAK
 from ATAK's process catches `RuntimeException | LinkageError` (or `Exception | LinkageError`
 when checked exceptions are involved) and logs it. This covers starting and stopping the
-engine (`TakConvoPlugin`), an embedded activity's lifecycle (`EmbeddedActivityHost.guarded`),
-and the provisioning reads on their own thread (`XmppEngine.provision`), where an uncaught
-exception would kill ATAK just the same.
+engine (`TakConvoPlugin`), an embedded activity's lifecycle and back press
+(`EmbeddedActivityHost.guarded`), and the provisioning reads on their own thread
+(`XmppEngine.provision`), where an uncaught exception would kill ATAK just the same. The other
+ways in, from ATAK's main thread, go through `Guard.run` (or `Guard.wrap` for a posted task):
+the engine's dispatch to its listeners and its provisioning results, the service commands and
+connections `EmbeddedContext` posts, the plugin's broadcast receivers (pane requests, group chat
+sends), the toolbar button, ATAK's contact and Send dialog callbacks, the nickname re-checks,
+and the account pane's refresh. A new entry point uses `Guard` as well.
 A plugin must not crash its host: an uncaught exception there kills ATAK. `LinkageError`
 covers a library that ATAK provides not matching what the plugin was built against
 ([06](06-atak-runtime-and-classloading.md)). `Error`s like `OutOfMemoryError` are not caught.

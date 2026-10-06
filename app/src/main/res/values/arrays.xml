@@ -11,4 +11,11 @@
         <item>server</item>
         <item>public</item>
     </string-array>
+    <!-- takconvo_xmpp_tak_server until the fragment adds ATAK's TAK servers -->
+    <string-array name="takconvo_tak_server_entries">
+        <item>@string/takconvo_pref_tak_server_auto</item>
+    </string-array>
+    <string-array name="takconvo_tak_server_values" translatable="false">
+        <item></item>
+    </string-array>
 </resources>

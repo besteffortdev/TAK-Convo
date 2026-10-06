@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.os.Handler;
 
 import com.atakmap.android.preference.AtakPreferences;
+import com.atakmap.android.takconvo.plugin.Guard;
 import com.atakmap.android.takconvo.plugin.SensitiveLog;
 import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.coremap.log.Log;
@@ -49,7 +50,7 @@ final class CallsignNicknames {
     private final Map<String, String> renamedBookmarks = new HashMap<>();
     /** Room address to the callsign it was asked to rename to. */
     private final Map<String, String> renamedRooms = new HashMap<>();
-    private final Runnable recheck = this::sync;
+    private final Runnable recheck = Guard.wrap(TAG, "set the callsign as nickname", this::sync);
     private int rechecks;
 
     CallsignNicknames(final Context atakContext, final Context engineContext,

@@ -13,6 +13,7 @@ import com.atakmap.android.contact.XmppConnector;
 import com.atakmap.android.cot.CotMapComponent;
 import com.atakmap.android.navigation.NavButtonManager;
 import com.atakmap.android.navigation.models.NavButtonModel;
+import com.atakmap.android.takconvo.plugin.Guard;
 import com.atakmap.android.takconvo.plugin.R;
 import com.atakmap.android.takconvo.plugin.SensitiveLog;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
@@ -272,7 +273,7 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
             Toast.makeText(atak, plugin.getString(R.string.takconvo_invalid_xmpp_address,
                     address), Toast.LENGTH_SHORT).show();
         } else {
-            opener.openChat(address);
+            Guard.run(TAG, "open the chat", () -> opener.openChat(address));
         }
         // handled either way, or ATAK looks for an external XMPP app
         return true;

@@ -235,7 +235,8 @@ resume(r): start(r); callActivityOnResume; onPostResume (reflection, resumes fra
 pause(r):  lifecycle ON_PAUSE; callActivityOnPause
 start(r):  [callActivityOnRestart if stopped before]; callActivityOnStart; lifecycle ON_START
 stop(r):   pause(r); lifecycle ON_STOP; callActivityOnStop
-destroy(r): stop(r); lifecycle ON_DESTROY; callActivityOnDestroy; remove r.content
+destroy(r): stop(r); lifecycle ON_DESTROY; callActivityOnDestroy; remove r.content;
+            engine.releaseUiContext(r.base)    # its service connections end, see 02
 ```
 
 Instrumentation doesn't make the calls around `onStart`/`onResume`/`onStop` that update an
@@ -255,7 +256,7 @@ goBack():
 
 host.onBackPressed():
     if top.activity.onBackPressedDispatcher.hasEnabledCallbacks():
-        dispatcher.onBackPressed(); return true     # fragments, search bar, attachments...
+        guarded: dispatcher.onBackPressed(); return true   # fragments, search bar...
     if stack.size > 1: finishFromChild(top); return true
     return false                                     # nothing left: close the pane
 ```

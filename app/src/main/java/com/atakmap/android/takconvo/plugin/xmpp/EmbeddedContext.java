@@ -18,14 +18,15 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.view.Display;
 
+import com.atakmap.android.takconvo.plugin.Guard;
 import com.atakmap.coremap.log.Log;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.util.Collections;
-import java.util.Set;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
@@ -53,6 +54,11 @@ final class EmbeddedContext extends ContextWrapper {
         IBinder bind(Intent intent);
     }
 
+    /** The UI contexts of one activity ({@link #forUi} and its configuration contexts). */
+    private static final class Owner {
+        volatile boolean released;
+    }
+
     /** The plugin's own context, never a configuration context. */
     private final Context pluginRoot;
     /** Where resources come from: {@link #pluginRoot} or a configuration context of it. */
@@ -61,10 +67,12 @@ final class EmbeddedContext extends ContextWrapper {
     private final EmbeddedContext root;
     /** A UI context's configuration override; null on the root instance. */
     private final Configuration uiOverride;
+    /** Null for the root and its configuration contexts. */
+    private final Owner owner;
     private Resources.Theme uiTheme;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
-    private final Set<ServiceConnection> boundConnections =
-            Collections.newSetFromMap(new WeakHashMap<>());
+    /** The connections bound to the in-process service, with the UI contexts that bound them. */
+    private final Map<ServiceConnection, Owner> boundConnections = new WeakHashMap<>();
     private volatile Application application;
     private volatile ServiceRouter router;
 
@@ -74,15 +82,17 @@ final class EmbeddedContext extends ContextWrapper {
         this.plugin = plugin;
         this.root = null;
         this.uiOverride = null;
+        this.owner = null;
     }
 
     private EmbeddedContext(final EmbeddedContext root, final Context base,
-            final Configuration override) {
+            final Configuration override, final Owner owner) {
         super(base);
         this.root = root;
         this.pluginRoot = root.pluginRoot;
         this.uiOverride = new Configuration(override);
         this.plugin = root.pluginRoot.createConfigurationContext(this.uiOverride);
+        this.owner = owner;
     }
 
     /**
@@ -91,7 +101,27 @@ final class EmbeddedContext extends ContextWrapper {
      */
     Context forUi(final Display display, final Configuration override) {
         final EmbeddedContext r = root();
-        return new EmbeddedContext(r, r.getBaseContext().createDisplayContext(display), override);
+        return new EmbeddedContext(r, r.getBaseContext().createDisplayContext(display), override,
+                new Owner());
+    }
+
+    /**
+     * The activity of this {@link #forUi} context is destroyed: its connections to the service
+     * end, and a connection not yet delivered never is, as Android does for an activity.
+     */
+    void release() {
+        if (owner == null) {
+            return;
+        }
+        owner.released = true;
+        final Map<ServiceConnection, Owner> bound = root().boundConnections;
+        synchronized (bound) {
+            for (final Iterator<Owner> i = bound.values().iterator(); i.hasNext(); ) {
+                if (i.next() == owner) {
+                    i.remove();
+                }
+            }
+        }
     }
 
     private EmbeddedContext root() {
@@ -159,7 +189,7 @@ final class EmbeddedContext extends ContextWrapper {
         }
         merged.updateFrom(overrideConfiguration);
         return new EmbeddedContext(root(),
-                getBaseContext().createConfigurationContext(overrideConfiguration), merged);
+                getBaseContext().createConfigurationContext(overrideConfiguration), merged, owner);
     }
 
     @Override
@@ -342,7 +372,7 @@ final class EmbeddedContext extends ContextWrapper {
     public ComponentName startService(final Intent service) {
         final ServiceRouter r = root().router;
         if (r != null && r.handles(service)) {
-            mainHandler.post(() -> r.startCommand(service));
+            mainHandler.post(startCommand(r, service));
             return service.getComponent();
         }
         return super.startService(service);
@@ -352,10 +382,16 @@ final class EmbeddedContext extends ContextWrapper {
     public ComponentName startForegroundService(final Intent service) {
         final ServiceRouter r = root().router;
         if (r != null && r.handles(service)) {
-            mainHandler.post(() -> r.startCommand(service));
+            mainHandler.post(startCommand(r, service));
             return service.getComponent();
         }
         return super.startForegroundService(service);
+    }
+
+    /** The service's onStartCommand, guarded: it runs in ATAK's main thread. */
+    private static Runnable startCommand(final ServiceRouter r, final Intent service) {
+        return Guard.wrap(TAG, "run the XMPP service's command " + service.getAction(),
+                () -> r.startCommand(service));
     }
 
     @Override
@@ -372,12 +408,17 @@ final class EmbeddedContext extends ContextWrapper {
             final int flags) {
         final ServiceRouter r = root().router;
         if (r != null && r.handles(service)) {
-            final Set<ServiceConnection> bound = root().boundConnections;
+            final Map<ServiceConnection, Owner> bound = root().boundConnections;
             synchronized (bound) {
-                bound.add(conn);
+                bound.put(conn, owner);
             }
             final IBinder binder = r.bind(service);
-            mainHandler.post(() -> conn.onServiceConnected(service.getComponent(), binder));
+            mainHandler.post(Guard.wrap(TAG, "connect to the XMPP service", () -> {
+                // not once unbound, or once the activity that bound is destroyed
+                if (isBound(conn)) {
+                    conn.onServiceConnected(service.getComponent(), binder);
+                }
+            }));
             return true;
         }
         return super.bindService(service, conn, flags);
@@ -385,12 +426,24 @@ final class EmbeddedContext extends ContextWrapper {
 
     @Override
     public void unbindService(final ServiceConnection conn) {
-        final Set<ServiceConnection> bound = root().boundConnections;
+        final Map<ServiceConnection, Owner> bound = root().boundConnections;
         synchronized (bound) {
-            if (bound.remove(conn)) {
+            if (bound.containsKey(conn)) {
+                bound.remove(conn);
                 return;
             }
         }
+        if (owner != null && owner.released) {
+            // released with its activity already
+            return;
+        }
         super.unbindService(conn);
+    }
+
+    private boolean isBound(final ServiceConnection conn) {
+        final Map<ServiceConnection, Owner> bound = root().boundConnections;
+        synchronized (bound) {
+            return bound.containsKey(conn);
+        }
     }
 }

@@ -24,6 +24,7 @@ import manager) provisions every one of them. An MDM can set them too, and then 
 | `takconvo_xmpp_host` | String | — | only if the domain has no reachable SRV/A record |
 | `takconvo_xmpp_port` | String | `5222` | port for `takconvo_xmpp_host` |
 | `takconvo_xmpp_use_tak_credentials` | Boolean | `true` | reuse the TAK server username/password |
+| `takconvo_xmpp_tak_server` | String | — | the host of the TAK server whose credentials to use, and no other's; empty: chosen (see Credentials) |
 | `takconvo_xmpp_username` | String | — | the XMPP login's username; without a password, only suggested on the login screen |
 | `takconvo_xmpp_password` | String | — | the XMPP login's password, moved to ATAK's credential store at once (see Credentials) |
 | `takconvo_xmpp_use_tak_truststore` | Boolean | `true` | trust the CAs of ATAK's TAK server truststores |
@@ -48,7 +49,9 @@ valid falls back to the account's server.
 
 Public CAs are always trusted, as in Conversations. `provisioning/takconvo-template.pref`
 documents the keys. A `.pref` file may carry Booleans as strings; `XmppSettings.normalize()`
-stores them as Booleans, because the preference check boxes fail on strings.
+stores them as Booleans, because the preference check boxes fail on strings. Code that reads
+one of these Booleans before `normalize()` ran goes through `XmppSettings`' getters, which take
+either type (the quick messages' switch, read by every chat as it opens, for example).
 
 ### Conversations' own settings
 
@@ -85,10 +88,14 @@ CAs) apply at the next connection.
 XmppSettings.load():
     read the takconvo_xmpp_* preferences
     if use_tak_credentials:
-        for server in (connected TAK servers) + (enabled TAK servers):
+        servers = (connected TAK servers) + (enabled TAK servers)
+        if tak_server is set: only the servers with that host
+        else: those on the XMPP domain or host first     # tak.example.org for example.org
+                                                         #   or xmpp.example.org
+        for server in servers:
             creds = AtakAuthenticationDatabase[TYPE_COT_SERVICE, host of server]
                     ?: server's own username/password
-            if creds: return settings(creds, source = TAK_SERVER)
+            if creds: return settings(creds, source = TAK_SERVER, origin = host of server)
         return settings(no credentials, source = NONE)   # no fallback to the XMPP login
     else:
         login = AtakAuthenticationDatabase["takconvo.xmpp"]
@@ -104,6 +111,14 @@ problem():                     # why no account can be provisioned, or null
 With TAK credentials there is deliberately **no fallback** to a stored XMPP login. At ATAK
 start-up the TAK server credentials are often not available yet, and silently switching to
 another identity would provision the wrong account.
+
+A device often has several TAK server connections, for example its own and a partner's from a
+data package. Which one connects first changes from one start to the next, and each has its own
+password. The servers on the XMPP domain come first, so the XMPP identity stays the same. The
+TAK server whose credentials go to the XMPP server is part of its identity (next section), so
+another one's password goes there only once the user approves it. `takconvo_xmpp_tak_server`
+names the one to use (in the tool preferences, a list of ATAK's TAK servers): then only its
+credentials are used, and none while it has none.
 
 When TAK credentials are not used, the account pane is a login form. The password goes to
 ATAK's encrypted credential store under type `takconvo.xmpp`.
@@ -145,7 +160,8 @@ XmppEngine.provision():                        # main thread
 provisionNow():                                # sign-in and sign-out: the account pane
     ++provisionRun; apply(load())              #   compares the account before and after
 
-XmppEngine.apply(loaded):                      # main thread
+XmppEngine.apply(loaded):                      # main thread; the first one then lets the
+                                               #   stored accounts connect (see Trust)
     settings = loaded.settings
     problem  = settings.problem()
     if problem is null or NO_TAK_CREDENTIALS, and loaded.server isn't approved (next section):
@@ -198,15 +214,22 @@ the sender's choosing. So the credentials go only to a server the user approved:
 
 ```text
 ServerIdentity.of(settings):     # read with the settings, on the provisioning thread
-    credentials: TAK or XMPP login
+    credentials: TAK or XMPP login; for TAK, the TAK server they belong to (none yet: null)
     domain (the JID's), host, port
     trust: TAK truststores on/off, Android CA store on/off, CA file path and its SHA-256
 
 isApproved(server):
     no domain, or equal to the approved one        -> yes
+    no TAK credentials yet, otherwise the approved one
+                                                   -> yes        # nothing new goes out
     the user is signing in (login form)            -> approve it, yes
+    the MDM's settings give it (below)             -> approve it, yes
     nothing approved yet, and an enabled account has logged in to that domain, host and
     port                                           -> approve it, yes    # set up before this check
+    the approved one without a TAK server, otherwise the same
+                                                   -> approve it, yes    # saved by an older
+                                                                         #   version, or before
+                                                                         #   any TAK credentials
     otherwise                                      -> no: SERVER_UNCONFIRMED
 ```
 
@@ -214,8 +237,9 @@ While a server waits:
 
 - every account is disabled and no extra CA is trusted, so nothing connects;
 - an ATAK notification ("approve the new server") opens the account pane;
-- the account pane names the server, how it signs in and the extra CAs it trusts, with
-  **Connect** (`XmppEngine.approveServer`, then provisions at once, as a sign-in does).
+- the account pane names the server, how it signs in (with TAK credentials, which TAK server's)
+  and the extra CAs it trusts, with **Connect** (`XmppEngine.approveServer`, then provisions at
+  once, as a sign-in does).
 
 Setting the values back to the approved ones reconnects without a question: approval is a
 comparison, not a state to clear. A first setup from a `.pref` file therefore asks once too.
@@ -295,9 +319,10 @@ AppConfig.load(bundle):
               empty or "unset": left out; unknown or invalid: logged, left out
     trusted_ca_certificate: rewritten as PEM to no_backup/takconvo_plugin/managed_ca_<sha>.pem,
               and takconvo_xmpp_trusted_ca = its path
-    domain set: host, port, use_tak_credentials, use_tak_truststore, use_android_ca_store and
-              trusted_ca are managed too, at their defaults unless set
-              server = the ServerIdentity these values give
+    username and password set, use_tak_credentials not: use_tak_credentials = false
+    domain set: host, port, use_tak_credentials, tak_server, use_tak_truststore,
+              use_android_ca_store and trusted_ca are managed too, at their defaults unless set
+              server = the ServerIdentity these values give (no tak_server: any TAK server)
     username and password set: stored in the credential store, unless it holds them already
 
 applyAppConfig(config):                 # main thread
@@ -315,8 +340,10 @@ reads the preferences, so a `.pref` imported while the plugin wasn't running doe
 either.
 
 **Approved.** The server the MDM's values give is approved without asking: `isApproved` also
-accepts `appConfig.server()`. That is safe because managing the domain manages every other part
-of the server identity. The settings give the MDM's identity only if nothing else changed them.
+accepts what `appConfig.approves()`. That is safe because managing the domain manages every other
+part of the server identity. The settings give the MDM's identity only if nothing else changed
+them. Unless the MDM names the TAK server (`takconvo_xmpp_tak_server`), the credentials of any
+TAK server are approved with it, those of one on the XMPP domain first.
 The CA file is named after its contents, so a new certificate is a new identity, and the file
 the current settings name stays until the new configuration is applied.
 
@@ -324,8 +351,10 @@ the current settings name stays until the new configuration is applied.
 do. Removing the domain therefore disables the account (its history stays). A managed login
 stays in the credential store.
 
-**Login.** While the MDM sets the login, a `.pref` file's `takconvo_xmpp_password` is discarded.
-A user who signs out is signed in again at the next read.
+**Login.** A username and password from the MDM are used instead of the TAK credentials: they
+turn "Use TAK server credentials" off unless the MDM sets it (set to on, the login is stored,
+unused, and a warning logged). While the MDM sets the login, a `.pref` file's
+`takconvo_xmpp_password` is discarded. A user who signs out is signed in again at the next read.
 
 ATAK reads an app config of its own too, for ATAK's package:
 `enterpriseConfigurationPreferences` there carries a whole `.pref` file, and TAK Convo's keys
@@ -371,8 +400,14 @@ applyTrust():
     return fingerprint changed since last call     # -> provision() reconnects if offline
 ```
 
-The trust manager is installed **before** `service.onStartCommand()`, because the service
-connects stored accounts right away.
+The trust manager is installed **before** the stored accounts connect. Reading the trust
+sources and the TAK credentials takes ATAK's databases and the Android CA store, so at start it
+runs on the provisioning thread, not while ATAK starts. Until the first `apply()`, the service
+holds its connections (`TakConvoCompat.HOLD_CONNECTIONS`, see
+[05](05-conversations-fork.md#b-trust-cas-provisioned-by-the-plugin)): the system's connectivity
+broadcast, an alarm or a screen opening would otherwise connect them without the trust manager,
+and before the server's approval is checked. That first `apply()` then calls
+`service.onStartCommand()`.
 
 ## The callsign as nickname
 

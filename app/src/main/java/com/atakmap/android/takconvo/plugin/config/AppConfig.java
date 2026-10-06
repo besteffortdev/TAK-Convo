@@ -71,8 +71,8 @@ public final class AppConfig {
             KEYS.put(key, Type.BOOLEAN);
         }
         for (final String key : new String[] {XmppSettings.KEY_DOMAIN, XmppSettings.KEY_HOST,
-                XmppSettings.KEY_USERNAME, XmppSettings.KEY_CHANNEL_SERVER,
-                XmppSettings.KEY_QUICK_MESSAGES}) {
+                XmppSettings.KEY_TAK_SERVER, XmppSettings.KEY_USERNAME,
+                XmppSettings.KEY_CHANNEL_SERVER, XmppSettings.KEY_QUICK_MESSAGES}) {
             KEYS.put(key, Type.STRING);
         }
         KEYS.put(XmppSettings.KEY_PORT, Type.PORT);
@@ -81,8 +81,9 @@ public final class AppConfig {
 
     /** Where the credentials go: kept at their defaults when the MDM sets only the domain. */
     private static final String[] SERVER_KEYS = {XmppSettings.KEY_HOST, XmppSettings.KEY_PORT,
-            XmppSettings.KEY_USE_TAK_CREDENTIALS, XmppSettings.KEY_USE_TAK_TRUSTSTORE,
-            XmppSettings.KEY_USE_ANDROID_CA_STORE, XmppSettings.KEY_TRUSTED_CA};
+            XmppSettings.KEY_USE_TAK_CREDENTIALS, XmppSettings.KEY_TAK_SERVER,
+            XmppSettings.KEY_USE_TAK_TRUSTSTORE, XmppSettings.KEY_USE_ANDROID_CA_STORE,
+            XmppSettings.KEY_TRUSTED_CA};
 
     /** A key the MDM keeps at its default: absent from the preferences. */
     private static final Object DEFAULT = new Object();
@@ -181,6 +182,18 @@ public final class AppConfig {
         if (ca != null) {
             values.put(XmppSettings.KEY_TRUSTED_CA, ca.getAbsolutePath());
         }
+
+        final String username = (String) values.get(XmppSettings.KEY_USERNAME);
+        final String password = managed.getString(XmppSettings.KEY_PASSWORD);
+        final boolean managesLogin = username != null && password != null && !password.isEmpty();
+        if (managesLogin && !values.containsKey(XmppSettings.KEY_USE_TAK_CREDENTIALS)) {
+            // the login is what the MDM sets it for: not the TAK credentials, the default
+            values.put(XmppSettings.KEY_USE_TAK_CREDENTIALS, Boolean.FALSE);
+        } else if (managesLogin
+                && Boolean.TRUE.equals(values.get(XmppSettings.KEY_USE_TAK_CREDENTIALS))) {
+            Log.w(TAG, "the managed XMPP login is unused: the TAK server credentials are on");
+        }
+
         ServerIdentity server = null;
         if (values.containsKey(XmppSettings.KEY_DOMAIN)) {
             for (final String key : SERVER_KEYS) {
@@ -191,9 +204,6 @@ public final class AppConfig {
             server = serverOf(values, ca);
         }
 
-        final String username = (String) values.get(XmppSettings.KEY_USERNAME);
-        final String password = managed.getString(XmppSettings.KEY_PASSWORD);
-        final boolean managesLogin = username != null && password != null && !password.isEmpty();
         final boolean savedLogin = managesLogin && XmppSettings.ensureLogin(username, password);
         if (savedLogin) {
             Log.i(TAG, "XMPP login set by the device management");
@@ -231,12 +241,17 @@ public final class AppConfig {
         }
     }
 
-    /** The server the managed values connect to: what {@link ServerIdentity#of} would read. */
+    /**
+     * The server the managed values connect to: what {@link ServerIdentity#of} would read.
+     * Without a managed TAK server, its TAK server is null: any.
+     */
     private static ServerIdentity serverOf(final Map<String, Object> values, final File ca) {
         final Object host = values.get(XmppSettings.KEY_HOST);
         final Object port = values.get(XmppSettings.KEY_PORT);
-        return ServerIdentity.of(
-                bool(values, XmppSettings.KEY_USE_TAK_CREDENTIALS, true),
+        final Object takServer = values.get(XmppSettings.KEY_TAK_SERVER);
+        final boolean takCredentials = bool(values, XmppSettings.KEY_USE_TAK_CREDENTIALS, true);
+        return ServerIdentity.of(takCredentials,
+                takCredentials && takServer instanceof String ? (String) takServer : null,
                 (String) values.get(XmppSettings.KEY_DOMAIN),
                 host instanceof String ? (String) host : null,
                 port instanceof String ? Integer.parseInt((String) port)
@@ -451,9 +466,19 @@ public final class AppConfig {
         return managesLogin;
     }
 
-    /** The server the MDM's settings connect to, approved without asking; or null. */
+    /** The server the MDM's settings connect to; or null. */
     public ServerIdentity server() {
         return server;
+    }
+
+    /**
+     * Whether the MDM's settings connect to {@code server}, which needs no approval then. Any
+     * TAK server's credentials, unless the MDM names the TAK server.
+     */
+    public boolean approves(final ServerIdentity server) {
+        return this.server != null && this.server.sameServer(server)
+                && (this.server.takServer == null
+                        || this.server.takServer.equals(server.takServer));
     }
 
     /** Whether reading it stored a new login, which the account then uses. */

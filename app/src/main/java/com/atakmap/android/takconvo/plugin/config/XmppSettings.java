@@ -14,6 +14,7 @@ import com.atakmap.net.AtakAuthenticationDatabase;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -31,6 +32,8 @@ public final class XmppSettings {
     public static final String KEY_HOST = "takconvo_xmpp_host";
     public static final String KEY_PORT = "takconvo_xmpp_port";
     public static final String KEY_USE_TAK_CREDENTIALS = "takconvo_xmpp_use_tak_credentials";
+    /** The host of the TAK server whose credentials to use; empty: chosen, see load(). */
+    public static final String KEY_TAK_SERVER = "takconvo_xmpp_tak_server";
     public static final String KEY_USERNAME = "takconvo_xmpp_username";
     /** Only in transit: moved to the credential store, see {@link #importLogin}. */
     public static final String KEY_PASSWORD = "takconvo_xmpp_password";
@@ -166,6 +169,7 @@ public final class XmppSettings {
                 parseBoolean(value(prefs, KEY_USE_ANDROID_CA_STORE), false),
                 trimToNull(value(prefs, KEY_TRUSTED_CA)));
         final boolean useTak = parseBoolean(value(prefs, KEY_USE_TAK_CREDENTIALS), true);
+        final String takServer = trimToNull(value(prefs, KEY_TAK_SERVER));
         final String suggested = trimToNull(value(prefs, KEY_USERNAME));
         final Channels channels = new Channels(
                 ChannelDiscovery.parse(value(prefs, KEY_CHANNEL_DISCOVERY)),
@@ -174,13 +178,14 @@ public final class XmppSettings {
         if (useTak) {
             // no fallback to the XMPP login: the TAK credentials often come later, and
             // switching identities would provision the wrong account
-            final TakCredentials tak = findTakCredentials();
+            final TakCredentials tak = findTakCredentials(takServer, domain, host);
             if (tak != null) {
                 return new XmppSettings(enabled, domain, host, port, tak.username, tak.password,
                         trust, true, CredentialSource.TAK_SERVER, tak.server, suggested,
                         channels);
             }
-            Log.d(TAG, "no TAK server credentials available yet");
+            Log.d(TAG, takServer != null ? "no credentials of the TAK server set yet"
+                    : "no TAK server credentials available yet");
             return new XmppSettings(enabled, domain, host, port, null, null, trust,
                     true, CredentialSource.NONE, null, suggested, channels);
         }
@@ -290,6 +295,16 @@ public final class XmppSettings {
         return getBoolean(prefs, KEY_NOTIFICATION_VIBRATE, true);
     }
 
+    public static boolean showQuickMessages(final SharedPreferences prefs) {
+        return getBoolean(prefs, KEY_SHOW_QUICK_MESSAGES, false);
+    }
+
+    /** The quick messages' texts, separated by {@code |}, or {@code def}. */
+    public static String quickMessages(final SharedPreferences prefs, final String def) {
+        final String value = getString(prefs, KEY_QUICK_MESSAGES);
+        return value == null ? def : value;
+    }
+
     /** Stores .pref string booleans as Booleans, which the settings' check boxes need. */
     public static void normalize(final SharedPreferences prefs) {
         final Map<String, ?> all = prefs.getAll();
@@ -297,7 +312,8 @@ public final class XmppSettings {
         boolean changed = false;
         for (final String key : new String[] {KEY_ENABLED, KEY_USE_TAK_CREDENTIALS,
                 KEY_USE_TAK_TRUSTSTORE, KEY_USE_ANDROID_CA_STORE, KEY_USE_CALLSIGN,
-                KEY_NOTIFICATION_MESSAGES, KEY_NOTIFICATION_SOUND, KEY_NOTIFICATION_VIBRATE}) {
+                KEY_NOTIFICATION_MESSAGES, KEY_NOTIFICATION_SOUND, KEY_NOTIFICATION_VIBRATE,
+                KEY_SHOW_QUICK_MESSAGES}) {
             final Object value = all.get(key);
             if (value != null && !(value instanceof Boolean)) {
                 editor.putBoolean(key, Boolean.parseBoolean(String.valueOf(value).trim()));
@@ -353,8 +369,14 @@ public final class XmppSettings {
         }
     }
 
-    /** Credentials of the first connected TAK server, else of the first enabled one. */
-    private static TakCredentials findTakCredentials() {
+    /**
+     * Credentials of the TAK server {@code named} ({@link #KEY_TAK_SERVER}), and of no other:
+     * another server's password must not go to the XMPP server. Without a name, of a TAK
+     * server on the XMPP server's domain, else of another; connected ones first in each case.
+     * The first connected server isn't always the same one.
+     */
+    private static TakCredentials findTakCredentials(final String named, final String domain,
+            final String xmppHost) {
         final TAKServerListener listener = TAKServerListener.getInstance();
         if (listener == null) {
             return null;
@@ -369,7 +391,19 @@ public final class XmppSettings {
                 }
             }
         }
-        for (final TAKServer server : candidates) {
+        final List<TAKServer> preferred = new ArrayList<>();
+        final List<TAKServer> others = new ArrayList<>();
+        for (final TAKServer s : candidates) {
+            final String host = hostOf(s);
+            if (named != null ? named.equalsIgnoreCase(host)
+                    : sameDomain(host, domain) || sameDomain(host, xmppHost)) {
+                preferred.add(s);
+            } else if (named == null) {
+                others.add(s);
+            }
+        }
+        preferred.addAll(others);
+        for (final TAKServer server : preferred) {
             final TakCredentials creds = credentialsFor(server);
             if (creds != null) {
                 return creds;
@@ -378,10 +412,62 @@ public final class XmppSettings {
         return null;
     }
 
+    /**
+     * Whether a TAK server's host is {@code name}, in its domain, or beside it in the same
+     * domain (tak.example.org and xmpp.example.org).
+     */
+    private static boolean sameDomain(final String host, final String name) {
+        if (host == null || name == null) {
+            return false;
+        }
+        final String h = host.toLowerCase(Locale.ROOT);
+        final String n = name.toLowerCase(Locale.ROOT);
+        if (h.equals(n)) {
+            return true;
+        }
+        if (isIpAddress(h) || isIpAddress(n)) {
+            return false;
+        }
+        final String parent = parentDomain(h);
+        return h.endsWith("." + n) || n.endsWith("." + h)
+                || (parent != null && parent.equals(parentDomain(n)));
+    }
+
+    /** example.org for tak.example.org; null for a name of two labels or fewer. */
+    private static String parentDomain(final String host) {
+        final int dot = host.indexOf('.');
+        final String parent = dot < 0 ? null : host.substring(dot + 1);
+        return parent != null && parent.indexOf('.') > 0 ? parent : null;
+    }
+
+    private static boolean isIpAddress(final String host) {
+        return host.indexOf(':') >= 0 || host.matches("[0-9.]+");
+    }
+
+    /** The hosts of ATAK's TAK server connections, to choose whose credentials to use. */
+    public static List<String> takServerHosts() {
+        final List<String> hosts = new ArrayList<>();
+        final TAKServerListener listener = TAKServerListener.getInstance();
+        final TAKServer[] all = listener == null ? null : listener.getServers();
+        if (all != null) {
+            for (final TAKServer s : all) {
+                final String host = s == null ? null : hostOf(s);
+                if (host != null && !hosts.contains(host)) {
+                    hosts.add(host);
+                }
+            }
+        }
+        return hosts;
+    }
+
+    private static String hostOf(final TAKServer server) {
+        final NetConnectString ncs = NetConnectString.fromString(server.getConnectString());
+        return ncs != null ? ncs.getHost() : null;
+    }
+
     private static TakCredentials credentialsFor(final TAKServer server) {
         final String connectString = server.getConnectString();
-        final NetConnectString ncs = NetConnectString.fromString(connectString);
-        final String host = ncs != null ? ncs.getHost() : null;
+        final String host = hostOf(server);
         if (host != null) {
             // ATAK's encrypted credential store, keyed by host
             final AtakAuthenticationCredentials stored = AtakAuthenticationDatabase

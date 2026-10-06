@@ -133,8 +133,8 @@ A `.pref` file can set everything:
   notifications, attachment size and compression, message deletion...), whose settings screen
   the plugin's replaces.
 
-A change to where the credentials go (domain, host, port, which credentials, trusted CAs)
-waits for the user's **Connect** in the account pane
+A change to where the credentials go (domain, host, port, which credentials and which TAK
+server's, trusted CAs) waits for the user's **Connect** in the account pane
 ([docs/03](docs/03-provisioning-and-trust.md#approving-the-server)): data packages apply their
 `.pref` files without asking.
 
@@ -147,6 +147,7 @@ lists TAK Convo's settings with descriptions. The keys are the preference keys a
 text). What the MDM sets:
 - is locked: greyed out in the tool preferences, and put back if a `.pref` file changes it;
 - needs no approval: the server it sets connects without the user's **Connect**;
+- a username and password it sets are used instead of the TAK server credentials;
 - applies when ATAK starts or comes back to the front; a key removed from the configuration
   goes back to its default.
 
@@ -268,7 +269,10 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
     resource** until it drops it (the new stream idles out after 10 s first). A fresh resource
     on every ATAK start makes login immediate.
 26. **TAK server credentials arrive after the plugin starts.** Provisioning re-runs on TAK
-    server connection changes and never falls back to another identity in the meantime.
+    server connection changes and never falls back to another identity in the meantime. With
+    several TAK servers, which one connects first changes between starts: the one on the XMPP
+    domain is used first (or the one `takconvo_xmpp_tak_server` names), and another one's
+    password goes to the XMPP server only after the user's **Connect**.
 27. **The organisation's CA is already in ATAK's TAK server truststore**, so reusing it as a
     trust source needs no extra provisioning. `CertificateManager.getLocalTrustManager(String)`
     rebuilds from ATAK's database on each call, so newly imported truststores count.
@@ -346,6 +350,7 @@ app/                      the ATAK plugin
   src/main/java/com/atakmap/android/takconvo/plugin/
     TakConvoPlugin.java   entry point (IPlugin)
     SensitiveLog.java     debug-only logs that name users
+    Guard.java            runs ATAK's callbacks into the plugin without crashing ATAK
     xmpp/                 embedded engine: XmppEngine, EmbeddedContext, CallsignNicknames,
                           PendingIntents, notifications
     contacts/             XmppContacts: ATAK contact handler, unread badges

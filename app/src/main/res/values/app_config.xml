@@ -11,11 +11,13 @@
     <string name="takconvo_mdm_xmpp_port">Server port</string>
     <string name="takconvo_mdm_xmpp_port_desc">The port on the server host. Default: 5222.</string>
     <string name="takconvo_mdm_xmpp_use_tak_credentials">Use TAK server credentials</string>
-    <string name="takconvo_mdm_xmpp_use_tak_credentials_desc">On: log in with the username and password of the TAK server connection (default). Off: an XMPP login, set below or entered by the user.</string>
+    <string name="takconvo_mdm_xmpp_use_tak_credentials_desc">On: log in with the username and password of the TAK server connection (default, unless a username and password are set below). Off: an XMPP login, set below or entered by the user.</string>
+    <string name="takconvo_mdm_xmpp_tak_server">TAK server for the credentials</string>
+    <string name="takconvo_mdm_xmpp_tak_server_desc">The host of the TAK server connection whose username and password TAK Convo uses, and no other\'s. Empty: a TAK server on the XMPP server\'s domain, otherwise another one, connected ones first.</string>
     <string name="takconvo_mdm_xmpp_username">XMPP username</string>
     <string name="takconvo_mdm_xmpp_username_desc">For an XMPP login: the username or full XMPP address; the MDM\'s user variables can fill it in. Without a password, it is only suggested on the sign-in screen.</string>
     <string name="takconvo_mdm_xmpp_password">XMPP password</string>
-    <string name="takconvo_mdm_xmpp_password_desc">For an XMPP login, with the username: the password, kept in ATAK\'s encrypted credential store. Leave empty for users to type their own.</string>
+    <string name="takconvo_mdm_xmpp_password_desc">For an XMPP login, with the username: the password, kept in ATAK\'s encrypted credential store. With both set, TAK Convo uses this login instead of the TAK server credentials, unless Use TAK server credentials is set to On. Leave empty for users to type their own.</string>
     <string name="takconvo_mdm_xmpp_use_tak_truststore">Trust the TAK server truststores</string>
     <string name="takconvo_mdm_xmpp_use_tak_truststore_desc">On: trust the certificate authorities of the TAK server truststores imported in ATAK (default). Public CAs are always trusted.</string>
     <string name="takconvo_mdm_xmpp_use_android_ca_store">Trust the Android CA store</string>

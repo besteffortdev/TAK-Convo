@@ -15,14 +15,20 @@ import java.util.Objects;
 
 /**
  * Where provisioning sends the credentials, and what it trusts there: the XMPP domain, host and
- * port, which credentials, the CA sources and the CA file's contents. A {@code .pref} file can
- * change all of them, so the engine connects only to a server the user approved. See docs/03.
+ * port, which credentials (the TAK server they belong to), the CA sources and the CA file's
+ * contents. A {@code .pref} file or a data package can change all of them, so the engine
+ * connects only to a server the user approved. See docs/03.
  */
 public final class ServerIdentity {
 
     private static final String TAG = "TakConvo.Server";
 
     public final boolean takCredentials;
+    /**
+     * The TAK server whose credentials go there, lower case; null with an XMPP login, or while
+     * there are no TAK credentials.
+     */
+    public final String takServer;
     public final String domain;
     /** Null: found through DNS. */
     public final String host;
@@ -34,10 +40,11 @@ public final class ServerIdentity {
     /** The CA file's SHA-256 in hex, "" if it can't be read; null without a CA file. */
     public final String caSha256;
 
-    private ServerIdentity(final boolean takCredentials, final String domain, final String host,
-            final int port, final boolean takTrustStore, final boolean androidCaStore,
-            final String caPath, final String caSha256) {
+    private ServerIdentity(final boolean takCredentials, final String takServer,
+            final String domain, final String host, final int port, final boolean takTrustStore,
+            final boolean androidCaStore, final String caPath, final String caSha256) {
         this.takCredentials = takCredentials;
+        this.takServer = takServer;
         this.domain = domain;
         this.host = host;
         this.port = port;
@@ -54,18 +61,27 @@ public final class ServerIdentity {
         if (domain == null || domain.isEmpty()) {
             return null;
         }
-        return of(settings.usesTakCredentials, domain, settings.host, settings.port,
-                settings.useTakTrustStore, settings.useAndroidCaStore, settings.trustedCaPath,
+        return of(settings.usesTakCredentials,
+                settings.usesTakCredentials ? settings.credentialOrigin : null, domain,
+                settings.host, settings.port, settings.useTakTrustStore,
+                settings.useAndroidCaStore, settings.trustedCaPath,
                 settings.trustedCaPath == null ? null : sha256(settings.trustedCaPath));
     }
 
-    /** The server of settings with these values: what a managed configuration approves. */
-    static ServerIdentity of(final boolean takCredentials, final String domain,
-            final String host, final int port, final boolean takTrustStore,
+    /**
+     * The server of settings with these values: what a managed configuration approves. A null
+     * {@code takServer} there stands for any TAK server ({@link #sameServer}).
+     */
+    static ServerIdentity of(final boolean takCredentials, final String takServer,
+            final String domain, final String host, final int port, final boolean takTrustStore,
             final boolean androidCaStore, final String caPath, final String caSha256) {
-        return new ServerIdentity(takCredentials, domain.toLowerCase(Locale.ROOT),
-                host == null ? null : host.toLowerCase(Locale.ROOT), port, takTrustStore,
+        return new ServerIdentity(takCredentials, lowerCase(takServer),
+                domain.toLowerCase(Locale.ROOT), lowerCase(host), port, takTrustStore,
                 androidCaStore, caPath, caSha256);
+    }
+
+    private static String lowerCase(final String value) {
+        return value == null ? null : value.toLowerCase(Locale.ROOT);
     }
 
     /** What {@link #serialize} wrote, or null. */
@@ -75,7 +91,9 @@ public final class ServerIdentity {
         }
         try {
             final JSONObject o = new JSONObject(serialized);
-            return new ServerIdentity(o.getBoolean("takCredentials"), o.getString("domain"),
+            // no takServer: saved by a version before it, or without TAK credentials yet
+            return new ServerIdentity(o.getBoolean("takCredentials"),
+                    o.has("takServer") ? o.getString("takServer") : null, o.getString("domain"),
                     o.has("host") ? o.getString("host") : null, o.getInt("port"),
                     o.getBoolean("takTrustStore"), o.getBoolean("androidCaStore"),
                     o.has("caPath") ? o.getString("caPath") : null,
@@ -95,7 +113,8 @@ public final class ServerIdentity {
                     .put("takTrustStore", takTrustStore)
                     .put("androidCaStore", androidCaStore);
             // put(name, null) leaves the name out
-            o.put("host", host).put("caPath", caPath).put("caSha256", caSha256);
+            o.put("takServer", takServer).put("host", host).put("caPath", caPath)
+                    .put("caSha256", caSha256);
             return o.toString();
         } catch (final JSONException e) {
             // only for non-finite numbers, which there are none of
@@ -155,13 +174,9 @@ public final class ServerIdentity {
         return hex.toString();
     }
 
-    @Override
-    public boolean equals(final Object o) {
-        if (!(o instanceof ServerIdentity)) {
-            return false;
-        }
-        final ServerIdentity other = (ServerIdentity) o;
-        return takCredentials == other.takCredentials && port == other.port
+    /** The same server and trust, whichever TAK server's credentials go there. */
+    public boolean sameServer(final ServerIdentity other) {
+        return other != null && takCredentials == other.takCredentials && port == other.port
                 && takTrustStore == other.takTrustStore
                 && androidCaStore == other.androidCaStore
                 && domain.equals(other.domain) && Objects.equals(host, other.host)
@@ -170,9 +185,15 @@ public final class ServerIdentity {
     }
 
     @Override
+    public boolean equals(final Object o) {
+        return o instanceof ServerIdentity && sameServer((ServerIdentity) o)
+                && Objects.equals(takServer, ((ServerIdentity) o).takServer);
+    }
+
+    @Override
     public int hashCode() {
-        return Objects.hash(takCredentials, domain, host, port, takTrustStore, androidCaStore,
-                caPath, caSha256);
+        return Objects.hash(takCredentials, takServer, domain, host, port, takTrustStore,
+                androidCaStore, caPath, caSha256);
     }
 
     /** Names the server: for debug logs only ({@code SensitiveLog}). */

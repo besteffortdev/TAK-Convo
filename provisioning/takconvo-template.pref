@@ -11,7 +11,11 @@
      takconvo_xmpp_use_tak_credentials  true (default): reuse the TAK server username/password
                                         false: an XMPP login, entered on the TAK Convo account
                                         screen or provisioned with the two keys below
-     takconvo_xmpp_username             the XMPP login's username (or full JID); without a
+     takconvo_xmpp_tak_server           the host of the TAK server connection whose
+                                        credentials to use, and no other's (default empty:
+                                        one on the XMPP server's domain, else another,
+                                        connected ones first)
+     takconvo_xmpp_username            the XMPP login's username (or full JID); without a
                                         password, only suggested on the sign-in screen
      takconvo_xmpp_password             the XMPP login's password. Moved to ATAK's encrypted
                                         credential store and deleted from the preferences as

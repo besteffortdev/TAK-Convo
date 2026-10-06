@@ -92,6 +92,7 @@ flowchart TB
 | `gradle/atak-runtime.gradle`, `tools/AtakLinkCheck.java` | build | Compile against what ATAK loads at runtime and check for it | [06](06-atak-runtime-and-classloading.md) |
 | `DebugReceiver` | `plugin.debug` | Debug builds: drive the plugin from `adb` | [07](07-development-and-testing.md) |
 | `SensitiveLog` | `plugin` | Debug logs that name users, left out of release builds | [09](09-code-guidelines.md#logging) |
+| `Guard` | `plugin` | Runs what ATAK's main thread calls or posts into the plugin; an exception is logged instead of killing ATAK | [09](09-code-guidelines.md#error-handling) |
 
 ## Lifecycle of the whole thing
 
@@ -99,12 +100,14 @@ flowchart TB
 ATAK starts, loads the plugin
   TakConvoPlugin.onStart()
     engine = XmppEngine.start(atakContext, pluginContext)   # see 02
-        EMBEDDED = true
+        EMBEDDED = true; HOLD_CONNECTIONS = true   # no connection before trust and approval
         build EmbeddedContext, Application, Service; service.onCreate()
-        load XmppSettings, install the trust manager, fresh resource per account
-        service.onStartCommand()          # connects stored accounts
-        provision()                        # create/update the one account from settings
+        fresh resource per account
         watch: takconvo_* prefs, TAK server connections, device trust store
+        provision()                        # reads XmppSettings and the CAs in the background,
+                                           # then on the main thread: install the trust
+                                           # manager, create/update the one account; the first
+                                           # time, service.onStartCommand() connects them
     XmppContacts.start()                   # contact handler, badges; see 08
     register the tool preferences page and the pane broadcasts
     add the toolbar button

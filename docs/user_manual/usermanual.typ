@@ -36,9 +36,10 @@ Your administrator gives you a settings file (`.pref`), on its own or in a data 
 the data package in ATAK, or import the file in *Settings › Tool Preferences › TAK Convo ›
 Import settings file (.pref)*.
 
-When a settings file names a new server, TAK Convo asks before sending your password there: a
-notification says the chats are offline, and the account screen names the server with
-*Connect*. Connect only if you or your administrator made the change.
+When a settings file names a new server, or the password would come from another of your TAK
+servers, TAK Convo asks before sending your password there: a notification says the chats are
+offline, and the account screen names the server with *Connect*. Connect only if you or your
+administrator made the change.
 
 == Signing in
 Tap the TAK Convo button (a speech bubble) in ATAK's toolbar or in the Tools menu. TAK Convo
@@ -149,7 +150,8 @@ organization_, and TAK Convo connects to the server they name without asking you
   columns: (auto, 1fr),
   stroke: none,
   inset: (x: 0.6em, y: 0.25em),
-  [*Account*], [Connection enabled · Use TAK server credentials · XMPP account · Use the ATAK
+  [*Account*], [Connection enabled · Use TAK server credentials · TAK server for the
+    credentials (Automatic: the one on your XMPP server's domain) · XMPP account · Use the ATAK
     callsign as nickname],
   [*Notifications*], [Message notifications (off by default) · Sound · Vibration],
   [*Chat*], [Show quick messages · Quick messages],

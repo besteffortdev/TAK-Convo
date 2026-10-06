@@ -40,21 +40,32 @@ class EmbeddedContext extends ContextWrapper(base = atak.applicationContext):
 
     startService(intent):
         if router.handles(intent):                 # component == XmppConnectionService
-            post(main) { router.startCommand(intent) }   # -> service.onStartCommand(intent)
+            post(main) { guarded: router.startCommand(intent) }   # -> service.onStartCommand
             return intent.component
         return base.startService(intent)
 
     bindService(intent, conn, flags):
         if router.handles(intent):
-            remember conn
+            remember conn, with the activity's contexts that bound it
             binder = router.bind(intent)           # -> service.onBind(intent)
-            post(main) { conn.onServiceConnected(intent.component, binder) }
+            post(main) { guarded: if conn is still bound:
+                             conn.onServiceConnected(intent.component, binder) }
             return true
         return base.bindService(intent, conn, flags)
 
     forUi(display, override):                      # a context per embedded activity
         return new EmbeddedContext(root, base.createDisplayContext(display), override)
+
+    release():                                     # its activity was destroyed (see 04)
+        forget the connections it bound            # as Android does for a destroyed activity
 ```
+
+An activity can stop and be destroyed before the posted `onServiceConnected` runs, for example
+when the pane's size relaunches it at once. Android doesn't deliver a connection to a destroyed
+activity, and drops what it bound. Without that, the dead activity would register itself as a
+listener of the service and never unbind. `guarded` is `Guard.run`
+([09](09-code-guidelines.md#error-handling)): an exception in the service's code would
+otherwise kill ATAK.
 
 ## Application and service
 
@@ -98,23 +109,24 @@ XmppEngine.start(atakContext, pluginContext):          # once per process
     TakConvoCompat.CREDENTIALS     = KeystoreCredentials      # see "Credentials in the database"
     nicknames = new CallsignNicknames(...)             # see 03, the callsign as nickname
     ConversationsSettings.apply(ATAK's prefs, Conversations' prefs)   # .pref-set, see 03
+    TakConvoCompat.HOLD_CONNECTIONS = true             # until the first apply(), see 03, trust
     service.onCreate()                                 # opens the DB, loads accounts
     if a credential was read unencrypted: save every account again    # encrypts it
     approvedServer = PrivateFiles "approved_server"    # see 03, approving the server
-    initial = load()                                   # on the main thread, this once
-    applyTrust(initial if its server is approved)      # before anything connects, see 03
     for account in service.accounts:
         account.resource = "TAK Convo." + random(3)    # see "resource" below
-    service.onStartCommand(null)                       # connects enabled accounts
-    apply(initial)                                     # the account, see 03
     watch ATAK's preferences:
         takconvo_xmpp_*           -> provision() (debounced 750 ms)
         takconvo_conversations_*  -> ConversationsSettings.apply() (debounced 750 ms)
         locationCallsign          -> nicknames.sync()
     watch TAK server connections and the device trust store -> provision()
+    provision()                     # load() on the provisioning thread, not while ATAK starts;
+                                    # then apply(): trust, approval, the account (see 03)
+        first apply(): HOLD_CONNECTIONS = false; service.onStartCommand(null)  # connects them
 
 XmppEngine.shutdown():
-    stop watching; nicknames.stop()                    # its pending join re-checks
+    stop watching; drop the posted provisioning, dispatches and nickname syncs
+    nicknames.stop()                                   # its pending join re-checks
     advertise(null)                                    # clear saXmppUsername
     service.onTaskRemoved(null)                        # logs out and saves, as on swipe-away
     service.onDestroy()

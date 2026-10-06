@@ -36,6 +36,13 @@
         android:defaultValue="unset" />
 
     <restriction
+        android:key="takconvo_xmpp_tak_server"
+        android:title="@string/takconvo_mdm_xmpp_tak_server"
+        android:description="@string/takconvo_mdm_xmpp_tak_server_desc"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
         android:key="takconvo_xmpp_username"
         android:title="@string/takconvo_mdm_xmpp_username"
         android:description="@string/takconvo_mdm_xmpp_username_desc"

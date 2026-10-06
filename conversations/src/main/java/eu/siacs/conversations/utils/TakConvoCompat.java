@@ -34,6 +34,12 @@ public final class TakConvoCompat {
     /** CAs the plugin adds, checked after the system's; hostname verification is unchanged. */
     public static volatile javax.net.ssl.X509TrustManager EXTRA_TRUST_MANAGER = null;
 
+    /**
+     * The service doesn't connect the stored accounts: the plugin hasn't installed its trust
+     * manager, nor checked that the user approved the server, which it reads in the background.
+     */
+    public static volatile boolean HOLD_CONNECTIONS = false;
+
     /** Where "Discover channels" looks on XMPP servers; null for the account's server. */
     public static volatile eu.siacs.conversations.xmpp.Jid CHANNEL_DISCOVERY_SERVER = null;
 

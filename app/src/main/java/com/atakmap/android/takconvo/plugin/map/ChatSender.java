@@ -23,6 +23,7 @@ import com.atakmap.android.missionpackage.MissionPackageMapComponent;
 import com.atakmap.android.missionpackage.api.MissionPackageApi;
 import com.atakmap.android.missionpackage.file.MissionPackageManifest;
 import com.atakmap.android.missionpackage.file.task.MissionPackageBaseTask;
+import com.atakmap.android.takconvo.plugin.Guard;
 import com.atakmap.android.takconvo.plugin.R;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 import com.atakmap.android.util.ATAKUtilities;
@@ -103,7 +104,8 @@ public final class ChatSender implements URIContentSender {
         final CharSequence[] names = names(chats);
         new AlertDialog.Builder(mapView.getContext())
                 .setTitle(plugin.getString(R.string.takconvo_send_to))
-                .setItems(names, (dialog, which) -> send(contentUri, chats.get(which), callback))
+                .setItems(names, (dialog, which) -> Guard.run(TAG, "send to a chat",
+                        () -> send(contentUri, chats.get(which), callback)))
                 .show();
         return true;
     }
@@ -238,13 +240,13 @@ public final class ChatSender implements URIContentSender {
                     @Override
                     public void onMissionPackageTaskComplete(final MissionPackageBaseTask task,
                             final boolean success) {
-                        mainHandler.post(() -> {
+                        mainHandler.post(Guard.wrap(TAG, "send a data package", () -> {
                             if (success && manifest.pathExists()) {
                                 attach(new File(manifest.getPath()), chat, contentUri, callback);
                             } else {
                                 failed(contentUri, callback, null);
                             }
-                        });
+                        }));
                     }
                 });
     }

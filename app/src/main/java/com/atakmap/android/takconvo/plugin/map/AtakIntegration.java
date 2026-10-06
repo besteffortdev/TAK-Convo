@@ -17,6 +17,7 @@ import com.atakmap.android.ipc.AtakBroadcast;
 import com.atakmap.android.maps.MapItem;
 import com.atakmap.android.maps.MapTouchController;
 import com.atakmap.android.maps.MapView;
+import com.atakmap.android.takconvo.plugin.Guard;
 import com.atakmap.android.takconvo.plugin.R;
 import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.android.util.ATAKUtilities;
@@ -65,10 +66,10 @@ public final class AtakIntegration implements TakConvoCompat.Atak {
     @Override
     public List<String> quickMessages() {
         final List<String> messages = new ArrayList<>();
-        if (!prefs.getBoolean(XmppSettings.KEY_SHOW_QUICK_MESSAGES, false)) {
+        if (!XmppSettings.showQuickMessages(prefs)) {
             return messages;
         }
-        final String value = prefs.getString(XmppSettings.KEY_QUICK_MESSAGES,
+        final String value = XmppSettings.quickMessages(prefs,
                 plugin.getString(R.string.takconvo_quick_messages_default));
         for (final String message : value.split("\\|")) {
             if (!message.trim().isEmpty()) {
@@ -149,7 +150,7 @@ public final class AtakIntegration implements TakConvoCompat.Atak {
                     if (which == 0) {
                         importFile(file);
                     } else {
-                        openElsewhere.run();
+                        Guard.run(TAG, "open a received file", openElsewhere);
                     }
                 })
                 .show();

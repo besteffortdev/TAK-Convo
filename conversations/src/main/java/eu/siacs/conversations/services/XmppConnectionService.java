@@ -745,6 +745,9 @@ public class XmppConnectionService extends Service {
 
     private synchronized void manageAccountConnectionStates(
             final String action, final Bundle extras) {
+        if (TakConvoCompat.HOLD_CONNECTIONS) { // TAKCONVO: until the plugin set trust and approval
+            return;
+        }
         final String pushedAccountHash = extras == null ? null : extras.getString("account");
         final boolean interactive = java.util.Objects.equals(ACTION_TRY_AGAIN, action);
         WakeLockHelper.acquire(wakeLock);

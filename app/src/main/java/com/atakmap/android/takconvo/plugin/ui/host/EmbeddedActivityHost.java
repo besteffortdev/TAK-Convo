@@ -146,6 +146,8 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     private static final class Record {
         /** Replaced when relaunched for another pane size. */
         Activity activity;
+        /** The activity's context from the engine, released when it is destroyed. */
+        Context base;
         /** Who gets the result, or null. */
         final Record caller;
         final int requestCode;
@@ -333,7 +335,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             final OnBackPressedDispatcher dispatcher =
                     ((ComponentActivity) top.activity).getOnBackPressedDispatcher();
             if (dispatcher.hasEnabledCallbacks()) {
-                dispatcher.onBackPressed();
+                guarded(top, "go back in", dispatcher::onBackPressed);
                 return true;
             }
         }
@@ -542,6 +544,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
                 engine.getApplication(), intent, info, "", parent, className, null);
         activity.setTheme(info.theme);
         record.activity = activity;
+        record.base = base;
         record.content = null;
         record.started = false;
         record.resumed = false;
@@ -872,6 +875,8 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             if (r.content != null) {
                 container.removeView(r.content);
             }
+            // e.g. a service connection it bound but wasn't given yet
+            engine.releaseUiContext(r.base);
         }
     }
 

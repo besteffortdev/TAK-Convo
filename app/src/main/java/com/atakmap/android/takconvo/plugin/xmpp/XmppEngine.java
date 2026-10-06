@@ -18,6 +18,7 @@ import android.security.KeyChain;
 import android.view.Display;
 
 import com.atakmap.android.preference.AtakPreferences;
+import com.atakmap.android.takconvo.plugin.Guard;
 import com.atakmap.android.takconvo.plugin.SensitiveLog;
 import com.atakmap.android.takconvo.plugin.config.AppConfig;
 import com.atakmap.android.takconvo.plugin.config.ConversationsSettings;
@@ -114,6 +115,8 @@ public final class XmppEngine {
             Executors.newSingleThreadExecutor(r -> new Thread(r, "TakConvo.Provision"));
     /** The latest provisioning; an older one's result is dropped. */
     private int provisionRun;
+    /** The stored accounts may connect: the first provisioning set their trust and approval. */
+    private boolean connectionsReleased;
     private boolean stopped;
     private final SharedPreferences.OnSharedPreferenceChangeListener prefListener;
     private final CotServiceRemote.OutputsChangedListener takServerListener;
@@ -223,6 +226,9 @@ public final class XmppEngine {
                 AppConfig.NONE);
         ConversationsSettings.apply(AtakPreferences.getInstance(this.atakContext).getSharedPrefs(),
                 defaultPreferences());
+        // the stored accounts wait for the first provisioning, which installs the trust
+        // manager and checks the server's approval; it reads in the background (provision())
+        TakConvoCompat.HOLD_CONNECTIONS = true;
         service.onCreate();
         if (credentials.sawPlaintext()) {
             // stored by a version that didn't encrypt them
@@ -231,25 +237,15 @@ public final class XmppEngine {
                 service.databaseBackend.updateAccount(account);
             }
         }
-        // trust must be in place before the service connects the stored accounts: read once
-        // here, on the main thread, as the plugin starts
+        // a few hundred bytes
         approvedServer = ServerIdentity.parse(PrivateFiles.read(this.atakContext,
                 APPROVED_SERVER));
-        final Loaded initial = load();
-        if (isApproved(initial.server)) {
-            applyTrust(initial.trust, initial.trustFingerprint);
-        } else {
-            // not the CAs of a server the user hasn't approved; apply() disables the accounts
-            applyTrust(null, TrustSources.fingerprint(null));
-        }
         // a new resource per start: Openfire holds the previous session for resumption and
         // doesn't answer a bind of the same resource until it drops it
         for (final Account account : service.getAccounts()) {
             account.setResource(String.format("%s.%s",
                     eu.siacs.conversations.BuildConfig.APP_NAME, CryptoHelper.random(3)));
         }
-        service.onStartCommand(null, 0, 0);
-        apply(initial);
 
         // re-provision on our preferences (e.g. a .pref import) and TAK server changes; the
         // TAK credentials are often not there yet when the plugin starts
@@ -272,7 +268,7 @@ public final class XmppEngine {
                 mainHandler.removeCallbacks(conversationsSettingsTask);
                 mainHandler.postDelayed(conversationsSettingsTask, DEBOUNCE_MS);
             } else if (XmppSettings.KEY_ATAK_CALLSIGN.equals(key)) {
-                mainHandler.post(nicknames::sync);
+                mainHandler.post(Guard.wrap(TAG, "set the callsign as nickname", nicknames::sync));
             }
         };
         AtakPreferences.getInstance(this.atakContext).registerListener(prefListener);
@@ -343,6 +339,9 @@ public final class XmppEngine {
         if (this.atakContext instanceof Application) {
             ((Application) this.atakContext).registerActivityLifecycleCallbacks(resumeCallbacks);
         }
+        // ATAK's credential store and certificate database, the Android CA store: not on the
+        // main thread while ATAK starts
+        provision();
         refreshAppConfig();
     }
 
@@ -356,8 +355,8 @@ public final class XmppEngine {
         Log.d(TAG, "stopping embedded Conversations engine");
         stopped = true;
         loader.shutdownNow();
-        mainHandler.removeCallbacks(provisionTask);
-        mainHandler.removeCallbacks(conversationsSettingsTask);
+        // provisioning, dispatches, nickname syncs: they would act on a stopped service
+        mainHandler.removeCallbacksAndMessages(null);
         nicknames.stop();
         if (atakContext instanceof Application) {
             ((Application) atakContext).unregisterActivityLifecycleCallbacks(resumeCallbacks);
@@ -377,6 +376,7 @@ public final class XmppEngine {
         TakConvoCompat.NOTIFICATIONS = null;
         TakConvoCompat.PENDING_INTENTS = null;
         TakConvoCompat.CHANNEL_DISCOVERY_SERVER = null;
+        TakConvoCompat.HOLD_CONNECTIONS = false;
         pendingIntents.unregister();
         listeners.clear();
     }
@@ -402,7 +402,7 @@ public final class XmppEngine {
             }
             mainHandler.post(() -> {
                 if (run == provisionRun && !stopped) {
-                    apply(loaded);
+                    Guard.run(TAG, "apply the XMPP settings", () -> apply(loaded));
                 }
             });
         });
@@ -413,7 +413,7 @@ public final class XmppEngine {
         mainHandler.removeCallbacks(provisionTask);
         // drops the result of one still in the background
         provisionRun++;
-        apply(load());
+        Guard.run(TAG, "apply the XMPP settings", () -> apply(load()));
     }
 
     /** What provisioning reads: the settings, the CAs they trust, the server they name. */
@@ -442,11 +442,25 @@ public final class XmppEngine {
     }
 
     /**
+     * Applies the settings read ({@link #applySettings}). The first time, the stored accounts
+     * may connect, now that their trust and the server's approval are in place.
+     */
+    private void apply(final Loaded loaded) {
+        applySettings(loaded);
+        if (!connectionsReleased) {
+            connectionsReleased = true;
+            TakConvoCompat.HOLD_CONNECTIONS = false;
+            Log.d(TAG, "settings applied, connecting the accounts");
+            service.onStartCommand(null, 0, 0);
+        }
+    }
+
+    /**
      * Creates or updates the XMPP account from the settings read; an unchanged configuration
      * leaves the connection alone. Accounts of another address are disabled, never deleted, so
      * their history survives a mistaken configuration.
      */
-    private void apply(final Loaded loaded) {
+    private void applySettings(final Loaded loaded) {
         settings = loaded.settings;
         applyChannelDiscovery();
         SensitiveLog.d(TAG, "provisioning " + settings);
@@ -551,12 +565,26 @@ public final class XmppEngine {
         if (server == null || server.equals(approvedServer)) {
             return true;
         }
-        if (approveNext || server.equals(appConfig.server())
-                || (approvedServer == null && loggedInTo(server))) {
+        if (server.takServer == null && server.sameServer(approvedServer)) {
+            // no TAK server credentials yet: nothing new goes to the server
+            return true;
+        }
+        if (approveNext || appConfig.approves(server)
+                || (approvedServer == null && loggedInTo(server))
+                || approvedWithoutTakServer(server)) {
             approve(server);
             return true;
         }
         return false;
+    }
+
+    /**
+     * The approval doesn't name the TAK server whose credentials go there: an older version
+     * saved it, or it came before any TAK credentials. The first TAK server seen goes with it.
+     */
+    private boolean approvedWithoutTakServer(final ServerIdentity server) {
+        return approvedServer != null && approvedServer.takCredentials
+                && approvedServer.takServer == null && server.sameServer(approvedServer);
     }
 
     /** Whether an enabled account has logged in to that domain, host and port. */
@@ -804,6 +832,16 @@ public final class XmppEngine {
         return context.forUi(display, override);
     }
 
+    /**
+     * The activity of a {@link #newUiContext} is destroyed: its service connections end, as
+     * Android ends a destroyed activity's.
+     */
+    public void releaseUiContext(final Context ui) {
+        if (ui instanceof EmbeddedContext) {
+            ((EmbeddedContext) ui).release();
+        }
+    }
+
     /** Conversations' Application, which its activities expect. */
     public Application getApplication() {
         return (Application) context.getApplicationContext();
@@ -886,10 +924,13 @@ public final class XmppEngine {
 
     private void dispatch() {
         dispatchPending.set(false);
+        if (stopped) {
+            return;
+        }
         // e.g. the account came online: the callsign can be published now
-        nicknames.sync();
+        Guard.run(TAG, "set the callsign as nickname", nicknames::sync);
         for (final Listener l : listeners) {
-            l.onXmppStateChanged();
+            Guard.run(TAG, "update " + l.getClass().getSimpleName(), l::onXmppStateChanged);
         }
     }
 

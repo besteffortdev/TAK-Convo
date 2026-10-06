@@ -120,23 +120,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     private final BroadcastReceiver showReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(final Context context, final Intent intent) {
-            final String action = intent.getAction();
-            if (ACTION_SHOW_CHAT.equals(action)) {
-                showChat();
-            } else if (EmbeddedPendingIntents.ACTION_OPEN.equals(action)) {
-                // a notification was tapped
-                final Intent activity = engine == null ? null
-                        : engine.unwrapNotificationTap(intent, pluginContext.getClassLoader());
-                if (activity != null) {
-                    showChat(activity);
-                }
-            } else if (ACTION_CHAT_BACK.equals(action)) {
-                if (chatDropDown != null) {
-                    chatDropDown.goBack();
-                }
-            } else {
-                showAccountPane();
-            }
+            Guard.run(TAG, "handle " + intent.getAction(), () -> onShowRequest(intent));
         }
     };
 
@@ -163,7 +147,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
                 .setListener(new ToolbarItemAdapter() {
                     @Override
                     public void onClick(ToolbarItem item) {
-                        showChat();
+                        Guard.run(TAG, "show the chats", TakConvoPlugin.this::showChat);
                     }
                 })
                 .setIdentifier(pluginContext.getPackageName())
@@ -377,6 +361,27 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         vector.setBounds(0, 0, bitmap.getWidth(), bitmap.getHeight());
         vector.draw(new Canvas(bitmap));
         return bitmap;
+    }
+
+    /** The pane broadcasts: show the chats or the account, a tapped notification, back. */
+    private void onShowRequest(final Intent intent) {
+        final String action = intent.getAction();
+        if (ACTION_SHOW_CHAT.equals(action)) {
+            showChat();
+        } else if (EmbeddedPendingIntents.ACTION_OPEN.equals(action)) {
+            // a notification was tapped
+            final Intent activity = engine == null ? null
+                    : engine.unwrapNotificationTap(intent, pluginContext.getClassLoader());
+            if (activity != null) {
+                showChat(activity);
+            }
+        } else if (ACTION_CHAT_BACK.equals(action)) {
+            if (chatDropDown != null) {
+                chatDropDown.goBack();
+            }
+        } else {
+            showAccountPane();
+        }
     }
 
     /** Shows the chats, or the account pane if there is no account. */

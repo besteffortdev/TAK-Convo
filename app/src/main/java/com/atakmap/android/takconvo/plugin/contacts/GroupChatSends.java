@@ -10,6 +10,7 @@ import com.atakmap.android.maps.MapItem;
 import com.atakmap.android.maps.MapView;
 import com.atakmap.android.missionpackage.api.MissionPackageApi;
 import com.atakmap.android.missionpackage.file.MissionPackageManifest;
+import com.atakmap.android.takconvo.plugin.Guard;
 import com.atakmap.android.takconvo.plugin.R;
 import com.atakmap.android.takconvo.plugin.map.ChatSender;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
@@ -57,9 +58,13 @@ public final class GroupChatSends extends BroadcastReceiver {
         AtakBroadcast.getInstance().unregisterReceiver(this);
     }
 
-    /** The extras are those of ATAK's send list request (ContactPresenceDropdown.SEND_LIST). */
     @Override
     public void onReceive(final Context context, final Intent intent) {
+        Guard.run(TAG, "send to a group chat", () -> send(intent));
+    }
+
+    /** The extras are those of ATAK's send list request (ContactPresenceDropdown.SEND_LIST). */
+    private void send(final Intent intent) {
         final Conversation chat = groupChat(
                 XmppRoomContact.addressOf(intent.getStringExtra("contactUID")));
         if (chat == null) {

@@ -231,6 +231,7 @@ delivered.
 | `DEBUG_PROVISION` | | runs `XmppEngine.provision()`: `TakConvo.Trust` logs the trust sources from the `TakConvo.Provision` thread, `TakConvo.XmppEngine` "provisioning ..." from the main thread |
 | `DEBUG_APP_CONFIG` | `takconvo_*` (`--es`, `--ez` for Booleans) | replaces the values `AppConfigProvider` adds to the MDM's managed configuration, then reads it: an MDM's settings without an MDM; without extras, none ([03](03-provisioning-and-trust.md#managed-configuration-mdm)) |
 | `DEBUG_ADD_TAK_SERVER` | `connect` (`host:port:ssl`), `user`, `pass` | adds a TAK server connection the way ATAK's dialog does |
+| `DEBUG_REMOVE_TAK_SERVER` | `connect` | removes that TAK server connection again, with the credentials stored for its host |
 | `DEBUG_DUMP_SELF_SA` | | logs the SA this device sends (check `xmppUsername`) |
 | `DEBUG_SEND` | `to`, `body` | sends a plain-text 1:1 message |
 | `DEBUG_SHOW_ACCOUNT` | | opens the account pane |

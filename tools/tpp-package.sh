@@ -39,7 +39,10 @@ for version in "${versions[@]}"; do
         git -C "$root" add -A
         # not needed to build, and they name internal hosts
         git -C "$root" rm -r -q --cached --ignore-unmatch \
-            docs tools provisioning README.md template.local.properties
+            docs tools provisioning README.md template.local.properties .gitlab-ci.yml
+        # the pipeline resolves the takdev plugin and the SDK from its own repository, whose
+        # artifacts aren't in the checksums: the build would refuse them
+        git -C "$root" rm -q --cached --ignore-unmatch gradle/verification-metadata.xml
         # except the user manual: the pipeline builds it into the APK (gradle/typst.gradle)
         git -C "$root" add docs/user_manual
         # the pipeline runs ./gradlew; the repository comes from Windows

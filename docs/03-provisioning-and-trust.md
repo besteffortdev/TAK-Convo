@@ -20,7 +20,7 @@ import manager) provisions every one of them. An MDM can set them too, and then 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `takconvo_xmpp_enabled` | Boolean | `true` | connect at all |
-| `takconvo_xmpp_domain` | String | — | XMPP domain; the JID becomes `<username>@<domain>` |
+| `takconvo_xmpp_domain` | String | — | XMPP domain; the JID becomes `<username>@<domain>`, also for a TAK username with a domain of its own (see Credentials) |
 | `takconvo_xmpp_host` | String | — | only if the domain has no reachable SRV/A record |
 | `takconvo_xmpp_port` | String | `5222` | port for `takconvo_xmpp_host` |
 | `takconvo_xmpp_use_tak_credentials` | Boolean | `true` | reuse the TAK server username/password |
@@ -105,8 +105,21 @@ problem():                     # why no account can be provisioned, or null
     !enabled                         -> DISABLED
     no username/password             -> NO_TAK_CREDENTIALS | NOT_SIGNED_IN
     no domain, username has no '@'   -> NO_DOMAIN
-    otherwise                        -> null        (jid() = username or username@domain)
+    otherwise                        -> null        (jid(), below)
+
+jid():
+    username without '@'             -> username@domain
+    TAK username user@other, a domain set and not "other"
+                                     -> user@domain     # a TAK login isn't an XMPP address
+    otherwise                        -> username        # an XMPP login's full address
 ```
+
+A TAK server whose users log in with their Windows login (`alice@corp.example`, the UPN) gives
+`alice@<XMPP domain>`, as a TAK login without `@` does: the XMPP server's own user is usually
+the account name (Openfire's LDAP: `sAMAccountName`). The configured domain also keeps the
+server identity the MDM sets. An XMPP server whose usernames are the whole UPN needs them
+escaped (`alice\40corp.example@domain`, XEP-0106) instead, which TAK Convo doesn't do; with no
+domain set, the UPN itself is the address.
 
 With TAK credentials there is deliberately **no fallback** to a stored XMPP login. At ATAK
 start-up the TAK server credentials are often not available yet, and silently switching to
@@ -289,6 +302,7 @@ code runs as ATAK. A provider in the plugin's own process (`:appconfig`) reads i
 ```text
 AppConfigProvider.call("get"):          # plugin package, process :appconfig, exported
     caller isn't ATAK (getCallingPackage)  -> SecurityException
+    nor signed as ATAK (below)             -> SecurityException
     return RestrictionsManager.getApplicationRestrictions()   # + DEBUG_APP_CONFIG's, debug builds
 
 XmppEngine.refreshAppConfig():          # at start, and when an ATAK activity resumes
@@ -305,6 +319,23 @@ can reach the provider. The client is "unstable": if the plugin's process dies d
 ATAK gets an error instead of being killed with it. That process runs only this provider: the
 other providers in the merged manifest (androidx startup) belong to the default process. ATAK's
 classes don't exist there, so the provider logs with `android.util.Log`.
+
+The package name alone isn't enough: while ATAK isn't installed (before the MDM installs it, or
+after it's removed), any app can be installed under `com.atakmap.app.civ` and would read the
+managed XMPP password. So the caller's signing certificate must also be:
+
+1. the plugin's own (`PackageManager.checkSignatures`): developer ATAK and debug plugins are both
+   signed with the SDK's development key. That key ships with every SDK, so it protects nothing
+   on a test device; a release plugin is signed by TAK.gov;
+2. one listed at build time: `-PatakSigners=<sha256>,...` (`BuildConfig.ATAK_SIGNERS`, empty by
+   default), the SHA-256 of `apksigner verify --print-certs atak.apk`;
+3. otherwise that of the first ATAK that called, remembered in the plugin's own storage
+   (`takconvo_app_config_caller`, which neither ATAK nor a `.pref` file reaches). A key ATAK
+   rotates keeps the earlier ones in its signing history, which counts.
+
+Release ATAK's key isn't known here, hence 3: an app installed under ATAK's name after the first
+call is refused, one installed before ATAK ever ran isn't. Setting `atakSigners` closes that
+too. The plugin's `<queries>` names ATAK's package, so it can read the caller's certificates.
 
 Android announces a change (`ACTION_APPLICATION_RESTRICTIONS_CHANGED`) only to a running process
 of the package, and the plugin's process doesn't run. TAK Convo reads the configuration again

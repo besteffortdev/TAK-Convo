@@ -8,6 +8,7 @@
 
      Account and connection
      takconvo_xmpp_domain               XMPP domain; the JID becomes <TAK username>@<domain>
+                                        (a TAK username user@other.example: user@<domain>)
      takconvo_xmpp_use_tak_credentials  true (default): reuse the TAK server username/password
                                         false: an XMPP login, entered on the TAK Convo account
                                         screen or provisioned with the two keys below

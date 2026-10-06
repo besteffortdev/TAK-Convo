@@ -5,6 +5,11 @@
     <!-- :conversations uses heifwriter (minSdk 28) only behind SDK_INT checks, as upstream does -->
     <uses-sdk tools:overrideLibrary="androidx.heifwriter" />
 
+    <!-- AppConfigProvider reads the signing key of the ATAK that calls it -->
+    <queries>
+        <package android:name="com.atakmap.app.civ" />
+    </queries>
+
     <application
         android:allowBackup="false"
         android:icon="@drawable/ic_launcher"

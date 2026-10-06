@@ -70,7 +70,7 @@ data isn't meant for.
   plugin's package, in its process `:appconfig`
   ([03](03-provisioning-and-trust.md#managed-configuration-mdm)). It is exported, because ATAK
   calls it, and `call()` refuses any other package (`getCallingPackage()`, which the system
-  checks against the caller's uid). ATAK's classes don't exist in that process: code there uses
+  checks against the caller's uid), and a package with ATAK's name but not its signing key. ATAK's classes don't exist in that process: code there uses
   Android's APIs only (`android.util.Log`). ATAK reaches it with an unstable
   `ContentProviderClient`, so ATAK survives that process dying.
 - **ATAK's internal broadcasts are reachable from other apps**: ATAK's launcher activity is
@@ -147,11 +147,14 @@ From the Google Java style guide, which Android's own guide follows:
 ## Checking
 
 - `tools/deploy.ps1` builds, link-checks against ATAK and installs: run it for each change.
-- Before committing, these should find nothing:
-  - a line over 100 characters: `grep -rnE "^.{101,}$" app/src/main/java`;
-  - a catch-all: `grep -rnE "catch \((final )?(Throwable|Exception) " app/src/main/java`, apart
-    from the boundaries listed above;
-  - a `Log.d` that names a user.
+- Before committing:
+  - `tools/check-style.sh` finds nothing: lines over 100 characters, wildcard imports,
+    catch-alls outside the boundaries listed above;
+  - the JVM tests pass (`gradlew testCivDebugUnitTest`, see
+    [07](07-development-and-testing.md#tests-and-ci)), with a test for logic that decides
+    where credentials go or what is trusted;
+  - no `Log.d` names a user (by reading: no script knows).
+- GitLab's pipeline runs all of these for both ATAK versions on each push.
 
 ## Sources
 

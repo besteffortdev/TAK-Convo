@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.text.TextUtils;
 
+import androidx.annotation.VisibleForTesting;
+
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.comms.NetConnectString;
 import com.atakmap.comms.TAKServer;
@@ -344,15 +346,28 @@ public final class XmppSettings {
         return null;
     }
 
-    /** The username if it has a domain, otherwise username@domain. */
+    /** The XMPP address the credentials sign in as, or null. */
     public String jid() {
+        return jid(username, domain, credentialSource == CredentialSource.TAK_SERVER);
+    }
+
+    /**
+     * username@domain, or the username itself if it has a domain. A TAK username isn't an XMPP
+     * address, though: with a domain set, user@corp.example (a Windows login, say) is
+     * user@domain, as a TAK username without '@' is. Null without a domain to add.
+     */
+    static String jid(final String username, final String domain, final boolean takUsername) {
         if (username == null) {
             return null;
         }
-        if (username.contains("@")) {
-            return username;
+        final int at = username.lastIndexOf('@');
+        if (at < 0) {
+            return domain == null ? null : username + "@" + domain;
         }
-        return domain == null ? null : username + "@" + domain;
+        if (takUsername && domain != null && !username.substring(at + 1).equalsIgnoreCase(domain)) {
+            return username.substring(0, at) + "@" + domain;
+        }
+        return username;
     }
 
     // --- TAK server credentials ---
@@ -416,7 +431,8 @@ public final class XmppSettings {
      * Whether a TAK server's host is {@code name}, in its domain, or beside it in the same
      * domain (tak.example.org and xmpp.example.org).
      */
-    private static boolean sameDomain(final String host, final String name) {
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    static boolean sameDomain(final String host, final String name) {
         if (host == null || name == null) {
             return false;
         }

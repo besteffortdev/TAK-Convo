@@ -31,10 +31,13 @@ final class CoordinateFinder {
                     + "{0,2}(\\d{1,5}" + SP + "{1,2}\\d{1,5}|\\d{2,10})(?![\\p{L}\\p{N}])",
             Pattern.CASE_INSENSITIVE);
 
-    /** At least three decimals each: fewer would match ordinary numbers. */
+    /**
+     * At least three decimals each: fewer would match ordinary numbers. A full stop may end
+     * the sentence after it, not continue the number.
+     */
     private static final Pattern SIGNED_DECIMAL = Pattern.compile(
             "(?<![\\p{N}.+-])([+-]?\\d{1,2}\\.\\d{3,})" + SP + "*," + SP
-                    + "*([+-]?\\d{1,3}\\.\\d{3,})(?![\\p{N}.])");
+                    + "*([+-]?\\d{1,3}\\.\\d{3,})(?!\\p{N}|\\.\\p{N})");
 
     private static final Pattern HEMISPHERE_DECIMAL = Pattern.compile(
             "(?<![\\p{N}.])(\\d{1,2}\\.\\d{2,})" + SP + "?°?" + SP + "?([NS])(?:" + SP + "|,)+"

@@ -107,10 +107,13 @@ Commit first: uncommitted changes make the version `<commit>-wip`. Each zip:
 - sets `atakVersion` (the TPP builds the default);
 - writes `takVersionName` (the commit) and `takStaticVersion` (the packaging time, as version
   code), because the archive has no `.git` for takdev to read them from;
-- leaves out `docs/` (except `docs/user_manual/`), `tools/`, `provisioning/`, `README.md` and
-  `template.local.properties`: the build doesn't need them, and they name internal hosts. The
-  TPP sets `ATAK_CI=1`, which makes `gradle/typst.gradle` compile `docs/user_manual/usermanual.typ`
-  into `assets/usermanual.pdf`; the manual uses no Typst package, so nothing is downloaded then;
+- leaves out `docs/` (except `docs/user_manual/`), `tools/`, `provisioning/`, `README.md`,
+  `template.local.properties` and `.gitlab-ci.yml`: the build doesn't need them, and they name
+  internal hosts. The TPP sets `ATAK_CI=1`, which makes `gradle/typst.gradle` compile
+  `docs/user_manual/usermanual.typ` into `assets/usermanual.pdf`; the manual uses no Typst
+  package, so nothing is downloaded then;
+- leaves out `gradle/verification-metadata.xml`: the TPP resolves takdev and the SDK from
+  TAK.gov's Maven, whose artifacts the checksums don't list, so the build would refuse them;
 - keeps files byte for byte (`core.autocrlf=false`): with Windows line endings `gradlew` breaks
   on the TPP's Linux.
 
@@ -173,6 +176,56 @@ government accounts, so the TPP's own pre-check command can't be run here.
   extensions and JNDI (`javax.naming`), which exist on no Android device.
 - The TPP applies release ATAK's mapping to everything in `main.jar`, OkHttp and Okio included,
   which release ATAK renames (see above).
+
+### Dependencies
+
+Libraries come from Google's and Maven Central's repositories, and one, `:conversations`'
+OpenPGP API (as upstream), from jitpack, which builds any GitHub project: the root `build.gradle`
+takes only that group from it. There is no `mavenLocal()`, whose contents anything on the PC
+could replace.
+
+`gradle/verification-metadata.xml` holds the SHA-256 of every library, Gradle plugin and POM
+the builds and tests resolve, for both ATAK versions: Gradle refuses a download that doesn't
+match. Sources and javadoc jars, which only Android Studio fetches, aren't checked. After
+adding or changing a library (or AGP), write the new checksums, then review the diff:
+
+```bash
+for v in 5.8.0 5.6.0; do
+  ./gradlew --write-verification-metadata sha256 -PatakVersion=$v \
+      assembleCivDebug assembleCivRelease testCivDebugUnitTest
+done
+```
+
+## Tests and CI
+
+```bash
+tools/check-style.sh                           # docs/09's checks: long lines, wildcard imports, catch-alls
+./gradlew testCivDebugUnitTest --offline       # the JVM tests, app/src/test
+```
+
+The JVM tests cover the plugin's plain logic, where a mistake sends credentials elsewhere or
+trusts what it shouldn't: the server identity and its approval (`ServerIdentityTest`), the MDM's
+values in the preferences and their lock (`AppConfigTest`), the XMPP address and the TAK server
+the credentials come from (`XmppSettingsTest`), Conversations' settings from `.pref` files
+(`ConversationsSettingsTest`), and positions in messages (`CoordinateFinderTest`). They run on
+the JVM: Android's classes are stubs that return defaults (`unitTests.returnDefaultValues`),
+`org.json` is the real one, ATAK's come from the SDK's `main.jar`, and `FakePreferences` stands
+in for `SharedPreferences`. What needs a device (the panes, the engine, the provider) is in the
+checklist below.
+
+`.gitlab-ci.yml` runs on each push to GitLab:
+- `style`: `tools/check-style.sh`;
+- `manual`: the user manual with Typst 0.13.1, as TAK.gov's pipeline builds it;
+- `build`, for 5.8.0 and 5.6.0: `assembleCivDebug assembleCivRelease testCivDebugUnitTest`,
+  then `AtakLinkCheck` against that SDK's `atak.apk`. The APKs and the test report are the
+  job's artifacts.
+
+The runner needs the ATAK SDKs, which aren't public: the CI/CD variables `ATAK_SDK_58` and
+`ATAK_SDK_56` name their directories as the jobs see them, for example a volume the Docker
+runner mounts read-only. The job installs the Android SDK (platform 36, build-tools 35) and
+caches it with Gradle's. The same commands, run on a copy of the tree with no
+`local.properties` and the SDK as `-Patak.sdk.5.8=<dir>`, pass on this PC; the pipeline itself
+hasn't run yet.
 
 ## Install and run
 

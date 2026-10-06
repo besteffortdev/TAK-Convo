@@ -50,13 +50,11 @@ buildscript {
     ext.takdevPlugin = getProperty('takdev.plugin',
             "${rootProject.ATAK_SDK}/atak-gradle-takdev.jar")
 
+    // no mavenLocal() or jitpack here: nothing comes from them, and anything put there would
+    // be taken; the project's repositories are in the root build.gradle
     repositories {
         google()
         mavenCentral()
-        mavenLocal()
-        maven {
-            url "https://jitpack.io"
-        }
         maven {
             url = takrepoUrl
             credentials {
@@ -74,31 +72,14 @@ buildscript {
     }
 }
 
-allprojects {
-    repositories {
-        mavenCentral()
-        google()
-        mavenCentral()
-        mavenLocal()
-        maven {
-            url "https://jitpack.io"
-        }
-    }
-}
-
 apply plugin: 'com.android.application'
 apply plugin: 'atak-takdev-plugin'
 apply from: "../gradle/typst.gradle"
 apply from: "../gradle/atak-runtime.gradle"
 
 
- 
-// The supportedFlavors list is an example configuration.  FMS variants can be added and defined via an 
-// ISO tricode (xyz is an example and not a real country code).   The ISO tricode can be found here
-// Please see the A-3 in https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
 
- 
-// The supportedFlavors list is an example configuration.  FMS variants can be added and defined via an 
+// The supportedFlavors list is an example configuration.  FMS variants can be added and defined via an
 // ISO tricode (xyz is an example and not a real country code).   The ISO tricode can be found here
 // Please see the A-3 in https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes
 
@@ -204,6 +185,9 @@ android {
          applicationVariants.all { variant ->
              variant.resValue "string", "versionName", variant.versionName
              buildConfigField 'String', 'ATAK_PACKAGE_NAME', '"com.atakmap.app.civ"'
+             // SHA-256 digests of ATAK signing certificates that may read the managed
+             // configuration, comma-separated (-PatakSigners=...); see AppConfigProvider
+             buildConfigField 'String', 'ATAK_SIGNERS', "\"${findProperty('atakSigners') ?: ''}\""
         }
     }
 
@@ -215,9 +199,6 @@ android {
             excludes += ['META-INF/BCKEY.DSA', 'META-INF/BCKEY.SF', 'META-INF/LICENSE.md',
                          'META-INF/versions/9/OSGI-INF/MANIFEST.MF']
         }
-
-        // Extract native libraries from the APK - required for plugin loading
-        jniLibs.useLegacyPackaging true
     }
 
     sourceSets {
@@ -271,6 +252,11 @@ android {
         abortOnError true
         checkReleaseBuilds true
     }
+    testOptions {
+        // the JVM tests (src/test) cover plain logic; Android's classes there are stubs, which
+        // return defaults instead of throwing (logging, TextUtils)
+        unitTests.returnDefaultValues = true
+    }
 }
 
 afterEvaluate {
@@ -316,6 +302,15 @@ dependencies {
     // same version as :conversations; its attach calls return Guava futures
     implementation 'com.google.guava:guava:33.7.1-android'
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+
+    testImplementation 'junit:junit:4.13.2'
+    // Android's org.json is a stub on the JVM
+    testImplementation 'org.json:json:20260814'
+    // ATAK's classes (logging, MGRS), which ATAK provides at runtime. Not in TAK.gov's pipeline,
+    // which doesn't run the tests
+    if (rootProject.ATAK_SDK != null) {
+        testImplementation files("${rootProject.ATAK_SDK}/main.jar")
+    }
 }
 
 // versions pinned to ATAK's in gradle/atak-runtime.gradle; don't package what ATAK already ships

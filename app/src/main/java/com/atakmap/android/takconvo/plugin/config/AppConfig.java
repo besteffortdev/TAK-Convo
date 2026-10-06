@@ -8,6 +8,8 @@ import android.os.Bundle;
 import android.os.RemoteException;
 import android.util.Base64;
 
+import androidx.annotation.VisibleForTesting;
+
 import com.atakmap.coremap.log.Log;
 
 import org.json.JSONException;
@@ -86,7 +88,7 @@ public final class AppConfig {
             XmppSettings.KEY_TRUSTED_CA};
 
     /** A key the MDM keeps at its default: absent from the preferences. */
-    private static final Object DEFAULT = new Object();
+    static final Object DEFAULT = new Object();
 
     /** No managed configuration. */
     public static final AppConfig NONE =
@@ -100,7 +102,8 @@ public final class AppConfig {
     /** The login was stored in this read; not part of the configuration. */
     private final boolean savedLogin;
 
-    private AppConfig(final Map<String, Object> values, final boolean managesLogin,
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    AppConfig(final Map<String, Object> values, final boolean managesLogin,
             final ServerIdentity server, final boolean savedLogin) {
         this.values = Collections.unmodifiableMap(values);
         this.managesLogin = managesLogin;

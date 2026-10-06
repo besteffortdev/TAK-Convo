@@ -1,18 +1,29 @@
 package com.atakmap.android.takconvo.plugin.config;
 
+import android.annotation.SuppressLint;
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.RestrictionsManager;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
+import android.content.pm.SigningInfo;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 
 import com.atakmap.android.takconvo.plugin.BuildConfig;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Hands the managed configuration an MDM set for the plugin's package to ATAK. Android lets
@@ -29,6 +40,10 @@ public final class AppConfigProvider extends ContentProvider {
     /** Debug builds: replaces the values {@link #METHOD_GET} adds to the MDM's. */
     static final String METHOD_DEBUG_SET = "debug_set";
     private static final String DEBUG_PREFS = "takconvo_debug_app_config";
+    /** In this package's storage, out of ATAK's (and a .pref file's) reach. */
+    private static final String CALLER_PREFS = "takconvo_app_config_caller";
+    /** The signing certificates (SHA-256) of the first ATAK that called. */
+    private static final String KEY_ATAK_SIGNERS = "atak_signers";
 
     /** The provider's address, in the package of this build's flavor. */
     static Uri uri() {
@@ -43,8 +58,9 @@ public final class AppConfigProvider extends ContentProvider {
     @Override
     public Bundle call(final String method, final String arg, final Bundle extras) {
         // getCallingPackage() is checked against the caller's uid by the system
-        if (!BuildConfig.ATAK_PACKAGE_NAME.equals(getCallingPackage())) {
-            Log.w(TAG, "refused for " + getCallingPackage());
+        final String caller = getCallingPackage();
+        if (!BuildConfig.ATAK_PACKAGE_NAME.equals(caller) || !isAtak(caller)) {
+            Log.w(TAG, "refused for " + caller);
             throw new SecurityException("only ATAK reads TAK Convo's managed configuration");
         }
         final Context context = getContext();
@@ -63,6 +79,80 @@ public final class AppConfigProvider extends ContentProvider {
             return new Bundle();
         }
         throw new IllegalArgumentException("unknown method " + method);
+    }
+
+    /**
+     * Whether the package with ATAK's name is ATAK, by its signing key: any app installed under
+     * that name while ATAK isn't would otherwise read the managed XMPP password. ATAK is signed
+     * like the plugin (the SDK's development key for both), with a key build.gradle lists
+     * (atakSigners), or like the first ATAK that called: release ATAK's key isn't known here,
+     * and an MDM installs ATAK with the plugin.
+     */
+    @SuppressLint("ApplySharedPref") // a binder thread, and stored before the answer
+    private synchronized boolean isAtak(final String caller) {
+        final Context context = getContext();
+        final PackageManager pm = context.getPackageManager();
+        if (pm.checkSignatures(context.getPackageName(), caller)
+                == PackageManager.SIGNATURE_MATCH) {
+            return true;
+        }
+        final Set<String> signers = signers(pm, caller);
+        if (signers.isEmpty()) {
+            return false;
+        }
+        for (final String known : BuildConfig.ATAK_SIGNERS.split(",")) {
+            if (signers.contains(known.trim().toLowerCase(Locale.ROOT))) {
+                return true;
+            }
+        }
+        final SharedPreferences prefs =
+                context.getSharedPreferences(CALLER_PREFS, Context.MODE_PRIVATE);
+        final Set<String> first = prefs.getStringSet(KEY_ATAK_SIGNERS, null);
+        if (first == null) {
+            Log.i(TAG, "remembering the signing key of " + caller);
+            // commit: before the configuration goes out
+            return prefs.edit().putStringSet(KEY_ATAK_SIGNERS, signers).commit();
+        }
+        // a rotated key keeps the earlier ones in its history
+        return !Collections.disjoint(first, signers);
+    }
+
+    /** SHA-256 digests of a package's signing certificates, with their history; or none. */
+    @SuppressLint("PackageManagerGetSignatures") // the only way before Android 9; compared whole
+    @SuppressWarnings("deprecation")
+    private static Set<String> signers(final PackageManager pm, final String packageName) {
+        final Set<String> digests = new HashSet<>();
+        try {
+            final Signature[] signatures;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                final SigningInfo info = pm.getPackageInfo(packageName,
+                        PackageManager.GET_SIGNING_CERTIFICATES).signingInfo;
+                signatures = info == null ? null : info.hasMultipleSigners()
+                        ? info.getApkContentsSigners() : info.getSigningCertificateHistory();
+            } else {
+                signatures = pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
+                        .signatures;
+            }
+            if (signatures != null) {
+                final MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+                for (final Signature signature : signatures) {
+                    digests.add(hex(sha256.digest(signature.toByteArray())));
+                }
+            }
+        } catch (final PackageManager.NameNotFoundException e) {
+            Log.w(TAG, "unable to read the signing key of " + packageName, e);
+        } catch (final NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+        return digests;
+    }
+
+    private static String hex(final byte[] bytes) {
+        final StringBuilder hex = new StringBuilder();
+        for (final byte b : bytes) {
+            hex.append(String.format(Locale.ROOT, "%02x", b));
+        }
+        return hex.toString();
     }
 
     /** What DEBUG_APP_CONFIG set, over the MDM's values: devices without an MDM can test. */

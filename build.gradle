@@ -12,7 +12,11 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-        maven { url 'https://jitpack.io' }
+        // only for :conversations' OpenPGP API, as upstream: jitpack builds any GitHub project
+        maven {
+            url 'https://jitpack.io'
+            content { includeGroup 'com.github.open-keychain.open-keychain' }
+        }
     }
 }
 

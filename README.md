@@ -121,7 +121,8 @@ edited in **Settings › Tool Preferences › TAK Convo**. Minimal provisioning:
 </preferences>
 ```
 
-The JID becomes `<TAK username>@<domain>`. All keys: [provisioning/takconvo-template.pref](provisioning/takconvo-template.pref)
+The JID becomes `<TAK username>@<domain>` (a TAK username with its own domain, such as a
+Windows login `alice@corp.example`, gives `alice@<domain>`). All keys: [provisioning/takconvo-template.pref](provisioning/takconvo-template.pref)
 and [docs/03](docs/03-provisioning-and-trust.md).
 
 A `.pref` file can set everything:
@@ -167,6 +168,16 @@ or, on Windows, `tools\deploy.ps1 -Serial <adb serial> [-AtakVersion 5.6.0]`, wh
 re-enables the plugin in ATAK after the reinstall and restarts ATAK. See
 [docs/07](docs/07-development-and-testing.md) for the setup (`local.properties` with the two
 SDKs) and the test checklist.
+
+```bash
+tools/check-style.sh                        # line length, wildcard imports, catch-alls
+./gradlew testCivDebugUnitTest --offline    # JVM tests of the provisioning and trust logic
+```
+
+GitLab's pipeline (`.gitlab-ci.yml`) runs both, the builds and the link checks for both ATAK
+versions; its runner needs the ATAK SDKs
+([docs/07](docs/07-development-and-testing.md#tests-and-ci)). Gradle checks every downloaded
+library against `gradle/verification-metadata.xml`.
 
 These debug builds load in the SDKs' developer ATAK only. For release ATAK (Play Store or an
 organisation's), TAK.gov's Third Party Pipeline builds and signs the plugin from source:
@@ -363,8 +374,10 @@ conversations/            Conversations 2.20.4 fork, as an Android library (GPLv
   UPSTREAM.md             base version, imported source sets
   upstream/               upstream manifests and proguard rules, for reference
 gradle/atak-runtime.gradle  library versions ATAK provides at runtime
+gradle/verification-metadata.xml  checksums of every library the build downloads
 provisioning/             .pref template and test files
-tools/                    AtakLinkCheck, fork-diff.sh, deploy.ps1, tpp-package.sh
+tools/                    AtakLinkCheck, check-style.sh, fork-diff.sh, deploy.ps1, tpp-package.sh
+.gitlab-ci.yml            GitLab pipeline: style, manual, builds, tests, link checks
 docs/                     design and maintenance documentation
 ```
 

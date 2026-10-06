@@ -134,7 +134,10 @@ names the one to use (in the tool preferences, a list of ATAK's TAK servers): th
 credentials are used, and none while it has none.
 
 When TAK credentials are not used, the account pane is a login form. The password goes to
-ATAK's encrypted credential store under type `takconvo.xmpp`.
+ATAK's encrypted credential store under type `takconvo.xmpp`. With a domain set, the username
+field shows `@<domain>` in grey after what is typed (`ui/DomainSuffixField`, in place of the
+layout's field); a long username keeps the field and the domain runs out of it on the right.
+Material's suffix text kept its whole width instead, and pushed the username out to the left.
 
 A `.pref` file can also provision the login, with `takconvo_xmpp_username` and
 `takconvo_xmpp_password`. The password doesn't stay in the preferences:
@@ -289,7 +292,11 @@ with titles and descriptions. Each key is the ATAK preference it sets: the table
 | `takconvo_xmpp_trusted_ca_certificate` | a CA certificate as text: PEM (several may follow each other, whatever the console does to the line breaks) or Base64 DER |
 
 Booleans and lists are choices that start at **Not managed** (`unset`). A console that sends
-every key with its default value therefore manages nothing until the admin picks a value. An
+every key with its default value therefore manages nothing until the admin picks a value.
+SOTI MobiControl adds a **Do nothing** of its own to each choice, which sends nothing: the same.
+The choices' labels are plain text in `res/values/app_config.xml`, not `@string` references:
+MobiControl, which reads the schema from the APK itself, showed other strings of the APK for
+references inside an array (their values were right). An
 empty text is not managed either. A console that sends its own key/value pairs may give
 Booleans as `true`/`false` strings or as Booleans, and the port as a string or a number.
 
@@ -506,7 +513,13 @@ refresh():
     login form:       address and password, editable until the account has logged in once;
                       no keyboard extract mode (IME_FLAG_NO_EXTRACT_UI / NO_FULLSCREEN), and
                       "Done" on the password signs in (the button is under the keyboard)
-    avatar:           only once the account is online or has logged in before
+    signing in:       the form stays as filled in, read-only, with the spinner and
+                      "Connecting", until the account is online (then the account's view, and
+                      the chats replace the pane) or the attempt fails (the form again,
+                      editable, with the error); not the view of an account that logged in
+                      before, e.g. the same address with TAK credentials (signingIn)
+    avatar:           only in the account's view: online, or logged in before and not being
+                      signed in again
     spinner:          while the account connects and no error is shown
     error:            the state the last attempt ended with (shownError), under the address or
                       password field; it stays while Conversations retries in the background,
@@ -521,6 +534,8 @@ signIn() / Reconnect:
     shownError = null; attemptFrom = the account's state now
     # the reconnection is asynchronous: while the state is still attemptFrom, it is the
     # previous attempt's and shows as the spinner (for at most 30 s)
+    from the form: signingIn, unless the account is online with that login already; it ends
+    when the account is online, its state is an error, or after those 30 s without a change
 ```
 
 A plugin view outside an `AppCompatActivity` has no `AppCompatDelegate` to turn `<Button>`,

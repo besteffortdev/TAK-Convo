@@ -49,6 +49,7 @@ import eu.siacs.conversations.xmpp.manager.RosterManager;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * The XMPP account pane: Conversations' {@code activity_edit_account} layout driven by
@@ -70,6 +71,7 @@ public final class AccountView implements XmppEngine.Listener {
     }
 
     private static final String TAG = "TakConvo.Account";
+    private static final String ANDROID_NS = "http://schemas.android.com/apk/res/android";
     /** Masked stand-in for a stored password. */
     private static final String PASSWORD_PLACEHOLDER = "xxxxxxxx";
     /** After this, a sign-in shows the account's state whatever it is. */
@@ -86,7 +88,7 @@ public final class AccountView implements XmppEngine.Listener {
     private final View progress;
     private final ImageView avatar;
     private final TextInputLayout jidLayout;
-    private final EditText jid;
+    private final DomainSuffixField jid;
     private final TextInputLayout passwordLayout;
     private final EditText password;
     private final Button save;
@@ -100,6 +102,13 @@ public final class AccountView implements XmppEngine.Listener {
 
     /** The fields hold the user's typing; don't overwrite them. */
     private boolean edited;
+    /**
+     * The user signed in from the form, until the account is online or the attempt failed: the
+     * form stays as filled in, not the account's view of a login that worked before.
+     */
+    private boolean signingIn;
+    /** The user typed since signing in: the attempt's error isn't shown again. */
+    private boolean correcting;
     /** The code is setting the text, not the user. */
     private boolean updating;
     /** The last attempt's error, kept up during background retries instead of flickering. */
@@ -108,6 +117,8 @@ public final class AccountView implements XmppEngine.Listener {
     private Account.State attemptFrom;
     private final Runnable attemptTimeout = () -> {
         attemptFrom = null;
+        // no answer yet: the form can be changed and sent again
+        signingIn = false;
         refresh();
     };
 
@@ -132,7 +143,10 @@ public final class AccountView implements XmppEngine.Listener {
         this.engine = engine;
         this.host = host;
 
-        root = ConversationsInflater.inflate(ui, R.layout.activity_edit_account, null, false);
+        // the address field shows the domain after the username without crowding it out
+        root = ConversationsInflater.inflate(ui, R.layout.activity_edit_account, null, false,
+                (context, attrs) -> attrs.getAttributeResourceValue(ANDROID_NS, "id", 0)
+                        == R.id.account_jid ? new DomainSuffixField(context, attrs) : null);
         root.setFitsSystemWindows(false);
         toolbar = root.findViewById(R.id.toolbar);
         editor = root.findViewById(R.id.editor);
@@ -223,6 +237,7 @@ public final class AccountView implements XmppEngine.Listener {
             public void afterTextChanged(final Editable s) {
                 if (!updating) {
                     edited = true;
+                    correcting = true;
                     jidLayout.setError(null);
                     passwordLayout.setError(null);
                     updateSuffix();
@@ -285,12 +300,23 @@ public final class AccountView implements XmppEngine.Listener {
             return;
         }
         final Account before = engine.getAccount();
+        final String beforePassword = before == null ? null : before.getPassword();
         if (!engine.signIn(user, pass)) {
             jidLayout.setError(ui.getString(R.string.invalid_jid));
             return;
         }
-        edited = false;
-        startAttempt(before);
+        final Account after = engine.getAccount();
+        // the form holds what was sent until the server answers
+        edited = true;
+        correcting = false;
+        signingIn = after != null && !(after == before && after.isOnlineAndConnected()
+                && Objects.equals(beforePassword, after.getPassword()));
+        if (signingIn) {
+            startAttempt(before);
+        } else {
+            // the login in use already, or nothing to sign in to: no attempt to wait for
+            edited = after == null;
+        }
         hideKeyboard();
         host.onSignInStarted();
         refresh();
@@ -317,6 +343,7 @@ public final class AccountView implements XmppEngine.Listener {
                 .setPositiveButton(ui.getString(R.string.log_out), (d, w) -> {
                     engine.signOut();
                     edited = false;
+                    signingIn = false;
                     setText(password, "");
                     refresh();
                 })
@@ -365,8 +392,10 @@ public final class AccountView implements XmppEngine.Listener {
         progress.setVisibility(isConnecting(account) ? View.VISIBLE : View.GONE);
         showErrors(problem, tak);
         showNotice(settings, problem, account);
-        showAvatar(account);
-        showStats(account);
+        // the account's details only for a login that worked, not over the form
+        final boolean shown = showsAccount(tak, account);
+        showAvatar(shown ? account : null);
+        showStats(shown ? account : null);
 
         final boolean login = settings != null
                 && settings.credentialSource == XmppSettings.CredentialSource.LOGIN;
@@ -378,12 +407,23 @@ public final class AccountView implements XmppEngine.Listener {
                 .setVisible(account != null);
     }
 
+    /**
+     * The account's own view, not the login form: with TAK credentials, or a login that worked
+     * while the user isn't changing it or signing in again.
+     */
+    private boolean showsAccount(final boolean tak, final Account account) {
+        return account != null && (tak || (!edited && !signingIn
+                && account.isOptionSet(Account.OPTION_LOGGED_IN_SUCCESSFULLY)
+                && !account.unauthorized()));
+    }
+
     /** TAK server credentials: the address only, once there is an account. */
     private void showTakAccount(final XmppSettings settings, final Account account) {
         edited = false;
+        signingIn = false;
         editor.setVisibility(account != null ? View.VISIBLE : View.GONE);
         jidLayout.setHint(ui.getString(R.string.account_settings_jabber_id));
-        jidLayout.setSuffixText(null);
+        jid.setSuffix(null);
         setText(jid, account != null ? account.getJid().asBareJid().toString() : "");
         setEditable(jid, false);
         passwordLayout.setVisibility(View.GONE);
@@ -394,9 +434,7 @@ public final class AccountView implements XmppEngine.Listener {
     private void showLoginForm(final XmppSettings settings, final Account account) {
         editor.setVisibility(View.VISIBLE);
         passwordLayout.setVisibility(View.VISIBLE);
-        final boolean loggedIn = account != null
-                && account.isOptionSet(Account.OPTION_LOGGED_IN_SUCCESSFULLY)
-                && !account.unauthorized();
+        final boolean loggedIn = showsAccount(false, account);
         if (!edited) {
             final String stored = XmppSettings.getLoginUsername();
             setText(jid, stored != null ? stored
@@ -406,9 +444,9 @@ public final class AccountView implements XmppEngine.Listener {
         }
         jidLayout.setHint(ui.getString(settings != null && settings.domain != null
                 ? R.string.username_hint : R.string.account_settings_jabber_id));
-        // like Conversations: fixed once logged in
-        setEditable(jid, !loggedIn);
-        setEditable(password, !loggedIn);
+        // like Conversations: fixed once logged in; and while the server checks the login
+        setEditable(jid, !loggedIn && !signingIn);
+        setEditable(password, !loggedIn && !signingIn);
         passwordLayout.setEndIconMode(loggedIn ? TextInputLayout.END_ICON_NONE
                 : TextInputLayout.END_ICON_PASSWORD_TOGGLE);
         cancel.setVisibility(settings != null
@@ -422,7 +460,7 @@ public final class AccountView implements XmppEngine.Listener {
         final XmppSettings settings = engine.getSettings();
         final boolean suffix = settings != null && !settings.usesTakCredentials
                 && settings.domain != null && !jid.getText().toString().contains("@");
-        jidLayout.setSuffixText(suffix ? "@" + settings.domain : null);
+        jid.setSuffix(suffix ? "@" + settings.domain : null);
     }
 
     private void updateButtons() {
@@ -433,7 +471,11 @@ public final class AccountView implements XmppEngine.Listener {
         final Account account = engine.getAccount();
         final boolean filled = jid.getText().toString().trim().length() > 0
                 && password.getText().length() > 0;
-        if (edited || account == null || shownError != null) {
+        if (signingIn) {
+            save.setVisibility(View.VISIBLE);
+            save.setText(R.string.account_status_connecting);
+            save.setEnabled(false);
+        } else if (edited || account == null || shownError != null) {
             save.setVisibility(View.VISIBLE);
             save.setText(R.string.log_in);
             // a new password has to be typed
@@ -453,6 +495,7 @@ public final class AccountView implements XmppEngine.Listener {
         if (account == null) {
             shownError = null;
             attemptFrom = null;
+            signingIn = false;
             return;
         }
         final Account.State status = account.getStatus();
@@ -465,8 +508,15 @@ public final class AccountView implements XmppEngine.Listener {
         root.removeCallbacks(attemptTimeout);
         if (account.isOnlineAndConnected()) {
             shownError = null;
+            if (signingIn) {
+                // the login is confirmed: the account's view from now on
+                signingIn = false;
+                edited = false;
+            }
         } else if (isError(status)) {
             shownError = status;
+            // refused, or unreachable: the form again, as filled in, with the error
+            signingIn = false;
         }
     }
 
@@ -474,7 +524,7 @@ public final class AccountView implements XmppEngine.Listener {
         if (account == null || account.isOnlineAndConnected()) {
             return false;
         }
-        if (attemptFrom != null) {
+        if (signingIn || attemptFrom != null) {
             return true;
         }
         final Account.State status = account.getStatus();
@@ -500,7 +550,7 @@ public final class AccountView implements XmppEngine.Listener {
             errorLayout = jidLayout;
             error = ui.getString(R.string.invalid_jid);
         }
-        if (edited && errorLayout != null) {
+        if (correcting && errorLayout != null) {
             // the user is already correcting it
             return;
         }

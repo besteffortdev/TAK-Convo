@@ -1,9 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- What MDM consoles show for xml/app_restrictions.xml -->
 <resources>
-    <string name="takconvo_mdm_unset">Not managed</string>
-    <string name="takconvo_mdm_on">On</string>
-    <string name="takconvo_mdm_off">Off</string>
     <string name="takconvo_mdm_xmpp_domain">XMPP domain</string>
     <string name="takconvo_mdm_xmpp_domain_desc">The server part of the XMPP address, which becomes username@domain. Setting it also manages the host, port, credential and certificate settings below (left empty: their defaults), and TAK Convo connects without asking the user to approve the server.</string>
     <string name="takconvo_mdm_xmpp_host">Server host</string>
@@ -110,19 +107,14 @@
     <string name="takconvo_mdm_conversations_grace_period_length_desc">Seconds notifications stay quiet after using another device. Default: 0.</string>
     <string name="takconvo_mdm_conversations_automatic_message_deletion">Conversations: automatic message deletion</string>
     <string name="takconvo_mdm_conversations_automatic_message_deletion_desc">Seconds after which messages are deleted from the device; 0: never. Default: 0.</string>
-    <string name="takconvo_mdm_omemo_always">Always</string>
-    <string name="takconvo_mdm_omemo_default_on">On by default</string>
-    <string name="takconvo_mdm_omemo_default_off">Off by default</string>
-    <string name="takconvo_mdm_compression_never">Never</string>
-    <string name="takconvo_mdm_compression_auto">Automatic</string>
-    <string name="takconvo_mdm_compression_always">Always</string>
-    <string name="takconvo_mdm_video_uncompressed">Uncompressed</string>
 
-    <!-- "unset" is AppConfig.UNSET -->
+    <!-- The choices' labels are text, not @string references: an MDM console reads them from
+         the APK, and SOTI MobiControl showed other strings of the APK for references.
+         "unset" is AppConfig.UNSET. -->
     <string-array name="takconvo_mdm_boolean_entries">
-        <item>@string/takconvo_mdm_unset</item>
-        <item>@string/takconvo_mdm_on</item>
-        <item>@string/takconvo_mdm_off</item>
+        <item>Not managed</item>
+        <item>On</item>
+        <item>Off</item>
     </string-array>
     <string-array name="takconvo_mdm_boolean_values" translatable="false">
         <item>unset</item>
@@ -130,10 +122,10 @@
         <item>false</item>
     </string-array>
     <string-array name="takconvo_mdm_channel_discovery_entries">
-        <item>@string/takconvo_mdm_unset</item>
-        <item>@string/takconvo_pref_channel_discovery_xmpp_server</item>
-        <item>@string/takconvo_pref_channel_discovery_server</item>
-        <item>@string/takconvo_pref_channel_discovery_public</item>
+        <item>Not managed</item>
+        <item>Your XMPP server</item>
+        <item>Another server</item>
+        <item>Public directory (search.jabber.network)</item>
     </string-array>
     <string-array name="takconvo_mdm_channel_discovery_values" translatable="false">
         <item>unset</item>
@@ -142,10 +134,10 @@
         <item>public</item>
     </string-array>
     <string-array name="takconvo_mdm_omemo_entries">
-        <item>@string/takconvo_mdm_unset</item>
-        <item>@string/takconvo_mdm_omemo_always</item>
-        <item>@string/takconvo_mdm_omemo_default_on</item>
-        <item>@string/takconvo_mdm_omemo_default_off</item>
+        <item>Not managed</item>
+        <item>Always</item>
+        <item>On by default</item>
+        <item>Off by default</item>
     </string-array>
     <string-array name="takconvo_mdm_omemo_values" translatable="false">
         <item>unset</item>
@@ -154,10 +146,10 @@
         <item>default_off</item>
     </string-array>
     <string-array name="takconvo_mdm_picture_compression_entries">
-        <item>@string/takconvo_mdm_unset</item>
-        <item>@string/takconvo_mdm_compression_never</item>
-        <item>@string/takconvo_mdm_compression_auto</item>
-        <item>@string/takconvo_mdm_compression_always</item>
+        <item>Not managed</item>
+        <item>Never</item>
+        <item>Automatic</item>
+        <item>Always</item>
     </string-array>
     <string-array name="takconvo_mdm_picture_compression_values" translatable="false">
         <item>unset</item>
@@ -166,12 +158,12 @@
         <item>always</item>
     </string-array>
     <string-array name="takconvo_mdm_video_compression_entries">
-        <item>@string/takconvo_mdm_unset</item>
+        <item>Not managed</item>
         <item>360p</item>
         <item>480p</item>
         <item>720p</item>
         <item>1080p</item>
-        <item>@string/takconvo_mdm_video_uncompressed</item>
+        <item>Uncompressed</item>
     </string-array>
     <string-array name="takconvo_mdm_video_compression_values" translatable="false">
         <item>unset</item>

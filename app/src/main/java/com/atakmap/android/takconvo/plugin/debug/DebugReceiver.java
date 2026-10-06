@@ -224,7 +224,8 @@ public final class DebugReceiver extends BroadcastReceiver {
             Log.d(TAG, "added TAK server " + connect);
         } else if (ACTION_REMOVE_TAK_SERVER.equals(action)) {
             final String connect = intent.getStringExtra("connect");
-            CommsMapComponent.getInstance().getCotService().removeStreaming(connect, true);
+            // not soft: that only disconnects, and keeps it in files/cotservice/cot_streams
+            CommsMapComponent.getInstance().getCotService().removeStreaming(connect, false);
             // and the password DEBUG_ADD_TAK_SERVER stored for it
             final NetConnectString ncs = NetConnectString.fromString(connect);
             if (ncs != null) {

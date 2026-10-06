@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What MDM consoles show for xml/app_restrictions.xml -->
+<resources>
+    <string name="takconvo_mdm_unset">Not managed</string>
+    <string name="takconvo_mdm_on">On</string>
+    <string name="takconvo_mdm_off">Off</string>
+    <string name="takconvo_mdm_xmpp_domain">XMPP domain</string>
+    <string name="takconvo_mdm_xmpp_domain_desc">The server part of the XMPP address, which becomes username@domain. Setting it also manages the host, port, credential and certificate settings below (left empty: their defaults), and TAK Convo connects without asking the user to approve the server.</string>
+    <string name="takconvo_mdm_xmpp_host">Server host</string>
+    <string name="takconvo_mdm_xmpp_host_desc">Connect to this host instead of looking the domain up in DNS. Leave empty normally.</string>
+    <string name="takconvo_mdm_xmpp_port">Server port</string>
+    <string name="takconvo_mdm_xmpp_port_desc">The port on the server host. Default: 5222.</string>
+    <string name="takconvo_mdm_xmpp_use_tak_credentials">Use TAK server credentials</string>
+    <string name="takconvo_mdm_xmpp_use_tak_credentials_desc">On: log in with the username and password of the TAK server connection (default). Off: an XMPP login, set below or entered by the user.</string>
+    <string name="takconvo_mdm_xmpp_username">XMPP username</string>
+    <string name="takconvo_mdm_xmpp_username_desc">For an XMPP login: the username or full XMPP address; the MDM\'s user variables can fill it in. Without a password, it is only suggested on the sign-in screen.</string>
+    <string name="takconvo_mdm_xmpp_password">XMPP password</string>
+    <string name="takconvo_mdm_xmpp_password_desc">For an XMPP login, with the username: the password, kept in ATAK\'s encrypted credential store. Leave empty for users to type their own.</string>
+    <string name="takconvo_mdm_xmpp_use_tak_truststore">Trust the TAK server truststores</string>
+    <string name="takconvo_mdm_xmpp_use_tak_truststore_desc">On: trust the certificate authorities of the TAK server truststores imported in ATAK (default). Public CAs are always trusted.</string>
+    <string name="takconvo_mdm_xmpp_use_android_ca_store">Trust the Android CA store</string>
+    <string name="takconvo_mdm_xmpp_use_android_ca_store_desc">On: also trust the certificate authorities installed on the device, including those the MDM installs. Default: off.</string>
+    <string name="takconvo_mdm_xmpp_trusted_ca_certificate">XMPP server CA certificate</string>
+    <string name="takconvo_mdm_xmpp_trusted_ca_certificate_desc">A CA certificate to trust for the XMPP server: PEM text (several certificates may follow each other) or Base64 DER.</string>
+    <string name="takconvo_mdm_xmpp_enabled">Connection enabled</string>
+    <string name="takconvo_mdm_xmpp_enabled_desc">Off: TAK Convo doesn\'t connect. Default: on.</string>
+    <string name="takconvo_mdm_xmpp_use_callsign">Callsign as nickname</string>
+    <string name="takconvo_mdm_xmpp_use_callsign_desc">On: the ATAK callsign is the XMPP nickname, in group chats too (default).</string>
+    <string name="takconvo_mdm_xmpp_channel_discovery">Discover channels on</string>
+    <string name="takconvo_mdm_xmpp_channel_discovery_desc">Where Discover channels looks for group chats. Default: the XMPP server.</string>
+    <string name="takconvo_mdm_xmpp_channel_server">Server for channel discovery</string>
+    <string name="takconvo_mdm_xmpp_channel_server_desc">For Another server: a server (example.org) or its group chat service (conference.example.org).</string>
+    <string name="takconvo_mdm_notification_messages">Message notifications</string>
+    <string name="takconvo_mdm_notification_messages_desc">On: new messages notify while the chats are closed. Default: off, as the Conversations app beside ATAK notifies; ATAK\'s contacts count unread messages either way.</string>
+    <string name="takconvo_mdm_notification_sound">Notification sound</string>
+    <string name="takconvo_mdm_notification_sound_desc">Message notifications play the notification sound. Default: on.</string>
+    <string name="takconvo_mdm_notification_vibrate">Notification vibration</string>
+    <string name="takconvo_mdm_notification_vibrate_desc">Message notifications vibrate. Default: on.</string>
+    <string name="takconvo_mdm_show_quick_messages">Show quick messages</string>
+    <string name="takconvo_mdm_show_quick_messages_desc">Preset buttons above the message field. Default: off.</string>
+    <string name="takconvo_mdm_quick_messages">Quick messages</string>
+    <string name="takconvo_mdm_quick_messages_desc">The buttons\' texts, separated by |.</string>
+    <string name="takconvo_mdm_conversations_confirm_messages">Conversations: read receipts</string>
+    <string name="takconvo_mdm_conversations_confirm_messages_desc">Contacts see when messages were read. Default: on.</string>
+    <string name="takconvo_mdm_conversations_chat_states">Conversations: typing notifications</string>
+    <string name="takconvo_mdm_conversations_chat_states_desc">Contacts see when the user is writing to them. Default: on.</string>
+    <string name="takconvo_mdm_conversations_last_activity">Conversations: show last seen</string>
+    <string name="takconvo_mdm_conversations_last_activity_desc">Contacts see when the user was last active. Default: off.</string>
+    <string name="takconvo_mdm_conversations_entity_time">Conversations: share local time</string>
+    <string name="takconvo_mdm_conversations_entity_time_desc">Contacts see the device\'s local time. Default: on.</string>
+    <string name="takconvo_mdm_conversations_allow_message_correction">Conversations: message edits</string>
+    <string name="takconvo_mdm_conversations_allow_message_correction_desc">Contacts may edit the messages they sent. Default: on.</string>
+    <string name="takconvo_mdm_conversations_accept_invites_from_strangers">Conversations: invites from strangers</string>
+    <string name="takconvo_mdm_conversations_accept_invites_from_strangers_desc">Accept group chat invites from people outside the contact list. Default: on.</string>
+    <string name="takconvo_mdm_conversations_notifications_from_strangers">Conversations: notifications from strangers</string>
+    <string name="takconvo_mdm_conversations_notifications_from_strangers_desc">Notify for messages from people outside the contact list. Default: on.</string>
+    <string name="takconvo_mdm_conversations_use_relays">Conversations: always use relays</string>
+    <string name="takconvo_mdm_conversations_use_relays_desc">Send file transfers through the server, which hides the device\'s IP address. Default: off.</string>
+    <string name="takconvo_mdm_conversations_btbv">Conversations: blind trust before verification</string>
+    <string name="takconvo_mdm_conversations_btbv_desc">OMEMO: trust new devices of contacts nobody verified. Default: on.</string>
+    <string name="takconvo_mdm_conversations_trust_system_ca_store">Conversations: system certificate authorities</string>
+    <string name="takconvo_mdm_conversations_trust_system_ca_store_desc">Trust Android\'s system CAs (the public ones). Default: on.</string>
+    <string name="takconvo_mdm_conversations_require_tls_v1_3">Conversations: require TLS 1.3</string>
+    <string name="takconvo_mdm_conversations_require_tls_v1_3_desc">Connect with TLS 1.3 only. Default: on.</string>
+    <string name="takconvo_mdm_conversations_channel_binding_required">Conversations: require channel binding</string>
+    <string name="takconvo_mdm_conversations_channel_binding_required_desc">Refuse logins without channel binding, which detects some machine-in-the-middle attacks. Default: off.</string>
+    <string name="takconvo_mdm_conversations_use_tor">Conversations: connect via Tor</string>
+    <string name="takconvo_mdm_conversations_use_tor_desc">Tunnel the connection through Tor; needs Orbot. Default: off.</string>
+    <string name="takconvo_mdm_conversations_manually_change_presence">Conversations: manage availability manually</string>
+    <string name="takconvo_mdm_conversations_manually_change_presence_desc">Set the availability when editing the status message. Default: off.</string>
+    <string name="takconvo_mdm_conversations_away_when_screen_off">Conversations: away when the device is locked</string>
+    <string name="takconvo_mdm_conversations_away_when_screen_off_desc">Default: off.</string>
+    <string name="takconvo_mdm_conversations_dnd_on_silent_mode">Conversations: sync Do Not Disturb</string>
+    <string name="takconvo_mdm_conversations_dnd_on_silent_mode_desc">Show as Do Not Disturb while Android\'s Do Not Disturb is on. Default: off.</string>
+    <string name="takconvo_mdm_conversations_treat_vibrate_as_silent">Conversations: include silent modes</string>
+    <string name="takconvo_mdm_conversations_treat_vibrate_as_silent_desc">Also show as Do Not Disturb when the phone is muted or on vibrate. Default: off.</string>
+    <string name="takconvo_mdm_conversations_auto_send_recording">Conversations: auto-send recordings</string>
+    <string name="takconvo_mdm_conversations_auto_send_recording_desc">Send voice messages when the recording ends. Default: on.</string>
+    <string name="takconvo_mdm_conversations_show_dynamic_tags">Conversations: dynamic tags</string>
+    <string name="takconvo_mdm_conversations_show_dynamic_tags_desc">Read-only tags under contacts. Default: off.</string>
+    <string name="takconvo_mdm_conversations_scroll_to_bottom">Conversations: scroll to bottom</string>
+    <string name="takconvo_mdm_conversations_scroll_to_bottom_desc">Scroll down after sending a message. Default: on.</string>
+    <string name="takconvo_mdm_conversations_start_searching">Conversations: direct search</string>
+    <string name="takconvo_mdm_conversations_start_searching_desc">The New chat screen opens with the keyboard in the search field. Default: off.</string>
+    <string name="takconvo_mdm_conversations_display_enter_key">Conversations: show enter key</string>
+    <string name="takconvo_mdm_conversations_display_enter_key_desc">An enter key instead of the emoticons key. Default: off.</string>
+    <string name="takconvo_mdm_conversations_enter_is_send">Conversations: enter is send</string>
+    <string name="takconvo_mdm_conversations_enter_is_send_desc">The Enter key sends the message. Default: off.</string>
+    <string name="takconvo_mdm_conversations_use_green_background">Conversations: colorful chat bubbles</string>
+    <string name="takconvo_mdm_conversations_use_green_background_desc">Different colors for sent and received messages. Default: on.</string>
+    <string name="takconvo_mdm_conversations_large_font">Conversations: large font</string>
+    <string name="takconvo_mdm_conversations_large_font_desc">Larger text in message bubbles. Default: off.</string>
+    <string name="takconvo_mdm_conversations_align_start">Conversations: left-aligned messages</string>
+    <string name="takconvo_mdm_conversations_align_start_desc">Sent messages on the left too. Default: off.</string>
+    <string name="takconvo_mdm_conversations_show_avatars">Conversations: avatars in 1:1 chats</string>
+    <string name="takconvo_mdm_conversations_show_avatars_desc">Default: on.</string>
+    <string name="takconvo_mdm_conversations_show_avatars_accounts">Conversations: account avatars</string>
+    <string name="takconvo_mdm_conversations_show_avatars_accounts_desc">The account avatar on sent messages. Default: on.</string>
+    <string name="takconvo_mdm_conversations_omemo">Conversations: OMEMO encryption</string>
+    <string name="takconvo_mdm_conversations_omemo_desc">End-to-end encryption of new chats. Default: on by default.</string>
+    <string name="takconvo_mdm_conversations_picture_compression">Conversations: image compression</string>
+    <string name="takconvo_mdm_conversations_picture_compression_desc">Default: automatic.</string>
+    <string name="takconvo_mdm_conversations_video_compression">Conversations: video quality</string>
+    <string name="takconvo_mdm_conversations_video_compression_desc">Default: 480p.</string>
+    <string name="takconvo_mdm_conversations_auto_accept_file_size">Conversations: automatic download</string>
+    <string name="takconvo_mdm_conversations_auto_accept_file_size_desc">Files up to this size in bytes download without asking; 0: never. Default: 524288.</string>
+    <string name="takconvo_mdm_conversations_grace_period_length">Conversations: grace period</string>
+    <string name="takconvo_mdm_conversations_grace_period_length_desc">Seconds notifications stay quiet after using another device. Default: 0.</string>
+    <string name="takconvo_mdm_conversations_automatic_message_deletion">Conversations: automatic message deletion</string>
+    <string name="takconvo_mdm_conversations_automatic_message_deletion_desc">Seconds after which messages are deleted from the device; 0: never. Default: 0.</string>
+    <string name="takconvo_mdm_omemo_always">Always</string>
+    <string name="takconvo_mdm_omemo_default_on">On by default</string>
+    <string name="takconvo_mdm_omemo_default_off">Off by default</string>
+    <string name="takconvo_mdm_compression_never">Never</string>
+    <string name="takconvo_mdm_compression_auto">Automatic</string>
+    <string name="takconvo_mdm_compression_always">Always</string>
+    <string name="takconvo_mdm_video_uncompressed">Uncompressed</string>
+
+    <!-- "unset" is AppConfig.UNSET -->
+    <string-array name="takconvo_mdm_boolean_entries">
+        <item>@string/takconvo_mdm_unset</item>
+        <item>@string/takconvo_mdm_on</item>
+        <item>@string/takconvo_mdm_off</item>
+    </string-array>
+    <string-array name="takconvo_mdm_boolean_values" translatable="false">
+        <item>unset</item>
+        <item>true</item>
+        <item>false</item>
+    </string-array>
+    <string-array name="takconvo_mdm_channel_discovery_entries">
+        <item>@string/takconvo_mdm_unset</item>
+        <item>@string/takconvo_pref_channel_discovery_xmpp_server</item>
+        <item>@string/takconvo_pref_channel_discovery_server</item>
+        <item>@string/takconvo_pref_channel_discovery_public</item>
+    </string-array>
+    <string-array name="takconvo_mdm_channel_discovery_values" translatable="false">
+        <item>unset</item>
+        <item>xmpp_server</item>
+        <item>server</item>
+        <item>public</item>
+    </string-array>
+    <string-array name="takconvo_mdm_omemo_entries">
+        <item>@string/takconvo_mdm_unset</item>
+        <item>@string/takconvo_mdm_omemo_always</item>
+        <item>@string/takconvo_mdm_omemo_default_on</item>
+        <item>@string/takconvo_mdm_omemo_default_off</item>
+    </string-array>
+    <string-array name="takconvo_mdm_omemo_values" translatable="false">
+        <item>unset</item>
+        <item>always</item>
+        <item>default_on</item>
+        <item>default_off</item>
+    </string-array>
+    <string-array name="takconvo_mdm_picture_compression_entries">
+        <item>@string/takconvo_mdm_unset</item>
+        <item>@string/takconvo_mdm_compression_never</item>
+        <item>@string/takconvo_mdm_compression_auto</item>
+        <item>@string/takconvo_mdm_compression_always</item>
+    </string-array>
+    <string-array name="takconvo_mdm_picture_compression_values" translatable="false">
+        <item>unset</item>
+        <item>never</item>
+        <item>auto</item>
+        <item>always</item>
+    </string-array>
+    <string-array name="takconvo_mdm_video_compression_entries">
+        <item>@string/takconvo_mdm_unset</item>
+        <item>360p</item>
+        <item>480p</item>
+        <item>720p</item>
+        <item>1080p</item>
+        <item>@string/takconvo_mdm_video_uncompressed</item>
+    </string-array>
+    <string-array name="takconvo_mdm_video_compression_values" translatable="false">
+        <item>unset</item>
+        <item>360</item>
+        <item>480</item>
+        <item>720</item>
+        <item>1080</item>
+        <item>uncompressed</item>
+    </string-array>
+</resources>

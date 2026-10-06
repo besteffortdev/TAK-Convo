@@ -9,7 +9,9 @@ process and shown in ATAK panes.
 An ATAK plugin is an APK whose code ATAK loads into **its own process** with a class loader of
 its own. The plugin package never runs as itself:
 
-- its manifest components (activities, services, receivers, providers) are never started;
+- its manifest components (activities, services, receivers, providers) are never started, with
+  one exception: the provider that reads its managed configuration for ATAK, in a process of its
+  own ([03](03-provisioning-and-trust.md#managed-configuration-mdm));
 - it has no `Application` object and no `ActivityThread` of its own;
 - permissions, storage, the process identity, the window and the FileProvider are ATAK's;
 - classes that ATAK also contains are loaded **from ATAK** (parent-first class loading).
@@ -79,6 +81,7 @@ flowchart TB
 | `ServerIdentity`, `PrivateFiles` | `plugin.config` | The server the credentials go to, which the user approves; values a `.pref` file can't write | [03](03-provisioning-and-trust.md#approving-the-server) |
 | `KeystoreCredentials` | `plugin.xmpp` | Encrypts the password and FAST token Conversations stores, with an Android Keystore key | [02](02-embedded-engine.md#credentials-in-the-database) |
 | `ConversationsSettings` | `plugin.config` | Conversations' own settings from `takconvo_conversations_*` preferences (.pref) | [03](03-provisioning-and-trust.md#conversations-own-settings) |
+| `AppConfig`, `AppConfigProvider` | `plugin.config` | The managed configuration an MDM sets: read in the plugin's own process, applied as locked preferences | [03](03-provisioning-and-trust.md#managed-configuration-mdm) |
 | `AccountView`, `ConversationsInflater`, `TakConvoPreferenceFragment` | `plugin.ui` | Account pane (Conversations' `activity_edit_account` layout) and the tool preferences page | [03](03-provisioning-and-trust.md) |
 | `EmbeddedActivityHost`, `HostParent`, `PaneFrame`, `ChatDropDown` | `plugin.ui.host` | Run Conversations' own activities, their views shown in an ATAK drop-down | [04](04-chat-pane-activity-host.md) |
 | `EmbeddedPendingIntents`, `EmbeddedNotifications` | `plugin.xmpp` | Make Conversations' notification taps, notification actions, alarms and notification icons work as ATAK's | [02](02-embedded-engine.md#pendingintents), [08](08-contacts-and-notifications.md) |
@@ -131,8 +134,8 @@ expect. Upstream's service reports changes from worker threads, so `XmppEngine` 
 back to the main thread. The XMPP connection, database, file and crypto work run on
 Conversations' own executors, unchanged. ATAK asks contact handlers for unread counts on a
 thread of its own; `XmppContacts` answers from snapshots made on the main thread. Provisioning
-reads ATAK's credential and certificate stores on a thread of its own (`TakConvo.Provision`),
-then applies what it read on the main thread ([03](03-provisioning-and-trust.md)).
+reads ATAK's credential and certificate stores, and the MDM's configuration, on a thread of its
+own (`TakConvo.Provision`), then applies what it read on the main thread ([03](03-provisioning-and-trust.md)).
 
 ## Data on the device
 
@@ -140,7 +143,7 @@ then applies what it read on the main thread ([03](03-provisioning-and-trust.md)
 |---|---|
 | Conversations' database, preferences, files, keys | ATAK's data directory, prefixed: `databases/takconvo_*`, `shared_prefs/takconvo_*`, `files/takconvo/`, `cache/takconvo/`. The account's password and FAST token are encrypted with the Keystore key `takconvo_credentials` |
 | XMPP login (when TAK credentials are not used) | ATAK's encrypted credential store, type `takconvo.xmpp` |
-| The approved server, the notification tap token | ATAK's `no_backup/takconvo_plugin/`, out of reach of `.pref` files |
+| The approved server, the notification tap token, the managed configuration last read and its CA file | ATAK's `no_backup/takconvo_plugin/`, out of reach of `.pref` files |
 | All of the above | deleted by ATAK's Clear Content ([02](02-embedded-engine.md#ataks-clear-content)) |
 | Settings | ATAK's preferences, keys `takconvo_xmpp_*` |
 | Attachments handed to other apps, camera captures | ATAK's external cache: `Android/data/com.atakmap.app.civ/cache/takconvo/{shared,Camera}` (`shared/` is emptied at every start) |

@@ -45,6 +45,7 @@ import eu.siacs.conversations.xmpp.Jid;
 
 import java.io.File;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -57,6 +58,9 @@ import java.util.List;
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_IMPORT_PREF --es path P
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_DUMP_SELF_SA
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_PROVISION
+ * # as if the MDM set these (the takconvo_* extras; --ez for Booleans); without any: none
+ * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_APP_CONFIG \
+ *     [--es takconvo_xmpp_domain D] [--ez takconvo_xmpp_use_tak_credentials B ...]
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SEND --es to J --es body B
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_ADD_TAK_SERVER \
  *     --es connect host:8089:ssl --es user U --es pass P
@@ -99,6 +103,7 @@ public final class DebugReceiver extends BroadcastReceiver {
     private static final String PREFIX = "com.atakmap.android.takconvo.";
     public static final String ACTION_SET_PREF = PREFIX + "DEBUG_SET_PREF";
     public static final String ACTION_PROVISION = PREFIX + "DEBUG_PROVISION";
+    public static final String ACTION_APP_CONFIG = PREFIX + "DEBUG_APP_CONFIG";
     public static final String ACTION_SEND = PREFIX + "DEBUG_SEND";
     public static final String ACTION_ADD_TAK_SERVER = PREFIX + "DEBUG_ADD_TAK_SERVER";
     public static final String ACTION_DUMP_SELF_SA = PREFIX + "DEBUG_DUMP_SELF_SA";
@@ -137,6 +142,7 @@ public final class DebugReceiver extends BroadcastReceiver {
         final IntentFilter filter = new IntentFilter();
         filter.addAction(ACTION_SET_PREF);
         filter.addAction(ACTION_PROVISION);
+        filter.addAction(ACTION_APP_CONFIG);
         filter.addAction(ACTION_SEND);
         filter.addAction(ACTION_ADD_TAK_SERVER);
         filter.addAction(ACTION_DUMP_SELF_SA);
@@ -183,6 +189,16 @@ public final class DebugReceiver extends BroadcastReceiver {
             }
         } else if (ACTION_PROVISION.equals(action) && engine != null) {
             engine.provision();
+        } else if (ACTION_APP_CONFIG.equals(action) && engine != null) {
+            final Bundle values = intent.getExtras() == null ? new Bundle()
+                    : new Bundle(intent.getExtras());
+            for (final String key : new ArrayList<>(values.keySet())) {
+                if (!key.startsWith("takconvo_")) {
+                    values.remove(key);
+                }
+            }
+            Log.d(TAG, "managed configuration for testing: " + values.keySet());
+            engine.debugSetAppConfig(values);
         } else if (ACTION_CLEAR_CONTENT.equals(action) && clearContent != null) {
             // ATAK calls it from its clear content task, off the main thread
             final ClearContentRegistry.ClearContentListener listener = clearContent;

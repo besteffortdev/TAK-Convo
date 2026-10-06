@@ -1,5 +1,7 @@
 <?xml version='1.0' standalone='yes'?>
 <!-- TAK Convo provisioning template. Import it on its own or ship it in a mission package.
+     An MDM can set the same keys through the plugin's managed configuration (app config),
+     which locks them: see docs/03.
      The takconvo_xmpp_*, takconvo_notification_* and quick message values can also be edited
      in ATAK:
      Settings > Tool Preferences > TAK Convo.

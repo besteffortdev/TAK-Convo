@@ -228,17 +228,32 @@ public final class XmppSettings {
         AtakAuthenticationDatabase.delete(CREDENTIALS_TYPE, CREDENTIALS_TYPE);
     }
 
+    /** Stores the login unless the credential store holds it already; true if it stored it. */
+    public static boolean ensureLogin(final String username, final String password) {
+        final AtakAuthenticationCredentials login =
+                AtakAuthenticationDatabase.getCredentials(CREDENTIALS_TYPE);
+        if (login != null && username.equals(login.username)
+                && password.equals(login.password)) {
+            return false;
+        }
+        saveLogin(username, password);
+        return true;
+    }
+
     /**
      * Moves a login a .pref file provisioned ({@link #KEY_USERNAME} and {@link #KEY_PASSWORD})
-     * into ATAK's credential store. The password is removed from the preferences either way.
+     * into ATAK's credential store; not when {@code store} is false (the MDM sets the login).
+     * The password is removed from the preferences either way.
      */
-    public static void importLogin(final SharedPreferences prefs) {
+    public static void importLogin(final SharedPreferences prefs, final boolean store) {
         final String password = getString(prefs, KEY_PASSWORD);
         if (password == null) {
             return;
         }
         final String username = trimToNull(getString(prefs, KEY_USERNAME));
-        if (username != null && !password.isEmpty()) {
+        if (!store) {
+            Log.w(TAG, "ignoring " + KEY_PASSWORD + ": the device management sets the login");
+        } else if (username != null && !password.isEmpty()) {
             saveLogin(username, password);
             Log.i(TAG, "XMPP login moved from the preferences to ATAK's credential store");
         } else {

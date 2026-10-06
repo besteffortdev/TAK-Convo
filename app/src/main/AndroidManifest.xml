@@ -14,6 +14,19 @@
         <meta-data android:name="plugin-api" android:value="${atakApiVersion}"/>
         <meta-data android:name="app_desc" android:value="@string/app_desc"/>
 
+        <!-- the managed configuration (app config) an MDM can set: see docs/03 -->
+        <meta-data android:name="android.content.APP_RESTRICTIONS"
+            android:resource="@xml/app_restrictions" />
+
+        <!-- reads that configuration for ATAK in the plugin's own process: a package can read
+             only its own. Exported for ATAK; call() refuses any other caller -->
+        <provider
+            android:name=".config.AppConfigProvider"
+            android:authorities="${applicationId}.appconfig"
+            android:exported="true"
+            android:process=":appconfig"
+            tools:ignore="ExportedContentProvider" />
+
 
        <!-- This fictitious activity entry allow for ATAK 4.6.0.2 and newer to perform 
             plugin discovery  android devices.  If this is removed, the plugin will 

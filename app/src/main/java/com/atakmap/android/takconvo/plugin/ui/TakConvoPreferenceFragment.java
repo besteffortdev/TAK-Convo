@@ -43,6 +43,16 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
     private static final String KEY_ACCOUNT = "takconvo_account";
     private static final String KEY_TRUSTED_CA_PICKER = "takconvo_trusted_ca_picker";
     private static final String KEY_IMPORT = "takconvo_import_pref";
+    private static final String KEY_MANAGED = "takconvo_managed";
+    /** The settings on this page an MDM can set. */
+    private static final String[] MANAGEABLE = {XmppSettings.KEY_ENABLED,
+            XmppSettings.KEY_USE_TAK_CREDENTIALS, XmppSettings.KEY_USE_CALLSIGN,
+            XmppSettings.KEY_NOTIFICATION_MESSAGES, XmppSettings.KEY_NOTIFICATION_SOUND,
+            XmppSettings.KEY_NOTIFICATION_VIBRATE, XmppSettings.KEY_SHOW_QUICK_MESSAGES,
+            XmppSettings.KEY_QUICK_MESSAGES, XmppSettings.KEY_DOMAIN, XmppSettings.KEY_HOST,
+            XmppSettings.KEY_PORT, XmppSettings.KEY_CHANNEL_DISCOVERY,
+            XmppSettings.KEY_CHANNEL_SERVER, XmppSettings.KEY_USE_TAK_TRUSTSTORE,
+            XmppSettings.KEY_USE_ANDROID_CA_STORE};
 
     // the plugin context, which lives as long as the plugin, for fragment re-creation
     private static Context staticPluginContext;
@@ -68,6 +78,10 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
     public void onCreate(final Bundle savedInstanceState) {
         XmppSettings.normalize(prefs());
         super.onCreate(savedInstanceState);
+        final XmppEngine engine = XmppEngine.get();
+        if (engine == null || !engine.isManaged()) {
+            getPreferenceScreen().removePreference(findPreference(KEY_MANAGED));
+        }
 
         findPreference(KEY_ACCOUNT).setOnPreferenceClickListener(p -> {
             AtakBroadcast.getInstance().sendBroadcast(new Intent(ACTION_SHOW_ACCOUNT));
@@ -140,8 +154,19 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
             showSummary(key, value);
         }
         final String ca = prefs.getString(XmppSettings.KEY_TRUSTED_CA, null);
-        findPreference(KEY_TRUSTED_CA_PICKER).setSummary(ca == null || ca.trim().isEmpty()
-                ? pluginContext.getString(R.string.takconvo_pref_trusted_ca_none) : ca);
+        final boolean noCa = ca == null || ca.trim().isEmpty();
+        final Preference caPicker = findPreference(KEY_TRUSTED_CA_PICKER);
+        if (managed(XmppSettings.KEY_TRUSTED_CA)) {
+            // the managed file is in ATAK's private storage: its path means nothing to users
+            caPicker.setSummary(pluginContext.getString(noCa
+                    ? R.string.takconvo_pref_trusted_ca_managed_none
+                    : R.string.takconvo_pref_trusted_ca_managed));
+            caPicker.setEnabled(false);
+        } else {
+            caPicker.setSummary(noCa
+                    ? pluginContext.getString(R.string.takconvo_pref_trusted_ca_none) : ca);
+            caPicker.setEnabled(true);
+        }
         findPreference(KEY_ACCOUNT).setSummary(accountSummary());
 
         final XmppSettings.ChannelDiscovery discovery = XmppSettings.ChannelDiscovery.parse(
@@ -151,6 +176,40 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
         ((EditTextPreference) findPreference(XmppSettings.KEY_CHANNEL_SERVER))
                 .setText(channelServer());
         showChannelDiscovery(discovery, channelServer());
+
+        // shown, not editable: the device management's values
+        for (final String key : MANAGEABLE) {
+            if (managed(key)) {
+                findPreference(key).setEnabled(false);
+            }
+        }
+        keepDependents(XmppSettings.KEY_NOTIFICATION_MESSAGES,
+                XmppSettings.KEY_NOTIFICATION_SOUND, XmppSettings.KEY_NOTIFICATION_VIBRATE);
+        keepDependents(XmppSettings.KEY_SHOW_QUICK_MESSAGES, XmppSettings.KEY_QUICK_MESSAGES);
+    }
+
+    /**
+     * A disabled check box disables the settings that depend on it: when the device management
+     * sets it, they follow its value instead, which can't change.
+     */
+    private void keepDependents(final String parent, final String... dependents) {
+        if (!managed(parent)) {
+            return;
+        }
+        final Preference parentPref = findPreference(parent);
+        final boolean on = ((CheckBoxPreference) parentPref).isChecked();
+        for (final String key : dependents) {
+            final Preference p = findPreference(key);
+            p.setDependency(null);
+            p.onDependencyChanged(parentPref, false);
+            p.setEnabled(on && !managed(key));
+        }
+    }
+
+    /** Whether the device management (MDM) sets {@code key}. */
+    private static boolean managed(final String key) {
+        final XmppEngine engine = XmppEngine.get();
+        return engine != null && engine.isManaged(key);
     }
 
     /** Shows the choice; the server field is enabled for "another server" only. */
@@ -176,7 +235,8 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
         }
         findPreference(XmppSettings.KEY_CHANNEL_DISCOVERY).setSummary(summary);
         final Preference serverPref = findPreference(XmppSettings.KEY_CHANNEL_SERVER);
-        serverPref.setEnabled(discovery == XmppSettings.ChannelDiscovery.SERVER);
+        serverPref.setEnabled(discovery == XmppSettings.ChannelDiscovery.SERVER
+                && !managed(XmppSettings.KEY_CHANNEL_SERVER));
         serverPref.setSummary(empty
                 ? pluginContext.getString(R.string.takconvo_pref_channel_server_summary)
                 : server.trim());

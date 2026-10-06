@@ -61,6 +61,13 @@ data isn't meant for.
   without flags is open to every app before Android 13, and the plugin supports Android 6 and
   up. The only exported one is `DebugReceiver`, registered in debug builds only, and it requires
   `android.permission.DUMP` from senders: adb's shell has it, apps can't get it.
+- **The plugin's own process**: `AppConfigProvider` is the only component that runs as the
+  plugin's package, in its process `:appconfig`
+  ([03](03-provisioning-and-trust.md#managed-configuration-mdm)). It is exported, because ATAK
+  calls it, and `call()` refuses any other package (`getCallingPackage()`, which the system
+  checks against the caller's uid). ATAK's classes don't exist in that process: code there uses
+  Android's APIs only (`android.util.Log`). ATAK reaches it with an unstable
+  `ContentProviderClient`, so ATAK survives that process dying.
 - **ATAK's internal broadcasts are reachable from other apps**: ATAK's launcher activity is
   exported and rebroadcasts any `internalIntent` extra through `AtakBroadcast`. A receiver that
   acts without the user (sends, opens, imports) must not trust what it receives. Either it

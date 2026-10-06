@@ -142,7 +142,8 @@ opens.
 #tak-slide[
 = Settings
 *Settings › Tool Preferences › TAK Convo*. Your administrator's settings file can set all of
-them.
+them. So can your device management (MDM): then they show greyed out, under _Managed by your
+organization_, and TAK Convo connects to the server they name without asking you.
 
 #table(
   columns: (auto, 1fr),

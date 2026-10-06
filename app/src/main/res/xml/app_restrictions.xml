@@ -1,0 +1,453 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The managed configuration (app config) an MDM can set for TAK Convo. Each key is the
+     ATAK preference it sets (provisioning/takconvo-template.pref), apart from
+     takconvo_xmpp_password and takconvo_xmpp_trusted_ca_certificate. Empty or "unset":
+     not managed. See docs/03. -->
+<restrictions xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <restriction
+        android:key="takconvo_xmpp_domain"
+        android:title="@string/takconvo_mdm_xmpp_domain"
+        android:description="@string/takconvo_mdm_xmpp_domain_desc"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="takconvo_xmpp_host"
+        android:title="@string/takconvo_mdm_xmpp_host"
+        android:description="@string/takconvo_mdm_xmpp_host_desc"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="takconvo_xmpp_port"
+        android:title="@string/takconvo_mdm_xmpp_port"
+        android:description="@string/takconvo_mdm_xmpp_port_desc"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="takconvo_xmpp_use_tak_credentials"
+        android:title="@string/takconvo_mdm_xmpp_use_tak_credentials"
+        android:description="@string/takconvo_mdm_xmpp_use_tak_credentials_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_xmpp_username"
+        android:title="@string/takconvo_mdm_xmpp_username"
+        android:description="@string/takconvo_mdm_xmpp_username_desc"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="takconvo_xmpp_password"
+        android:title="@string/takconvo_mdm_xmpp_password"
+        android:description="@string/takconvo_mdm_xmpp_password_desc"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="takconvo_xmpp_use_tak_truststore"
+        android:title="@string/takconvo_mdm_xmpp_use_tak_truststore"
+        android:description="@string/takconvo_mdm_xmpp_use_tak_truststore_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_xmpp_use_android_ca_store"
+        android:title="@string/takconvo_mdm_xmpp_use_android_ca_store"
+        android:description="@string/takconvo_mdm_xmpp_use_android_ca_store_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_xmpp_trusted_ca_certificate"
+        android:title="@string/takconvo_mdm_xmpp_trusted_ca_certificate"
+        android:description="@string/takconvo_mdm_xmpp_trusted_ca_certificate_desc"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="takconvo_xmpp_enabled"
+        android:title="@string/takconvo_mdm_xmpp_enabled"
+        android:description="@string/takconvo_mdm_xmpp_enabled_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_xmpp_use_callsign"
+        android:title="@string/takconvo_mdm_xmpp_use_callsign"
+        android:description="@string/takconvo_mdm_xmpp_use_callsign_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_xmpp_channel_discovery"
+        android:title="@string/takconvo_mdm_xmpp_channel_discovery"
+        android:description="@string/takconvo_mdm_xmpp_channel_discovery_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_channel_discovery_entries"
+        android:entryValues="@array/takconvo_mdm_channel_discovery_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_xmpp_channel_server"
+        android:title="@string/takconvo_mdm_xmpp_channel_server"
+        android:description="@string/takconvo_mdm_xmpp_channel_server_desc"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="takconvo_notification_messages"
+        android:title="@string/takconvo_mdm_notification_messages"
+        android:description="@string/takconvo_mdm_notification_messages_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_notification_sound"
+        android:title="@string/takconvo_mdm_notification_sound"
+        android:description="@string/takconvo_mdm_notification_sound_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_notification_vibrate"
+        android:title="@string/takconvo_mdm_notification_vibrate"
+        android:description="@string/takconvo_mdm_notification_vibrate_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_show_quick_messages"
+        android:title="@string/takconvo_mdm_show_quick_messages"
+        android:description="@string/takconvo_mdm_show_quick_messages_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_quick_messages"
+        android:title="@string/takconvo_mdm_quick_messages"
+        android:description="@string/takconvo_mdm_quick_messages_desc"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="takconvo_conversations_confirm_messages"
+        android:title="@string/takconvo_mdm_conversations_confirm_messages"
+        android:description="@string/takconvo_mdm_conversations_confirm_messages_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_chat_states"
+        android:title="@string/takconvo_mdm_conversations_chat_states"
+        android:description="@string/takconvo_mdm_conversations_chat_states_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_last_activity"
+        android:title="@string/takconvo_mdm_conversations_last_activity"
+        android:description="@string/takconvo_mdm_conversations_last_activity_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_entity_time"
+        android:title="@string/takconvo_mdm_conversations_entity_time"
+        android:description="@string/takconvo_mdm_conversations_entity_time_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_allow_message_correction"
+        android:title="@string/takconvo_mdm_conversations_allow_message_correction"
+        android:description="@string/takconvo_mdm_conversations_allow_message_correction_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_accept_invites_from_strangers"
+        android:title="@string/takconvo_mdm_conversations_accept_invites_from_strangers"
+        android:description="@string/takconvo_mdm_conversations_accept_invites_from_strangers_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_notifications_from_strangers"
+        android:title="@string/takconvo_mdm_conversations_notifications_from_strangers"
+        android:description="@string/takconvo_mdm_conversations_notifications_from_strangers_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_use_relays"
+        android:title="@string/takconvo_mdm_conversations_use_relays"
+        android:description="@string/takconvo_mdm_conversations_use_relays_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_btbv"
+        android:title="@string/takconvo_mdm_conversations_btbv"
+        android:description="@string/takconvo_mdm_conversations_btbv_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_trust_system_ca_store"
+        android:title="@string/takconvo_mdm_conversations_trust_system_ca_store"
+        android:description="@string/takconvo_mdm_conversations_trust_system_ca_store_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_require_tls_v1_3"
+        android:title="@string/takconvo_mdm_conversations_require_tls_v1_3"
+        android:description="@string/takconvo_mdm_conversations_require_tls_v1_3_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_channel_binding_required"
+        android:title="@string/takconvo_mdm_conversations_channel_binding_required"
+        android:description="@string/takconvo_mdm_conversations_channel_binding_required_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_use_tor"
+        android:title="@string/takconvo_mdm_conversations_use_tor"
+        android:description="@string/takconvo_mdm_conversations_use_tor_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_manually_change_presence"
+        android:title="@string/takconvo_mdm_conversations_manually_change_presence"
+        android:description="@string/takconvo_mdm_conversations_manually_change_presence_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_away_when_screen_off"
+        android:title="@string/takconvo_mdm_conversations_away_when_screen_off"
+        android:description="@string/takconvo_mdm_conversations_away_when_screen_off_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_dnd_on_silent_mode"
+        android:title="@string/takconvo_mdm_conversations_dnd_on_silent_mode"
+        android:description="@string/takconvo_mdm_conversations_dnd_on_silent_mode_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_treat_vibrate_as_silent"
+        android:title="@string/takconvo_mdm_conversations_treat_vibrate_as_silent"
+        android:description="@string/takconvo_mdm_conversations_treat_vibrate_as_silent_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_auto_send_recording"
+        android:title="@string/takconvo_mdm_conversations_auto_send_recording"
+        android:description="@string/takconvo_mdm_conversations_auto_send_recording_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_show_dynamic_tags"
+        android:title="@string/takconvo_mdm_conversations_show_dynamic_tags"
+        android:description="@string/takconvo_mdm_conversations_show_dynamic_tags_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_scroll_to_bottom"
+        android:title="@string/takconvo_mdm_conversations_scroll_to_bottom"
+        android:description="@string/takconvo_mdm_conversations_scroll_to_bottom_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_start_searching"
+        android:title="@string/takconvo_mdm_conversations_start_searching"
+        android:description="@string/takconvo_mdm_conversations_start_searching_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_display_enter_key"
+        android:title="@string/takconvo_mdm_conversations_display_enter_key"
+        android:description="@string/takconvo_mdm_conversations_display_enter_key_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_enter_is_send"
+        android:title="@string/takconvo_mdm_conversations_enter_is_send"
+        android:description="@string/takconvo_mdm_conversations_enter_is_send_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_use_green_background"
+        android:title="@string/takconvo_mdm_conversations_use_green_background"
+        android:description="@string/takconvo_mdm_conversations_use_green_background_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_large_font"
+        android:title="@string/takconvo_mdm_conversations_large_font"
+        android:description="@string/takconvo_mdm_conversations_large_font_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_align_start"
+        android:title="@string/takconvo_mdm_conversations_align_start"
+        android:description="@string/takconvo_mdm_conversations_align_start_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_show_avatars"
+        android:title="@string/takconvo_mdm_conversations_show_avatars"
+        android:description="@string/takconvo_mdm_conversations_show_avatars_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_show_avatars_accounts"
+        android:title="@string/takconvo_mdm_conversations_show_avatars_accounts"
+        android:description="@string/takconvo_mdm_conversations_show_avatars_accounts_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_boolean_entries"
+        android:entryValues="@array/takconvo_mdm_boolean_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_omemo"
+        android:title="@string/takconvo_mdm_conversations_omemo"
+        android:description="@string/takconvo_mdm_conversations_omemo_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_omemo_entries"
+        android:entryValues="@array/takconvo_mdm_omemo_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_picture_compression"
+        android:title="@string/takconvo_mdm_conversations_picture_compression"
+        android:description="@string/takconvo_mdm_conversations_picture_compression_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_picture_compression_entries"
+        android:entryValues="@array/takconvo_mdm_picture_compression_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_video_compression"
+        android:title="@string/takconvo_mdm_conversations_video_compression"
+        android:description="@string/takconvo_mdm_conversations_video_compression_desc"
+        android:restrictionType="choice"
+        android:entries="@array/takconvo_mdm_video_compression_entries"
+        android:entryValues="@array/takconvo_mdm_video_compression_values"
+        android:defaultValue="unset" />
+
+    <restriction
+        android:key="takconvo_conversations_auto_accept_file_size"
+        android:title="@string/takconvo_mdm_conversations_auto_accept_file_size"
+        android:description="@string/takconvo_mdm_conversations_auto_accept_file_size_desc"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="takconvo_conversations_grace_period_length"
+        android:title="@string/takconvo_mdm_conversations_grace_period_length"
+        android:description="@string/takconvo_mdm_conversations_grace_period_length_desc"
+        android:restrictionType="string"
+        android:defaultValue="" />
+
+    <restriction
+        android:key="takconvo_conversations_automatic_message_deletion"
+        android:title="@string/takconvo_mdm_conversations_automatic_message_deletion"
+        android:description="@string/takconvo_mdm_conversations_automatic_message_deletion_desc"
+        android:restrictionType="string"
+        android:defaultValue="" />
+</restrictions>

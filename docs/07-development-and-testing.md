@@ -229,6 +229,7 @@ delivered.
 | `DEBUG_SET_PREF` | `key`, `value` | sets an ATAK preference (string); removes it without `value` |
 | `DEBUG_IMPORT_PREF` | `path` | imports a `.pref` file with ATAK's importer |
 | `DEBUG_PROVISION` | | runs `XmppEngine.provision()`: `TakConvo.Trust` logs the trust sources from the `TakConvo.Provision` thread, `TakConvo.XmppEngine` "provisioning ..." from the main thread |
+| `DEBUG_APP_CONFIG` | `takconvo_*` (`--es`, `--ez` for Booleans) | replaces the values `AppConfigProvider` adds to the MDM's managed configuration, then reads it: an MDM's settings without an MDM; without extras, none ([03](03-provisioning-and-trust.md#managed-configuration-mdm)) |
 | `DEBUG_ADD_TAK_SERVER` | `connect` (`host:port:ssl`), `user`, `pass` | adds a TAK server connection the way ATAK's dialog does |
 | `DEBUG_DUMP_SELF_SA` | | logs the SA this device sends (check `xmppUsername`) |
 | `DEBUG_SEND` | `to`, `body` | sends a plain-text 1:1 message |
@@ -257,7 +258,7 @@ adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_CHAT
 
 | Tag | From |
 |---|---|
-| `TakConvo.Plugin`, `.XmppEngine`, `.Nicknames`, `.Trust`, `.Settings`, `.Host`, `.Contacts`, `.PendingIntents`, `.Notifications`, `.Debug` | the plugin (`.Settings`: also rejected `takconvo_conversations_*` values) |
+| `TakConvo.Plugin`, `.XmppEngine`, `.Nicknames`, `.Trust`, `.Settings`, `.AppConfig`, `.Host`, `.Contacts`, `.PendingIntents`, `.Notifications`, `.Debug` | the plugin (`.Settings`: also rejected `takconvo_conversations_*` values; `.AppConfig`: rejected managed values, from ATAK's process, and the provider, from the plugin's `:appconfig`) |
 | `tak convo` | Conversations (its `Config.LOGTAG` is the app name) |
 | `AndroidRuntime` | crashes; `adb logcat -b crash` keeps them after the main buffer rolls |
 
@@ -443,7 +444,35 @@ After an upstream merge, a dependency change or a change to the host:
       chat pane while it rotates, the chat pane is relaunched when it shows again;
     - remove the setting (`DEBUG_SET_PREF --es key atakControlForcePortrait`), restart ATAK (its
       own layout is off after the change) and clear the draft.
-20. `adb logcat -b crash` is empty.
+20. Managed configuration ([03](03-provisioning-and-trust.md#managed-configuration-mdm)),
+    without an MDM: `DEBUG_APP_CONFIG` sets the values the provider adds to the MDM's. Back up
+    ATAK's preferences and `no_backup/takconvo_plugin/approved_server` first (`exec-out
+    run-as ... cat`):
+    - after the start, `ps -A` lists `com.atakmap.android.takconvo.plugin:appconfig`, and
+      `TakConvo.AppConfig` logs no warning;
+    - `--es takconvo_notification_sound false --ez takconvo_show_quick_messages true --es
+      takconvo_conversations_omemo always --es takconvo_foo x`: "managed configuration
+      changed", a warning for `takconvo_foo`; the values are in ATAK's preferences (`omemo` in
+      Conversations'), and in `no_backup/takconvo_plugin/managed_config`. The tool preferences
+      show "Managed by your organization", Sound and Show quick messages greyed out, Quick
+      messages still editable. `DEBUG_SET_PREF` on one of them logs "change undone", and the
+      value stays. After an ATAK restart, the same;
+    - the device's own server (`--es takconvo_xmpp_domain D --es
+      takconvo_xmpp_use_tak_credentials true`): it stays online, and a leftover
+      `takconvo_xmpp_host` is removed. Adding `--es takconvo_xmpp_use_android_ca_store true`:
+      "approved {...}" without a notification, still online. `DEBUG_SET_PREF` of
+      `takconvo_xmpp_host` or `takconvo_xmpp_trusted_ca`: "change undone", no approval asked;
+    - a CA certificate with its line breaks, through the device's shell:
+      `adb shell 'am broadcast -a ...DEBUG_APP_CONFIG --es takconvo_xmpp_domain D --es
+      takconvo_xmpp_use_tak_truststore false --es takconvo_xmpp_trusted_ca_certificate
+      "$(cat CA.crt)"'`: `TakConvo.TrustedCa` trusts 1 certificate from
+      `managed_ca_<sha>.pem`. Turn `takconvo_xmpp_enabled` off and on: Conversations logs
+      "trusted cert via TAK Convo provisioned CA" and the account comes online;
+    - the device's own server again, so the original server is the approved one, then
+      `DEBUG_APP_CONFIG` without extras: "no managed configuration", the managed keys are gone
+      (with the domain: `NO_DOMAIN`, the account disabled), the CA file deleted. Set the backed-up
+      values back with `DEBUG_SET_PREF` and delete `managed_config`.
+21. `adb logcat -b crash` is empty.
 
 ## Gotchas
 

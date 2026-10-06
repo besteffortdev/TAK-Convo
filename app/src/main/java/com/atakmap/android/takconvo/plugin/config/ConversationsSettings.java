@@ -109,6 +109,18 @@ public final class ConversationsSettings {
         editor.apply();
     }
 
+    /**
+     * The value to store for setting {@code key} (without the prefix): a Boolean or a String.
+     * Null if the setting isn't supported or the value isn't valid.
+     */
+    public static Object typedValue(final String key, final String value) {
+        final Spec spec = SETTINGS.get(key);
+        if (spec == null || !valid(spec, value)) {
+            return null;
+        }
+        return spec.type == Type.BOOLEAN ? (Object) Boolean.valueOf(value) : value;
+    }
+
     private static boolean valid(final Spec spec, final String value) {
         switch (spec.type) {
             case BOOLEAN:

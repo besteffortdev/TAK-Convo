@@ -5,13 +5,15 @@ in a mission package), the login reuses the TAK server's username and password, 
 server's certificate is checked against the CAs ATAK already trusts for its TAK servers.
 
 Classes: `plugin/config/XmppSettings`, `ConversationsSettings`, `TrustSources`, `TrustedCa`,
-`ServerIdentity`, `PrivateFiles`; `plugin/xmpp/XmppEngine`, `CallsignNicknames`;
+`ServerIdentity`, `PrivateFiles`, `AppConfig`, `AppConfigProvider`; `plugin/xmpp/XmppEngine`,
+`CallsignNicknames`;
 `plugin/ui/TakConvoPreferenceFragment`, `AccountView`.
 
 ## Settings
 
 All settings are ATAK preferences, so ATAK's own import (`.pref` files, mission packages, the
-import manager) provisions every one of them. Those in the table also appear under
+import manager) provisions every one of them. An MDM can set them too, and then they're locked
+([below](#managed-configuration-mdm)). Those in the table also appear under
 **Settings › Tool Preferences › TAK Convo**; Conversations' own settings and the login are
 .pref-only (below).
 
@@ -234,6 +236,104 @@ What a `.pref` file can still do:
   XMPP as well. Using it takes an attacker on the network path too, and the server list shows
   the new server.
 - **Turn TAK Convo off** (`takconvo_xmpp_enabled`), as it can turn off any ATAK feature.
+
+## Managed configuration (MDM)
+
+An MDM (SOTI MobiControl, Intune, Workspace ONE...) that installs the plugin APK can also set
+its settings through Android's managed configurations ("app config").
+`app/src/main/res/xml/app_restrictions.xml` declares them, and the manifest points to it
+(`android.content.APP_RESTRICTIONS`), so the MDM console lists them for TAK Convo's package,
+with titles and descriptions. Each key is the ATAK preference it sets: the table above and
+`takconvo_conversations_<key>`. Two more aren't preferences:
+
+| Key | Meaning |
+|---|---|
+| `takconvo_xmpp_password` | with `takconvo_xmpp_username`: the XMPP login, stored in ATAK's credential store |
+| `takconvo_xmpp_trusted_ca_certificate` | a CA certificate as text: PEM (several may follow each other, whatever the console does to the line breaks) or Base64 DER |
+
+Booleans and lists are choices that start at **Not managed** (`unset`). A console that sends
+every key with its default value therefore manages nothing until the admin picks a value. An
+empty text is not managed either. A console that sends its own key/value pairs may give
+Booleans as `true`/`false` strings or as Booleans, and the port as a string or a number.
+
+### Reading it
+
+Android gives a package's managed configuration only to that package
+(`RestrictionsManager.getApplicationRestrictions` checks the caller's uid), and the plugin's
+code runs as ATAK. A provider in the plugin's own process (`:appconfig`) reads it for ATAK:
+
+```text
+AppConfigProvider.call("get"):          # plugin package, process :appconfig, exported
+    caller isn't ATAK (getCallingPackage)  -> SecurityException
+    return RestrictionsManager.getApplicationRestrictions()   # + DEBUG_APP_CONFIG's, debug builds
+
+XmppEngine.refreshAppConfig():          # at start, and when an ATAK activity resumes
+    on the TakConvo.Provision thread:
+        bundle = unstable ContentProviderClient(AppConfigProvider).call("get")
+        bundle null (provider unreachable): change nothing
+        config = AppConfig.load(bundle)     # validates, stores the CA file and the login
+        changed: save it to no_backup/takconvo_plugin/managed_config
+    then on the main thread: applyAppConfig(config)
+```
+
+ATAK can see the plugin's package (its `<queries>` names the plugin discovery intent), so it
+can reach the provider. The client is "unstable": if the plugin's process dies during a call,
+ATAK gets an error instead of being killed with it. That process runs only this provider: the
+other providers in the merged manifest (androidx startup) belong to the default process. ATAK's
+classes don't exist there, so the provider logs with `android.util.Log`.
+
+Android announces a change (`ACTION_APPLICATION_RESTRICTIONS_CHANGED`) only to a running process
+of the package, and the plugin's process doesn't run. TAK Convo reads the configuration again
+each time one of ATAK's activities resumes. A change pushed while ATAK is on screen applies the
+next time the user comes back to ATAK.
+
+### Applying it
+
+```text
+AppConfig.load(bundle):
+    each key: a plugin setting or takconvo_conversations_<key>, typed and validated;
+              empty or "unset": left out; unknown or invalid: logged, left out
+    trusted_ca_certificate: rewritten as PEM to no_backup/takconvo_plugin/managed_ca_<sha>.pem,
+              and takconvo_xmpp_trusted_ca = its path
+    domain set: host, port, use_tak_credentials, use_tak_truststore, use_android_ca_store and
+              trusted_ca are managed too, at their defaults unless set
+              server = the ServerIdentity these values give
+    username and password set: stored in the credential store, unless it holds them already
+
+applyAppConfig(config):                 # main thread
+    write each managed value into ATAK's preferences where it differs
+    keys the previous configuration managed and this one doesn't: removed (their defaults)
+    configuration changed or login stored: provision
+```
+
+**Locked.** Nothing else can change a managed key. When anything writes one (a `.pref` import,
+`adb`), the engine's preference listener puts the managed value back before provisioning reads
+it. The tool preferences show managed settings greyed out, under "Managed by your
+organization". The account pane doesn't offer "Use an XMPP account" when the MDM decides which
+credentials to use. At start, the configuration read last time is applied before anything
+reads the preferences, so a `.pref` imported while the plugin wasn't running doesn't stick
+either.
+
+**Approved.** The server the MDM's values give is approved without asking: `isApproved` also
+accepts `appConfig.server()`. That is safe because managing the domain manages every other part
+of the server identity. The settings give the MDM's identity only if nothing else changed them.
+The CA file is named after its contents, so a new certificate is a new identity, and the file
+the current settings name stays until the new configuration is applied.
+
+**Removed.** A key the MDM no longer sets goes back to its default, as Conversations' settings
+do. Removing the domain therefore disables the account (its history stays). A managed login
+stays in the credential store.
+
+**Login.** While the MDM sets the login, a `.pref` file's `takconvo_xmpp_password` is discarded.
+A user who signs out is signed in again at the next read.
+
+ATAK reads an app config of its own too, for ATAK's package:
+`enterpriseConfigurationPreferences` there carries a whole `.pref` file, and TAK Convo's keys
+work in it. That file counts as any other `.pref` file, though: a new server waits for the
+user's approval, and nothing is locked.
+
+Clear Content deletes `no_backup/takconvo_plugin/`, the managed configuration and the CA file
+included. The next start reads them from the MDM again.
 
 ## Trust
 

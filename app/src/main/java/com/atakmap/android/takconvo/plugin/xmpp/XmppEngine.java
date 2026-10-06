@@ -1,5 +1,6 @@
 package com.atakmap.android.takconvo.plugin.xmpp;
 
+import android.app.Activity;
 import android.app.Application;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -18,6 +19,7 @@ import android.view.Display;
 
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.android.takconvo.plugin.SensitiveLog;
+import com.atakmap.android.takconvo.plugin.config.AppConfig;
 import com.atakmap.android.takconvo.plugin.config.ConversationsSettings;
 import com.atakmap.android.takconvo.plugin.config.PrivateFiles;
 import com.atakmap.android.takconvo.plugin.config.ServerIdentity;
@@ -127,6 +129,13 @@ public final class XmppEngine {
     private ServerIdentity pendingServer;
     /** The user's sign-in approves the server it connects to. */
     private boolean approveNext;
+    /** What the MDM sets; read on the provisioning thread too. */
+    private volatile AppConfig appConfig;
+    private boolean appConfigReading;
+    /** Read again once the read in progress is done. */
+    private boolean appConfigAgain;
+    /** The MDM may have changed it while ATAK was in the background. */
+    private final Application.ActivityLifecycleCallbacks resumeCallbacks;
 
     public static synchronized XmppEngine start(final Context atakContext,
             final Context pluginContext) {
@@ -207,6 +216,11 @@ public final class XmppEngine {
         TakConvoCompat.CREDENTIALS = credentials;
 
         Log.d(TAG, "starting embedded Conversations engine");
+        // the MDM's values as last read, put back before anything reads the preferences: a
+        // .pref import may have changed them while the plugin wasn't running
+        appConfig = AppConfig.restore(this.atakContext);
+        appConfig.applyTo(AtakPreferences.getInstance(this.atakContext).getSharedPrefs(),
+                AppConfig.NONE);
         ConversationsSettings.apply(AtakPreferences.getInstance(this.atakContext).getSharedPrefs(),
                 defaultPreferences());
         service.onCreate();
@@ -245,6 +259,10 @@ public final class XmppEngine {
                 () -> ConversationsSettings.apply(atakPrefs, defaultPreferences());
         prefListener = (prefs, key) -> {
             if (key == null) {
+                return;
+            }
+            if (appConfig.enforce(prefs, key)) {
+                // the MDM's value is back, and its change comes next
                 return;
             }
             if (key.startsWith(XmppSettings.KEY_PREFIX)) {
@@ -287,6 +305,45 @@ public final class XmppEngine {
         } else {
             this.atakContext.registerReceiver(trustStoreReceiver, trustFilter);
         }
+
+        // Android tells only the plugin's own process of changes, which isn't running
+        resumeCallbacks = new Application.ActivityLifecycleCallbacks() {
+            @Override
+            public void onActivityResumed(final Activity activity) {
+                refreshAppConfig();
+            }
+
+            // only resumes matter
+
+            @Override
+            public void onActivityCreated(final Activity activity, final Bundle state) {
+            }
+
+            @Override
+            public void onActivityStarted(final Activity activity) {
+            }
+
+            @Override
+            public void onActivityPaused(final Activity activity) {
+            }
+
+            @Override
+            public void onActivityStopped(final Activity activity) {
+            }
+
+            @Override
+            public void onActivitySaveInstanceState(final Activity activity,
+                    final Bundle state) {
+            }
+
+            @Override
+            public void onActivityDestroyed(final Activity activity) {
+            }
+        };
+        if (this.atakContext instanceof Application) {
+            ((Application) this.atakContext).registerActivityLifecycleCallbacks(resumeCallbacks);
+        }
+        refreshAppConfig();
     }
 
     /** Debounced: a .pref import changes several keys at once. */
@@ -302,6 +359,9 @@ public final class XmppEngine {
         mainHandler.removeCallbacks(provisionTask);
         mainHandler.removeCallbacks(conversationsSettingsTask);
         nicknames.stop();
+        if (atakContext instanceof Application) {
+            ((Application) atakContext).unregisterActivityLifecycleCallbacks(resumeCallbacks);
+        }
         AtakPreferences.getInstance(atakContext).unregisterListener(prefListener);
         CommsMapComponent.getInstance().removeOutputsChangedListener(takServerListener);
         try {
@@ -375,7 +435,7 @@ public final class XmppEngine {
     /** Reads the settings and builds their trust manager; disk work, any thread. */
     private Loaded load() {
         final SharedPreferences prefs = AtakPreferences.getInstance(atakContext).getSharedPrefs();
-        XmppSettings.importLogin(prefs);
+        XmppSettings.importLogin(prefs, !appConfig.managesLogin());
         XmppSettings.normalize(prefs);
         final XmppSettings loaded = XmppSettings.load(atakContext);
         return new Loaded(loaded, TrustSources.build(loaded));
@@ -484,14 +544,15 @@ public final class XmppEngine {
 
     /**
      * Whether the credentials may go to {@code server}: the user approved it, or is signing in
-     * to it. Approves on its own the one an account already logs in to, the first time: that
-     * account was set up before approvals existed.
+     * to it, or the MDM set it. Approves on its own the one an account already logs in to, the
+     * first time: that account was set up before approvals existed.
      */
     private boolean isApproved(final ServerIdentity server) {
         if (server == null || server.equals(approvedServer)) {
             return true;
         }
-        if (approveNext || (approvedServer == null && loggedInTo(server))) {
+        if (approveNext || server.equals(appConfig.server())
+                || (approvedServer == null && loggedInTo(server))) {
             approve(server);
             return true;
         }
@@ -520,6 +581,84 @@ public final class XmppEngine {
         if (!PrivateFiles.write(atakContext, APPROVED_SERVER, server.serialize())) {
             Log.w(TAG, "the approved server will be asked again after a restart");
         }
+    }
+
+    /**
+     * Reads the MDM's configuration again, in the background, and applies it if it changed.
+     * At start and each time one of ATAK's screens shows.
+     */
+    public void refreshAppConfig() {
+        if (stopped) {
+            return;
+        }
+        if (appConfigReading) {
+            // that read may have started before the change
+            appConfigAgain = true;
+            return;
+        }
+        appConfigReading = true;
+        loader.execute(() -> {
+            AppConfig fresh = null;
+            try {
+                final Bundle managed = AppConfig.read(atakContext);
+                if (managed != null) {
+                    final AppConfig current = appConfig;
+                    fresh = AppConfig.load(atakContext, managed, current);
+                    if (!fresh.equals(current)) {
+                        fresh.save(atakContext);
+                    }
+                }
+            } catch (final RuntimeException | LinkageError e) {
+                // uncaught on this thread, it would take ATAK down
+                Log.e(TAG, "unable to read the managed configuration", e);
+            }
+            final AppConfig result = fresh;
+            mainHandler.post(() -> {
+                appConfigReading = false;
+                if (result != null && !stopped) {
+                    applyAppConfig(result);
+                }
+                if (appConfigAgain) {
+                    appConfigAgain = false;
+                    refreshAppConfig();
+                }
+            });
+        });
+    }
+
+    private void applyAppConfig(final AppConfig fresh) {
+        final AppConfig previous = appConfig;
+        appConfig = fresh;
+        // also when unchanged: puts back what changed while the plugin wasn't listening
+        fresh.applyTo(AtakPreferences.getInstance(atakContext).getSharedPrefs(), previous);
+        if (!fresh.equals(previous) || fresh.savedLogin()) {
+            Log.i(TAG, fresh.isEmpty() ? "no managed configuration"
+                    : "managed configuration changed");
+            // e.g. a server it approves, a login it stored
+            scheduleProvision();
+            dispatchChanged();
+        }
+    }
+
+    /** Debug builds: replaces the values added to the MDM's, then reads them. */
+    public void debugSetAppConfig(final Bundle values) {
+        if (stopped) {
+            return;
+        }
+        loader.execute(() -> {
+            AppConfig.debugSet(atakContext, values);
+            mainHandler.post(this::refreshAppConfig);
+        });
+    }
+
+    /** Whether the MDM sets this preference, so the user can't change it. */
+    public boolean isManaged(final String key) {
+        return appConfig.isManaged(key);
+    }
+
+    /** Whether the MDM sets anything. */
+    public boolean isManaged() {
+        return !appConfig.isEmpty();
     }
 
     /** The server waiting for the user's approval, or null. */

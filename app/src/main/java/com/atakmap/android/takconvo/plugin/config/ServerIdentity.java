@@ -54,11 +54,18 @@ public final class ServerIdentity {
         if (domain == null || domain.isEmpty()) {
             return null;
         }
-        return new ServerIdentity(settings.usesTakCredentials, domain.toLowerCase(Locale.ROOT),
-                settings.host == null ? null : settings.host.toLowerCase(Locale.ROOT),
-                settings.port, settings.useTakTrustStore, settings.useAndroidCaStore,
-                settings.trustedCaPath,
+        return of(settings.usesTakCredentials, domain, settings.host, settings.port,
+                settings.useTakTrustStore, settings.useAndroidCaStore, settings.trustedCaPath,
                 settings.trustedCaPath == null ? null : sha256(settings.trustedCaPath));
+    }
+
+    /** The server of settings with these values: what a managed configuration approves. */
+    static ServerIdentity of(final boolean takCredentials, final String domain,
+            final String host, final int port, final boolean takTrustStore,
+            final boolean androidCaStore, final String caPath, final String caSha256) {
+        return new ServerIdentity(takCredentials, domain.toLowerCase(Locale.ROOT),
+                host == null ? null : host.toLowerCase(Locale.ROOT), port, takTrustStore,
+                androidCaStore, caPath, caSha256);
     }
 
     /** What {@link #serialize} wrote, or null. */
@@ -111,26 +118,41 @@ public final class ServerIdentity {
         return bare.substring(bare.indexOf('@') + 1);
     }
 
-    private static String sha256(final String path) {
+    /** The file's SHA-256 in hex, "" if it can't be read. */
+    static String sha256(final String path) {
         try (InputStream in = new FileInputStream(path)) {
-            final MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            final MessageDigest digest = sha256();
             final byte[] buffer = new byte[8192];
             int n;
             while ((n = in.read(buffer)) > 0) {
                 digest.update(buffer, 0, n);
             }
-            final StringBuilder hex = new StringBuilder();
-            for (final byte b : digest.digest()) {
-                hex.append(String.format(Locale.ROOT, "%02x", b));
-            }
-            return hex.toString();
+            return hex(digest.digest());
         } catch (final IOException | SecurityException e) {
             // a file that appears later changes the identity
             Log.w(TAG, "unable to read the trusted CA file", e);
             return "";
+        }
+    }
+
+    static String sha256(final byte[] data) {
+        return hex(sha256().digest(data));
+    }
+
+    private static MessageDigest sha256() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
         } catch (final NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    private static String hex(final byte[] bytes) {
+        final StringBuilder hex = new StringBuilder();
+        for (final byte b : bytes) {
+            hex.append(String.format(Locale.ROOT, "%02x", b));
+        }
+        return hex.toString();
     }
 
     @Override

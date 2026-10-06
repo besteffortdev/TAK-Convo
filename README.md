@@ -7,8 +7,9 @@ user's TAK identity.
 
 - **XMPP in ATAK**: 1:1 chats and group chats (MUC), OMEMO encryption, file transfer
   (HTTP upload), reactions, search, history (MAM). The engine and UI are Conversations 2.20.4.
-- **Zero typing**: the XMPP domain comes from a `.pref` file or mission package; the login
-  reuses the TAK server's username and password. An XMPP login screen exists for other setups.
+- **Zero typing**: the XMPP domain comes from a `.pref` file, a mission package or the MDM that
+  installs the plugin (Android app config, e.g. SOTI MobiControl); the login reuses the TAK
+  server's username and password. An XMPP login screen exists for other setups.
 - **Trust like ATAK**: the server certificate is checked against the CAs of ATAK's TAK server
   truststores (optionally the device CA store, or a CA file), besides the public CAs.
 - **TAK identity**: the device's XMPP address goes out in its SA (`<contact xmppUsername>`), as
@@ -34,7 +35,7 @@ Galaxy S22+ with 5.5.1.8):
 
 | Works | Not yet |
 |---|---|
-| engine in-process, provisioning from `.pref`, TAK credentials or XMPP login | calls (audio/video): switched off, not advertised |
+| engine in-process, provisioning from `.pref` or an MDM's app config, TAK credentials or XMPP login | calls (audio/video): switched off, not advertised |
 | trust from TAK truststores / Android CA store / CA file | |
 | ATAK's map: locations, positions in messages, quick messages, Show on map, Send dialog, import into ATAK | |
 | account pane, tool preferences, `.pref` import; QR codes: show and scan; profile picture (from the account pane) | backups |
@@ -136,6 +137,21 @@ A change to where the credentials go (domain, host, port, which credentials, tru
 waits for the user's **Connect** in the account pane
 ([docs/03](docs/03-provisioning-and-trust.md#approving-the-server)): data packages apply their
 `.pref` files without asking.
+
+### From an MDM (app config)
+
+An MDM that pushes the APK (SOTI MobiControl, Intune...) can set the same settings as Android
+managed configuration: the APK declares them (`res/xml/app_restrictions.xml`), so the console
+lists TAK Convo's settings with descriptions. The keys are the preference keys above, plus
+`takconvo_xmpp_password` and `takconvo_xmpp_trusted_ca_certificate` (a CA certificate as PEM
+text). What the MDM sets:
+- is locked: greyed out in the tool preferences, and put back if a `.pref` file changes it;
+- needs no approval: the server it sets connects without the user's **Connect**;
+- applies when ATAK starts or comes back to the front; a key removed from the configuration
+  goes back to its default.
+
+Booleans and lists start at **Not managed**. Details:
+[docs/03](docs/03-provisioning-and-trust.md#managed-configuration-mdm).
 
 ## Build and install
 
@@ -316,6 +332,12 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
     stack-overflow advisory isn't reachable (64 nesting levels at most), but crafted keys parse
     in quadratic time; keys over 2 KiB are skipped
     ([docs/05](docs/05-conversations-fork.md#o-omemo-keys-parsed-by-protobuf-250)).
+42. **Only a package reads its own managed configuration** (app config), and a plugin's code
+    runs as ATAK: `RestrictionsManager` in ATAK's process returns ATAK's. A provider in the
+    plugin's package, in a process of its own, reads it and answers ATAK only. Android tells
+    only a running process of the package about changes, so the plugin reads it again each time
+    ATAK comes to the front
+    ([docs/03](docs/03-provisioning-and-trust.md#managed-configuration-mdm)).
 
 ## Repository layout
 
@@ -327,7 +349,8 @@ app/                      the ATAK plugin
     xmpp/                 embedded engine: XmppEngine, EmbeddedContext, CallsignNicknames,
                           PendingIntents, notifications
     contacts/             XmppContacts: ATAK contact handler, unread badges
-    config/               XmppSettings, ConversationsSettings, TrustSources, TrustedCa
+    config/               XmppSettings, ConversationsSettings, TrustSources, TrustedCa,
+                          AppConfig (MDM app config) and its provider
     ui/                   account pane, tool preferences
     ui/host/              chat pane: EmbeddedActivityHost, HostParent, PaneFrame, ChatDropDown
     debug/                DebugReceiver (debug builds)

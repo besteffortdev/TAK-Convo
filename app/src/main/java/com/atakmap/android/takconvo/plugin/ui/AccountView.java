@@ -514,6 +514,8 @@ public final class AccountView implements XmppEngine.Listener {
         boolean offerLogin = false;
         Runnable secondary = this::useXmppLogin;
         int secondaryText = com.atakmap.android.takconvo.plugin.R.string.takconvo_use_xmpp_login;
+        // the device management (MDM) decides between TAK credentials and an XMPP login
+        final boolean loginOffered = !engine.isManaged(XmppSettings.KEY_USE_TAK_CREDENTIALS);
         if (problem == XmppSettings.Problem.DISABLED) {
             text = ui.getString(
                     com.atakmap.android.takconvo.plugin.R.string.takconvo_notice_disabled);
@@ -525,15 +527,15 @@ public final class AccountView implements XmppEngine.Listener {
         } else if (problem == XmppSettings.Problem.NO_TAK_CREDENTIALS) {
             text = ui.getString(com.atakmap.android.takconvo.plugin.R.string
                     .takconvo_notice_no_tak_credentials);
-            offerLogin = true;
+            offerLogin = loginOffered;
         } else if (problem == XmppSettings.Problem.NO_DOMAIN) {
             text = ui.getString(
                     com.atakmap.android.takconvo.plugin.R.string.takconvo_notice_no_domain);
-            offerLogin = tak;
+            offerLogin = tak && loginOffered;
         } else if (problem == XmppSettings.Problem.INVALID_JID && tak) {
             text = ui.getString(
                     com.atakmap.android.takconvo.plugin.R.string.takconvo_notice_invalid_jid);
-            offerLogin = true;
+            offerLogin = loginOffered;
         } else if (shownError == Account.State.TLS_ERROR_UNTRUSTED && attemptFrom == null) {
             // the trust settings decide, not a prompt
             text = ui.getString(

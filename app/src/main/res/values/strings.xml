@@ -132,4 +132,8 @@
     <string name="takconvo_pref_imported">Imported %1$d settings from %2$s</string>
     <string name="takconvo_pref_import_failed">No settings could be read from %1$s</string>
     <string name="takconvo_pref_not_set">Not set</string>
+    <string name="takconvo_pref_managed">Managed by your organization</string>
+    <string name="takconvo_pref_managed_summary">The greyed-out settings come from your device management (MDM) and can\'t be changed here</string>
+    <string name="takconvo_pref_trusted_ca_managed">A CA certificate from your device management</string>
+    <string name="takconvo_pref_trusted_ca_managed_none">None, set by your device management</string>
 </resources>

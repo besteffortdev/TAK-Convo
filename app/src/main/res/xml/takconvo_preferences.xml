@@ -3,6 +3,13 @@
      values. Plugin preference categories can't have members, hence the flat list. -->
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- removed unless the device management (MDM) sets some of these -->
+    <com.atakmap.android.gui.PanPreference
+        android:key="takconvo_managed"
+        android:selectable="false"
+        android:summary="@string/takconvo_pref_managed_summary"
+        android:title="@string/takconvo_pref_managed" />
+
     <PreferenceCategory android:title="@string/takconvo_pref_cat_account" />
 
     <com.atakmap.android.gui.PanCheckBoxPreference

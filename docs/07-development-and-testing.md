@@ -53,6 +53,15 @@ Store builds, aren't obfuscated.
 `AtakLinkCheck` must report no finding before an APK goes on a device (see
 [06](06-atak-runtime-and-classloading.md)).
 
+### Versions
+
+`PLUGIN_VERSION` in `app/build.gradle` goes up by 0.1.0 with each set of changes pushed:
+0.2.0, 0.3.0, ... (0.1 before 2026-10-06). The APK's version name is
+`<PLUGIN_VERSION> (<commit>) - [<ATAK version>]` and its file
+`ATAK-Plugin-takconvo-<PLUGIN_VERSION>-<commit>-<ATAK version>-civ-<type>.apk`. The user
+manual's `plugin-version` follows it (TAK.gov's pipeline writes it there anyway,
+`gradle/typst.gradle`). The version code comes from git (TAK.gov: the packaging time).
+
 ### Developer ATAK on a test device, and release ATAK
 
 The plugin loads in the SDK's **developer** ATAK (build type `sdk`). The developer `atak.apk`
@@ -124,7 +133,7 @@ returns the signed APK, which declares `com.atakmap.app@5.6.0.CIV` or `...@5.8.0
 with only `sdk.dir` (takdev needs the file; the TPP writes its own):
 - `assembleCivRelease` succeeds for both versions, with the SDK given as
   `-Patak.sdk.5.x=<dir>`;
-- the APK's version is `0.1 (<commit>) - [5.x.0]`, with the static version code;
+- the APK's version is `<version> (<commit>) - [5.x.0]`, with the static version code;
 - with the TPP's flags (`-Ptakrepo.force=true -Ptakrepo.url=https://artifacts.tak.gov/artifactory/maven
   -Ptakrepo.user=... -Ptakrepo.password=...`), the build goes straight to TAK.gov's Maven for
   takdev.

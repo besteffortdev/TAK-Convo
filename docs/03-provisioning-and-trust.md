@@ -89,19 +89,13 @@ XmppSettings.load():
     read the takconvo_xmpp_* preferences
     if use_tak_credentials:
         servers = (connected TAK servers) + (enabled TAK servers)
-        if tak_server is set: one group, the servers with that host
-        else: two groups, those on the XMPP domain or host,  # tak.example.org for
-              then the others                                #   example.org or
-                                                             #   xmpp.example.org
-        for each server: creds =
-            AtakAuthenticationDatabase[TYPE_COT_SERVICE, host of server]
-                ?: server's own username/password       # ATAK's credentials dialog
-                ?: only a username from either: username +
-                   AtakAuthenticationDatabase["takconvo.tak", host] if saved for that
-                   username, else no password           # the user enters it, below
-        in the first group, else the second:
-            the first creds with a password, else the first with only a username
-        if creds: return settings(creds, source = TAK_SERVER, origin = host of server)
+        if tak_server is set: only the servers with that host
+        else: those on the XMPP domain or host first     # tak.example.org for example.org
+                                                         #   or xmpp.example.org
+        for server in servers:
+            creds = AtakAuthenticationDatabase[TYPE_COT_SERVICE, host of server]
+                    ?: server's own username/password
+            if creds: return settings(creds, source = TAK_SERVER, origin = host of server)
         return settings(no credentials, source = NONE)   # no fallback to the XMPP login
     else:
         login = AtakAuthenticationDatabase["takconvo.xmpp"]
@@ -109,9 +103,8 @@ XmppSettings.load():
 
 problem():                     # why no account can be provisioned, or null
     !enabled                         -> DISABLED
-    no username                      -> NO_TAK_CREDENTIALS | NOT_SIGNED_IN
+    no username/password             -> NO_TAK_CREDENTIALS | NOT_SIGNED_IN
     no domain, username has no '@'   -> NO_DOMAIN
-    no password                      -> NO_TAK_PASSWORD | NOT_SIGNED_IN
     otherwise                        -> null        (jid(), below)
 
 jid():
@@ -139,57 +132,6 @@ TAK server whose credentials go to the XMPP server is part of its identity (next
 another one's password goes there only once the user approves it. `takconvo_xmpp_tak_server`
 names the one to use (in the tool preferences, a list of ATAK's TAK servers): then only its
 credentials are used, and none while it has none.
-
-### A TAK server without its password
-
-ATAK doesn't always keep the TAK server's password. It keeps only the username:
-
-- when the connection's credentials option is "Cache username" (or "Do not cache", which
-  keeps neither);
-- typically on networks that **enroll for a client certificate**: once enrolled, ATAK connects
-  with the certificate and never needs the password again. Enrollment itself saves both
-  (`CertificateEnrollmentClient.onEnrollmentOk`, the quick-connect and QR code path), but a
-  server added by hand follows its cache option;
-- with "Use Authentication" off and "Enroll for client certificate" on, ATAK asks for the
-  username and password in a dialog without a cache option, and saves neither. They live in the
-  connection's in-memory settings until ATAK restarts, then they are gone. TAK Convo uses them
-  until then, and asks for the password after a restart only if the username is still there.
-
-The XMPP server needs the password at each login. When ATAK has only the username,
-`problem()` is `NO_TAK_PASSWORD`:
-
-```text
-XmppEngine.apply(loaded), NO_TAK_PASSWORD:
-    the server must be approved first, as for TAK credentials (Approving the server): a
-    .pref file can't get the user asked for a TAK password to send to a server of its own
-    the username isn't a valid address  -> INVALID_JID, no question
-    otherwise: disable all accounts, unprovision      # none connects with a password
-                                                      #   stored before
-
-account pane: the address the TAK username signs in as (read-only), a password field,
-              Log in; the notice names the TAK server
-signInTak(password):              # XmppEngine
-    AtakAuthenticationDatabase["takconvo.tak", host] = (TAK username, password)
-    provisionNow()                # the TAK credentials now have a password
-forgetRefusedTakPassword():       # each dispatch of the engine's changes
-    the account of an entered password is UNAUTHORIZED:
-        delete it from "takconvo.tak"; takPasswordRefused = true; provisionNow()
-        # NO_TAK_PASSWORD again: the account is disabled, the pane asks again and says the
-        # password was refused
-```
-
-Conversations retries a refused login with a backoff (32 s, 42 s, ... in the test). With a
-password typed by hand, and usually the organisation's directory password, a directory that
-locks an account after a few failures would lock the user's after a typo; so a refused entered
-password is tried once. Disabling sets the account's state to `OFFLINE` at once
-(`Account.setOption`), so a later sign-in doesn't see the old `UNAUTHORIZED`. A password from
-ATAK's own store, or an XMPP login, still gets Conversations' retries.
-
-The entered password is used only while ATAK keeps the same username for that host. A password
-in ATAK's own store, or in the connection's settings, still comes first. A server on the XMPP
-domain without its password comes before another domain's server that has one: the user's own
-password, not a partner server's. Clear Content deletes the entered passwords with the rest
-([02](02-embedded-engine.md#ataks-clear-content)).
 
 When TAK credentials are not used, the account pane is a login form. The password goes to
 ATAK's encrypted credential store under type `takconvo.xmpp`. With a domain set, the username
@@ -238,18 +180,15 @@ XmppEngine.apply(loaded):                      # main thread; the first one then
                                                #   stored accounts connect (see Trust)
     settings = loaded.settings
     problem  = settings.problem()
-    if problem is null, NO_TAK_CREDENTIALS or NO_TAK_PASSWORD, and loaded.server isn't
-            approved (next section):
+    if problem is null or NO_TAK_CREDENTIALS, and loaded.server isn't approved (next section):
         problem = SERVER_UNCONFIRMED; trust nothing extra; disable all accounts
         unprovision(); return
     trustChanged = applyTrust(loaded)
-    if problem == NO_TAK_PASSWORD and settings.jid() is not a valid JID:
-        problem = INVALID_JID                          # no question it couldn't use
     if problem == NO_TAK_CREDENTIALS:
         # TAK credentials often arrive after the plugin starts: keep the account on the
         # configured domain as it is, disable the others
         disable accounts not on settings.domain; unprovision(); return
-    if problem != null or settings.jid() is not a valid JID:   # NO_TAK_PASSWORD among them
+    if problem != null or settings.jid() is not a valid JID:
         disable all accounts; unprovision(); return
 
     # upstream only honours an account's host/port with "extended connection settings" on
@@ -279,9 +218,7 @@ keys at once):
   `ACTION_KEYCHAIN_CHANGED`).
 
 `signIn(user, password)` stores the XMPP login and provisions; `signOut()` clears it, empties
-the account's password and provisions, which disables the account. `signInTak(password)`
-stores the password of a TAK server ATAK keeps only the username of, and provisions
-([A TAK server without its password](#a-tak-server-without-its-password)).
+the account's password and provisions, which disables the account.
 
 ## Approving the server
 
@@ -573,9 +510,6 @@ refresh():
     TAK credentials:  address and password fields hidden until there is an account; then the
                       address only, read-only. The notice explains a missing account and offers
                       "Use an XMPP account", which switches to the login form.
-    TAK password:     NO_TAK_PASSWORD: the address read-only, the password field and Log in
-                      (signInTak); the notice names the TAK server, or says the password
-                      entered was refused (then the password field shows Unauthorized too)
     login form:       address and password, editable until the account has logged in once;
                       no keyboard extract mode (IME_FLAG_NO_EXTRACT_UI / NO_FULLSCREEN), and
                       "Done" on the password signs in (the button is under the keyboard)

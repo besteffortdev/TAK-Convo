@@ -289,8 +289,6 @@ wipe():                                    # ClearContentTask's thread
         delete the Keystore key                            # earlier copies stay unreadable
         delete no_backup/takconvo_plugin                   # approved server, open token
         delete the takconvo.xmpp login
-        delete the takconvo.tak passwords                  # entered for TAK servers ATAK
-                                                           #   keeps no password for (03)
 ```
 
 After it, ATAK clears its preferences (the `takconvo_*` settings among them) and its

@@ -353,12 +353,6 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
     only a running process of the package about changes, so the plugin reads it again each time
     ATAK comes to the front
     ([docs/03](docs/03-provisioning-and-trust.md#managed-configuration-mdm)).
-43. **After enrolling for a client certificate, ATAK may keep no TAK server password**: it
-    connects with the certificate. A server added by hand keeps what its cache option says
-    ("Cache username" keeps only the username), and enrolling with "Use Authentication" off
-    keeps the password in memory until ATAK restarts. The XMPP server needs it at each login,
-    so TAK Convo asks for it once and keeps it in ATAK's credential store
-    ([docs/03](docs/03-provisioning-and-trust.md#a-tak-server-without-its-password)).
 
 ## Repository layout
 

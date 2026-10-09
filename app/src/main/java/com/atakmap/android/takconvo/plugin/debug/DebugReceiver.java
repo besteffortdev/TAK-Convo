@@ -23,7 +23,6 @@ import com.atakmap.android.maps.MapItem;
 import com.atakmap.android.maps.MapView;
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.android.takconvo.plugin.TakConvoPlugin;
-import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.android.takconvo.plugin.map.ChatSender;
 import com.atakmap.android.takconvo.plugin.ui.TakConvoPreferenceFragment;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
@@ -41,7 +40,6 @@ import com.atakmap.coremap.maps.time.CoordinatedTime;
 import com.atakmap.net.AtakAuthenticationCredentials;
 import com.atakmap.net.AtakAuthenticationDatabase;
 
-import eu.siacs.conversations.entities.Account;
 import eu.siacs.conversations.entities.Conversation;
 import eu.siacs.conversations.entities.Message;
 import eu.siacs.conversations.services.XmppConnectionService;
@@ -68,8 +66,7 @@ import java.util.List;
  *     [--es takconvo_xmpp_domain D] [--ez takconvo_xmpp_use_tak_credentials B ...]
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SEND --es to J --es body B
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_ADD_TAK_SERVER \
- *     --es connect host:8089:ssl --es user U [--es pass P]
- *     (without pass: ATAK keeps the username only, as after a certificate enrollment)
+ *     --es connect host:8089:ssl --es user U --es pass P
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_REMOVE_TAK_SERVER \
  *     --es connect host:8089:ssl
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_ACCOUNT
@@ -98,8 +95,6 @@ import java.util.List;
  * # what ATAK's Clear Content does to TAK Convo, without clearing ATAK: stops the plugin and
  * # deletes its chats, keys and XMPP login
  * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_CLEAR_CONTENT
- * # deletes a disabled account a test left, with its chats; not the provisioned one
- * adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_DELETE_ACCOUNT --es jid J
  * </pre>
  *
  * <p>Only adb's shell can send these: the receiver requires android.permission.DUMP. The fake
@@ -133,7 +128,6 @@ public final class DebugReceiver extends BroadcastReceiver {
     public static final String ACTION_SEND_TO_CONTACT = PREFIX + "DEBUG_SEND_TO_CONTACT";
     public static final String ACTION_SEND_FILE = PREFIX + "DEBUG_SEND_FILE";
     public static final String ACTION_CLEAR_CONTENT = PREFIX + "DEBUG_CLEAR_CONTENT";
-    public static final String ACTION_DELETE_ACCOUNT = PREFIX + "DEBUG_DELETE_ACCOUNT";
 
     private static final String FAKE_UID = "TAKCONVO-DEBUG-CONTACT";
     /** Extras named extra.K become extra K of the broadcast sent. */
@@ -174,7 +168,6 @@ public final class DebugReceiver extends BroadcastReceiver {
         filter.addAction(ACTION_SEND_TO_CONTACT);
         filter.addAction(ACTION_SEND_FILE);
         filter.addAction(ACTION_CLEAR_CONTENT);
-        filter.addAction(ACTION_DELETE_ACCOUNT);
         // exported for adb's shell, which holds DUMP; apps can't get it
         ContextCompat.registerReceiver(context, receiver, filter, Manifest.permission.DUMP, null,
                 ContextCompat.RECEIVER_EXPORTED);
@@ -217,45 +210,27 @@ public final class DebugReceiver extends BroadcastReceiver {
             // ATAK calls it from its clear content task, off the main thread
             final ClearContentRegistry.ClearContentListener listener = clearContent;
             new Thread(() -> listener.onClearContent(false), "TakConvo.DebugClear").start();
-        } else if (ACTION_DELETE_ACCOUNT.equals(action) && engine != null) {
-            // a test account that provisioning left disabled; never the one in use
-            final Jid jid = XmppEngine.bareJid(intent.getStringExtra("jid"));
-            final Account account =
-                    jid == null ? null : engine.getService().findAccountByJid(jid);
-            if (account != null && account != engine.getAccount()) {
-                engine.getService().deleteAccount(account);
-                Log.d(TAG, "deleted account " + jid);
-            }
         } else if (ACTION_ADD_TAK_SERVER.equals(action)) {
             // as ATAK's "add TAK server" dialog does
             final String connect = intent.getStringExtra("connect");
-            final String user = intent.getStringExtra("user");
-            final String pass = intent.getStringExtra("pass");
             final Bundle data = new Bundle();
             data.putString("description", "TAK Convo test server");
             data.putBoolean("enabled", true);
             data.putBoolean("useAuth", true);
-            if (pass == null) {
-                // ATAK stores the username only, as after a certificate enrollment
-                data.putString("username", user);
-                data.putString("cacheCreds", "Cache username");
-            }
             final CotService cot = CommsMapComponent.getInstance().getCotService();
             cot.addStreaming(connect, data);
-            if (pass != null) {
-                cot.setCredentialsForStream(connect, user, pass);
-            }
+            cot.setCredentialsForStream(connect, intent.getStringExtra("user"),
+                    intent.getStringExtra("pass"));
             Log.d(TAG, "added TAK server " + connect);
         } else if (ACTION_REMOVE_TAK_SERVER.equals(action)) {
             final String connect = intent.getStringExtra("connect");
             // not soft: that only disconnects, and keeps it in files/cotservice/cot_streams
             CommsMapComponent.getInstance().getCotService().removeStreaming(connect, false);
-            // and the credentials stored for it, ATAK's and the password entered in TAK Convo
+            // and the password DEBUG_ADD_TAK_SERVER stored for it
             final NetConnectString ncs = NetConnectString.fromString(connect);
             if (ncs != null) {
                 AtakAuthenticationDatabase.delete(AtakAuthenticationCredentials.TYPE_COT_SERVICE,
                         ncs.getHost());
-                XmppSettings.deleteTakPassword(ncs.getHost());
             }
             Log.d(TAG, "removed TAK server " + connect);
         } else if (ACTION_IMPORT_PREF.equals(action)) {

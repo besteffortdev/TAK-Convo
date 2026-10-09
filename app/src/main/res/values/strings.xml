@@ -18,15 +18,12 @@
     <string name="takconvo_full_address_required">Enter your full XMPP address (user@server): no XMPP domain is configured</string>
     <string name="takconvo_status_disabled">Turned off</string>
     <string name="takconvo_status_no_tak_credentials">Waiting for TAK server credentials</string>
-    <string name="takconvo_status_no_tak_password">TAK server password needed</string>
     <string name="takconvo_status_not_signed_in">Not signed in</string>
     <string name="takconvo_status_no_domain">No XMPP server configured</string>
     <string name="takconvo_status_invalid_jid">Invalid XMPP address</string>
     <string name="takconvo_notice_tak_credentials">Signed in with the credentials of TAK server %1$s. To use another account, turn off \"Use TAK server credentials\" in the settings.</string>
     <string name="takconvo_notice_disabled">The XMPP connection is turned off in the TAK Convo settings.</string>
     <string name="takconvo_notice_no_tak_credentials">No TAK server credentials are available. Add a TAK server with a username and password (Settings › Network Preferences › TAK Servers), or sign in with an XMPP account.</string>
-    <string name="takconvo_notice_no_tak_password">ATAK keeps your username for TAK server %1$s but not its password, for example after enrolling for a client certificate. Enter that password to sign in. TAK Convo keeps it in ATAK\'s encrypted credential store, and asks again only if the server refuses it.</string>
-    <string name="takconvo_notice_tak_password_refused">The XMPP server refused the password you entered for TAK server %1$s, so TAK Convo won\'t try it again. Enter the password again, or the new one if it has changed.</string>
     <string name="takconvo_notice_no_domain">No XMPP server is configured. Import a TAK Convo .pref file (it can come in a mission package), set the XMPP domain in the settings, or sign in with a full XMPP address.</string>
     <string name="takconvo_notice_invalid_jid">Your TAK server username is not a valid XMPP address. Sign in with an XMPP account instead.</string>
     <string name="takconvo_use_xmpp_login">Use an XMPP account</string>

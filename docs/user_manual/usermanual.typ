@@ -44,10 +44,8 @@ administrator made the change.
 == Signing in
 Tap the TAK Convo button (a speech bubble) in ATAK's toolbar or in the Tools menu. TAK Convo
 signs in with the username and password of your TAK server connection, so connect to your TAK
-server first; if ATAK kept only your username (after enrolling for a certificate, say), the
-account screen asks for the password once. Until the connection is up, a red strip at the top
-of the chats says you are not connected yet, or why not (for example _Server not found_). Tap
-it to see the account.
+server first. Until the connection is up, a red strip at the top of the chats says you are
+not connected yet, or why not (for example _Server not found_). Tap it to see the account.
 
 To use another account, tap *Use an XMPP account* and enter your XMPP address and password.
 

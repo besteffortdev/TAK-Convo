@@ -292,8 +292,8 @@ delivered.
 | `DEBUG_IMPORT_PREF` | `path` | imports a `.pref` file with ATAK's importer |
 | `DEBUG_PROVISION` | | runs `XmppEngine.provision()`: `TakConvo.Trust` logs the trust sources from the `TakConvo.Provision` thread, `TakConvo.XmppEngine` "provisioning ..." from the main thread |
 | `DEBUG_APP_CONFIG` | `takconvo_*` (`--es`, `--ez` for Booleans) | replaces the values `AppConfigProvider` adds to the MDM's managed configuration, then reads it: an MDM's settings without an MDM; without extras, none ([03](03-provisioning-and-trust.md#managed-configuration-mdm)) |
-| `DEBUG_ADD_TAK_SERVER` | `connect` (`host:port:ssl`), `user`, `pass` (optional) | adds a TAK server connection the way ATAK's dialog does; without `pass`, ATAK keeps only the username ("Cache username"), as after a certificate enrollment ([03](03-provisioning-and-trust.md#a-tak-server-without-its-password)) |
-| `DEBUG_REMOVE_TAK_SERVER` | `connect` | removes that TAK server connection again, with the credentials stored for its host: ATAK's, and a password entered in TAK Convo |
+| `DEBUG_ADD_TAK_SERVER` | `connect` (`host:port:ssl`), `user`, `pass` | adds a TAK server connection the way ATAK's dialog does |
+| `DEBUG_REMOVE_TAK_SERVER` | `connect` | removes that TAK server connection again, with the credentials stored for its host |
 | `DEBUG_DUMP_SELF_SA` | | logs the SA this device sends (check `xmppUsername`) |
 | `DEBUG_SEND` | `to`, `body` | sends a plain-text 1:1 message |
 | `DEBUG_SHOW_ACCOUNT` | | opens the account pane |
@@ -310,7 +310,6 @@ delivered.
 | `DEBUG_SEND_TO_CONTACT` | `uid` (a contact's), `extra.<key>` | does what ATAK's send list does for a contact whose IP connector names a broadcast (a group chat's `takconvo.room:<address>`); without extras nothing is sent, `GroupChatSends` only warns |
 | `DEBUG_SEND_FILE` | `path` | sends a file to the self chat, as ATAK's Send dialog would |
 | `DEBUG_CLEAR_CONTENT` | | does to TAK Convo what ATAK's Clear Content does, without clearing ATAK: stops the plugin and deletes its data, keys and XMPP login ([02](02-embedded-engine.md#ataks-clear-content)). Back up first (see the checklist) |
-| `DEBUG_DELETE_ACCOUNT` | `jid` | deletes that Conversations account with its chats, unless it is the provisioned one: the disabled account a test of another identity leaves |
 
 ```bash
 adb shell am broadcast -a com.atakmap.android.takconvo.DEBUG_SHOW_CHAT

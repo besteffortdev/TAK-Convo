@@ -3,11 +3,15 @@ package com.atakmap.android.takconvo.plugin.config;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import com.atakmap.android.takconvo.plugin.FakePreferences;
 
 import org.junit.Test;
+
+import java.util.Arrays;
+import java.util.Collections;
 
 public class XmppSettingsTest {
 
@@ -95,5 +99,55 @@ public class XmppSettingsTest {
         assertFalse(XmppSettings.notificationSound(prefs));
         assertTrue(XmppSettings.notificationVibrate(prefs));
         assertEquals("Roger", XmppSettings.quickMessages(prefs, "Roger"));
+    }
+
+    @Test
+    public void takUsernameWithoutPasswordAsksForIt() {
+        assertEquals(XmppSettings.Problem.NO_TAK_PASSWORD,
+                XmppSettings.problem(true, true, "alice", null, "xmpp.example.org"));
+        assertEquals(XmppSettings.Problem.NO_TAK_CREDENTIALS,
+                XmppSettings.problem(true, true, null, null, "xmpp.example.org"));
+        // an XMPP login has no such question
+        assertEquals(XmppSettings.Problem.NOT_SIGNED_IN,
+                XmppSettings.problem(true, false, "alice", "", "xmpp.example.org"));
+        assertNull(XmppSettings.problem(true, true, "alice", "secret", "xmpp.example.org"));
+    }
+
+    @Test
+    public void noDomainComesBeforeThePasswordQuestion() {
+        assertEquals(XmppSettings.Problem.NO_DOMAIN,
+                XmppSettings.problem(true, true, "alice", null, null));
+        // a UPN is an address of its own
+        assertEquals(XmppSettings.Problem.NO_TAK_PASSWORD,
+                XmppSettings.problem(true, true, "alice@corp.example", null, null));
+        assertEquals(XmppSettings.Problem.DISABLED,
+                XmppSettings.problem(false, true, "alice", null, "xmpp.example.org"));
+    }
+
+    @Test
+    public void takCredentialsWithAPasswordComeFirstInTheirGroup() {
+        final XmppSettings.TakCredentials usernameOnly = creds("tak.example.org", null);
+        final XmppSettings.TakCredentials full = creds("tak2.example.org", "secret");
+        assertSame(full, XmppSettings.choose(Arrays.asList(usernameOnly, full),
+                Collections.emptyList()));
+        // none has one: the first username, whose password the user enters
+        final XmppSettings.TakCredentials other = creds("tak3.example.org", null);
+        assertSame(usernameOnly, XmppSettings.choose(Arrays.asList(usernameOnly, other),
+                Collections.emptyList()));
+    }
+
+    @Test
+    public void ownTakServerWithoutPasswordComesBeforeAnotherServersPassword() {
+        final XmppSettings.TakCredentials own = creds("tak.example.org", null);
+        final XmppSettings.TakCredentials partner = creds("tak.partner.net", "secret");
+        assertSame(own, XmppSettings.choose(Collections.singletonList(own),
+                Collections.singletonList(partner)));
+        assertSame(partner, XmppSettings.choose(Collections.emptyList(),
+                Collections.singletonList(partner)));
+        assertNull(XmppSettings.choose(Collections.emptyList(), Collections.emptyList()));
+    }
+
+    private static XmppSettings.TakCredentials creds(final String server, final String password) {
+        return new XmppSettings.TakCredentials(server, "alice", password, password == null);
     }
 }

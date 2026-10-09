@@ -132,6 +132,8 @@ public final class XmppEngine {
     private ServerIdentity pendingServer;
     /** The user's sign-in approves the server it connects to. */
     private boolean approveNext;
+    /** The server refused the TAK server password the user entered; asked again since. */
+    private boolean takPasswordRefused;
     /** What the MDM sets; read on the provisioning thread too. */
     private volatile AppConfig appConfig;
     private boolean appConfigReading;
@@ -162,7 +164,8 @@ public final class XmppEngine {
     /**
      * Deletes what TAK Convo keeps on the device: Conversations' database (messages, contacts,
      * OMEMO keys), files and settings, its notifications, the credentials key, the approved
-     * server and the XMPP login. For ATAK's Clear Content, after {@link #shutdown}; any thread.
+     * server, the XMPP login and the TAK server passwords the user entered. For ATAK's Clear
+     * Content, after {@link #shutdown}; any thread.
      */
     public static void wipe(final Context atakContext) {
         final Context atak = atakContext.getApplicationContext();
@@ -172,6 +175,7 @@ public final class XmppEngine {
         KeystoreCredentials.deleteKey();
         EmbeddedContext.deleteRecursively(PrivateFiles.dir(atak));
         XmppSettings.clearLogin();
+        XmppSettings.clearTakPasswords();
         Log.i(TAG, "TAK Convo's data deleted");
     }
 
@@ -466,10 +470,11 @@ public final class XmppEngine {
         SensitiveLog.d(TAG, "provisioning " + settings);
 
         lastProblem = settings.problem();
-        final boolean connects = lastProblem == null
-                || lastProblem == XmppSettings.Problem.NO_TAK_CREDENTIALS;
-        if (connects && !isApproved(loaded.server)) {
-            // a .pref file can change where the credentials go: the user approves it first
+        final boolean waitsForTak = lastProblem == XmppSettings.Problem.NO_TAK_CREDENTIALS
+                || lastProblem == XmppSettings.Problem.NO_TAK_PASSWORD;
+        if ((lastProblem == null || waitsForTak) && !isApproved(loaded.server)) {
+            // a .pref file can change where the credentials go: the user approves it first,
+            // and before being asked for a TAK server password to send there
             Log.w(TAG, "not provisioning: the server settings changed");
             SensitiveLog.d(TAG, "waiting for approval of " + loaded.server);
             lastProblem = XmppSettings.Problem.SERVER_UNCONFIRMED;
@@ -482,6 +487,14 @@ public final class XmppEngine {
         pendingServer = null;
         final boolean trustChanged = applyTrust(loaded.trust, loaded.trustFingerprint);
 
+        if (lastProblem == XmppSettings.Problem.NO_TAK_PASSWORD
+                && bareJid(settings.jid()) == null) {
+            // no use asking for the password of a username that isn't an address
+            lastProblem = XmppSettings.Problem.INVALID_JID;
+        }
+        if (lastProblem != XmppSettings.Problem.NO_TAK_PASSWORD) {
+            takPasswordRefused = false;
+        }
         if (lastProblem == XmppSettings.Problem.NO_TAK_CREDENTIALS) {
             // the TAK credentials often come later: keep an account on the configured domain
             Log.w(TAG, "not provisioning: " + lastProblem);
@@ -490,7 +503,8 @@ public final class XmppEngine {
             unprovision();
             return;
         } else if (lastProblem != null) {
-            // turned off, signed out or not configured
+            // turned off, signed out, not configured, or the user is asked for the TAK
+            // password: no account connects with a password stored before
             Log.w(TAG, "not provisioning: " + lastProblem);
             disableAccountsExcept(a -> false);
             unprovision();
@@ -756,15 +770,61 @@ public final class XmppEngine {
         } finally {
             approveNext = false;
         }
+        retryIfUnchanged(before, previousPassword);
+        return true;
+    }
+
+    /**
+     * Signs in with the password the user entered for the TAK server of which ATAK keeps only
+     * the username ({@link XmppSettings.Problem#NO_TAK_PASSWORD}). Doesn't approve the server:
+     * that came before the question. False if the settings don't take a password from the user.
+     */
+    public boolean signInTak(final String password) {
+        if (settings == null || !settings.takPasswordFromUser || password.isEmpty()) {
+            return false;
+        }
+        SensitiveLog.d(TAG, "TAK server password entered for " + settings.username);
+        takPasswordRefused = false;
+        final Account before = getAccount();
+        final String previousPassword = before == null ? null : before.getPassword();
+        XmppSettings.saveTakPassword(settings.credentialOrigin, settings.username, password);
+        provisionNow();
+        retryIfUnchanged(before, previousPassword);
+        return true;
+    }
+
+    /** The server refused the TAK server password the user entered last: the pane says so. */
+    public boolean isTakPasswordRefused() {
+        return takPasswordRefused;
+    }
+
+    /**
+     * The server refused the TAK server password the user entered: forgets it, so provisioning
+     * disables the account and asks again. Conversations would retry it with a backoff, and a
+     * directory that locks an account after a few failures would lock the user's.
+     */
+    private void forgetRefusedTakPassword() {
+        final Account account = getAccount();
+        if (settings == null || !settings.takPasswordFromUser || account == null
+                || account.getStatus() != Account.State.UNAUTHORIZED) {
+            return;
+        }
+        Log.w(TAG, "the XMPP server refused the TAK server password entered");
+        XmppSettings.deleteTakPassword(settings.credentialOrigin);
+        takPasswordRefused = true;
+        // at once: the backoff's next attempt would send it again
+        provisionNow();
+    }
+
+    /** After a sign-in: an account apply() left alone retries now, not after the backoff. */
+    private void retryIfUnchanged(final Account before, final String previousPassword) {
         final Account account = getAccount();
         if (account != null && account == before
                 && Objects.equals(previousPassword, account.getPassword())
                 && !account.isOptionSet(Account.OPTION_DISABLED)
                 && !account.isOnlineAndConnected()) {
-            // unchanged, so apply() left it alone: retry now rather than after the backoff
             service.reconnectAccountInBackground(account);
         }
-        return true;
     }
 
     /** Forgets the XMPP login and disables its account; the history is kept. */
@@ -927,6 +987,7 @@ public final class XmppEngine {
         if (stopped) {
             return;
         }
+        Guard.run(TAG, "forget a refused TAK server password", this::forgetRefusedTakPassword);
         // e.g. the account came online: the callsign can be published now
         Guard.run(TAG, "set the callsign as nickname", nicknames::sync);
         for (final Listener l : listeners) {

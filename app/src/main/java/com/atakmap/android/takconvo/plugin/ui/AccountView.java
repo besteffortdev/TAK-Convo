@@ -53,8 +53,8 @@ import java.util.Objects;
 
 /**
  * The XMPP account pane: Conversations' {@code activity_edit_account} layout driven by
- * {@link XmppEngine}. With TAK server credentials it shows the address; otherwise it is the
- * login form. See docs/03.
+ * {@link XmppEngine}. With TAK server credentials it shows the address, and asks for the TAK
+ * server's password if ATAK kept only the username; otherwise it is the login form. See docs/03.
  */
 public final class AccountView implements XmppEngine.Listener {
 
@@ -291,9 +291,13 @@ public final class AccountView implements XmppEngine.Listener {
     }
 
     private void signIn() {
+        final XmppSettings settings = engine.getSettings();
+        if (asksTakPassword(settings, engine.getProblem())) {
+            signInTak();
+            return;
+        }
         final String user = jid.getText().toString().trim();
         final String pass = password.getText().toString();
-        final XmppSettings settings = engine.getSettings();
         if (!user.contains("@") && (settings == null || settings.domain == null)) {
             jidLayout.setError(ui.getString(
                     com.atakmap.android.takconvo.plugin.R.string.takconvo_full_address_required));
@@ -317,6 +321,23 @@ public final class AccountView implements XmppEngine.Listener {
             // the login in use already, or nothing to sign in to: no attempt to wait for
             edited = after == null;
         }
+        hideKeyboard();
+        host.onSignInStarted();
+        refresh();
+    }
+
+    /** With the TAK server password typed; the address is the TAK username's. */
+    private void signInTak() {
+        final Account before = engine.getAccount();
+        if (!engine.signInTak(password.getText().toString())) {
+            // the settings changed meanwhile
+            refresh();
+            return;
+        }
+        edited = false;
+        correcting = false;
+        setText(password, "");
+        startAttempt(before);
         hideKeyboard();
         host.onSignInStarted();
         refresh();
@@ -352,6 +373,9 @@ public final class AccountView implements XmppEngine.Listener {
     }
 
     private void useXmppLogin() {
+        // the login form starts afresh, not with a TAK server password typed
+        edited = false;
+        setText(password, "");
         AtakPreferences.getInstance(dialogContext)
                 .set(XmppSettings.KEY_USE_TAK_CREDENTIALS, false);
         engine.provision();
@@ -379,18 +403,21 @@ public final class AccountView implements XmppEngine.Listener {
         final Account account = engine.getAccount();
         final boolean tak = settings == null || settings.usesTakCredentials;
         followAttempt(account);
+        final boolean asksPassword = asksTakPassword(settings, problem);
 
         toolbar.setSubtitle(account != null
                 ? ui.getString(account.getStatus().getReadableId())
                 : ui.getString(problemStatus(problem)));
 
-        if (tak) {
+        if (asksPassword) {
+            showTakPasswordForm(settings);
+        } else if (tak) {
             showTakAccount(settings, account);
         } else {
             showLoginForm(settings, account);
         }
         progress.setVisibility(isConnecting(account) ? View.VISIBLE : View.GONE);
-        showErrors(problem, tak);
+        showErrors(problem, !tak || asksPassword);
         showNotice(settings, problem, account);
         // the account's details only for a login that worked, not over the form
         final boolean shown = showsAccount(tak, account);
@@ -431,6 +458,33 @@ public final class AccountView implements XmppEngine.Listener {
         cancel.setVisibility(View.GONE);
     }
 
+    /**
+     * ATAK keeps the TAK server's username but not its password (or the server refused the
+     * password the user entered, which the engine then forgets): the pane asks for it.
+     */
+    private static boolean asksTakPassword(final XmppSettings settings,
+            final XmppSettings.Problem problem) {
+        return settings != null && problem == XmppSettings.Problem.NO_TAK_PASSWORD;
+    }
+
+    /** The address the TAK username signs in as, read-only, and the password to type. */
+    private void showTakPasswordForm(final XmppSettings settings) {
+        editor.setVisibility(View.VISIBLE);
+        jidLayout.setHint(ui.getString(R.string.account_settings_jabber_id));
+        jid.setSuffix(null);
+        final String address = settings.jid();
+        setText(jid, address != null ? address : "");
+        setEditable(jid, false);
+        passwordLayout.setVisibility(View.VISIBLE);
+        if (!edited) {
+            setText(password, "");
+        }
+        setEditable(password, true);
+        passwordLayout.setEndIconMode(TextInputLayout.END_ICON_PASSWORD_TOGGLE);
+        cancel.setVisibility(View.GONE);
+        updateButtons();
+    }
+
     private void showLoginForm(final XmppSettings settings, final Account account) {
         editor.setVisibility(View.VISIBLE);
         passwordLayout.setVisibility(View.VISIBLE);
@@ -465,6 +519,12 @@ public final class AccountView implements XmppEngine.Listener {
 
     private void updateButtons() {
         final XmppSettings settings = engine.getSettings();
+        if (asksTakPassword(settings, engine.getProblem())) {
+            save.setVisibility(View.VISIBLE);
+            save.setText(R.string.log_in);
+            save.setEnabled(password.getText().length() > 0);
+            return;
+        }
         if (settings == null || settings.usesTakCredentials) {
             return;
         }
@@ -537,18 +597,22 @@ public final class AccountView implements XmppEngine.Listener {
                 || status == Account.State.AIRPLANE_MODE;
     }
 
-    private void showErrors(final XmppSettings.Problem problem, final boolean tak) {
+    private void showErrors(final XmppSettings.Problem problem, final boolean passwordShown) {
         TextInputLayout errorLayout = null;
         String error = null;
         if (shownError != null && attemptFrom == null) {
-            // no password field with TAK server credentials
-            errorLayout = !tak && (shownError == Account.State.UNAUTHORIZED
+            errorLayout = passwordShown && (shownError == Account.State.UNAUTHORIZED
                     || shownError == Account.State.DOWNGRADE_ATTACK)
                     ? passwordLayout : jidLayout;
             error = ui.getString(shownError.getReadableId());
         } else if (problem == XmppSettings.Problem.INVALID_JID) {
             errorLayout = jidLayout;
             error = ui.getString(R.string.invalid_jid);
+        } else if (problem == XmppSettings.Problem.NO_TAK_PASSWORD
+                && engine.isTakPasswordRefused()) {
+            // the account that was refused is gone, with its state
+            errorLayout = passwordLayout;
+            error = ui.getString(Account.State.UNAUTHORIZED.getReadableId());
         }
         if (correcting && errorLayout != null) {
             // the user is already correcting it
@@ -585,6 +649,13 @@ public final class AccountView implements XmppEngine.Listener {
         } else if (problem == XmppSettings.Problem.NO_TAK_CREDENTIALS) {
             text = ui.getString(com.atakmap.android.takconvo.plugin.R.string
                     .takconvo_notice_no_tak_credentials);
+            offerLogin = loginOffered;
+        } else if (problem == XmppSettings.Problem.NO_TAK_PASSWORD) {
+            text = ui.getString(engine.isTakPasswordRefused()
+                    ? com.atakmap.android.takconvo.plugin.R.string
+                            .takconvo_notice_tak_password_refused
+                    : com.atakmap.android.takconvo.plugin.R.string
+                            .takconvo_notice_no_tak_password, settings.credentialOrigin);
             offerLogin = loginOffered;
         } else if (problem == XmppSettings.Problem.NO_DOMAIN) {
             text = ui.getString(
@@ -736,6 +807,9 @@ public final class AccountView implements XmppEngine.Listener {
             case NO_TAK_CREDENTIALS:
                 return com.atakmap.android.takconvo.plugin.R.string
                         .takconvo_status_no_tak_credentials;
+            case NO_TAK_PASSWORD:
+                return com.atakmap.android.takconvo.plugin.R.string
+                        .takconvo_status_no_tak_password;
             case NO_DOMAIN:
                 return com.atakmap.android.takconvo.plugin.R.string.takconvo_status_no_domain;
             case INVALID_JID:

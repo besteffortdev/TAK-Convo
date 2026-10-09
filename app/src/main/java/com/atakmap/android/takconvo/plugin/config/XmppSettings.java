@@ -23,7 +23,8 @@ import java.util.Map;
  * XMPP settings from ATAK's preferences, so a {@code .pref} file can provision them; the keys
  * are described in provisioning/takconvo-template.pref. The XMPP login lives in ATAK's
  * encrypted credential store ({@link #CREDENTIALS_TYPE}); a password provisioned in the
- * preferences is moved there ({@link #importLogin}).
+ * preferences is moved there ({@link #importLogin}). So is a TAK server password the user
+ * entered because ATAK kept only the username ({@link #TAK_PASSWORD_TYPE}).
  */
 public final class XmppSettings {
 
@@ -61,6 +62,11 @@ public final class XmppSettings {
 
     /** Type of the XMPP login in {@link AtakAuthenticationDatabase}. */
     public static final String CREDENTIALS_TYPE = "takconvo.xmpp";
+    /**
+     * Type of the TAK server passwords the user entered, by TAK server host: ATAK kept only the
+     * username, as after a certificate enrollment with "Cache username".
+     */
+    public static final String TAK_PASSWORD_TYPE = "takconvo.tak";
 
     public static final int DEFAULT_PORT = 5222;
 
@@ -101,6 +107,8 @@ public final class XmppSettings {
     public enum Problem {
         DISABLED,
         NO_TAK_CREDENTIALS,
+        /** ATAK keeps the TAK server's username but not its password: the user enters it. */
+        NO_TAK_PASSWORD,
         NOT_SIGNED_IN,
         NO_DOMAIN,
         INVALID_JID,
@@ -121,6 +129,11 @@ public final class XmppSettings {
     public final CredentialSource credentialSource;
     /** The TAK server the credentials belong to, or null. */
     public final String credentialOrigin;
+    /**
+     * ATAK keeps only the TAK server's username: the password is the one the user entered
+     * ({@link #saveTakPassword}), null until then.
+     */
+    public final boolean takPasswordFromUser;
     /** Username suggested on the login screen, or null. */
     public final String suggestedUsername;
     public final ChannelDiscovery channelDiscovery;
@@ -138,6 +151,7 @@ public final class XmppSettings {
             final boolean usesTakCredentials,
             final CredentialSource credentialSource,
             final String credentialOrigin,
+            final boolean takPasswordFromUser,
             final String suggestedUsername,
             final Channels channels) {
         this.enabled = enabled;
@@ -152,6 +166,7 @@ public final class XmppSettings {
         this.usesTakCredentials = usesTakCredentials;
         this.credentialSource = credentialSource;
         this.credentialOrigin = credentialOrigin;
+        this.takPasswordFromUser = takPasswordFromUser;
         this.suggestedUsername = suggestedUsername;
         this.channelDiscovery = channels.discovery;
         this.channelServer = channels.server;
@@ -182,25 +197,26 @@ public final class XmppSettings {
             // switching identities would provision the wrong account
             final TakCredentials tak = findTakCredentials(takServer, domain, host);
             if (tak != null) {
+                // a null password: the user enters it (NO_TAK_PASSWORD)
                 return new XmppSettings(enabled, domain, host, port, tak.username, tak.password,
-                        trust, true, CredentialSource.TAK_SERVER, tak.server, suggested,
-                        channels);
+                        trust, true, CredentialSource.TAK_SERVER, tak.server, tak.fromUser,
+                        suggested, channels);
             }
             Log.d(TAG, takServer != null ? "no credentials of the TAK server set yet"
                     : "no TAK server credentials available yet");
             return new XmppSettings(enabled, domain, host, port, null, null, trust,
-                    true, CredentialSource.NONE, null, suggested, channels);
+                    true, CredentialSource.NONE, null, false, suggested, channels);
         }
         final AtakAuthenticationCredentials login =
                 AtakAuthenticationDatabase.getCredentials(CREDENTIALS_TYPE);
         if (login != null && !TextUtils.isEmpty(login.username)
                 && !TextUtils.isEmpty(login.password)) {
             return new XmppSettings(enabled, domain, host, port, login.username.trim(),
-                    login.password, trust, false, CredentialSource.LOGIN, null, suggested,
-                    channels);
+                    login.password, trust, false, CredentialSource.LOGIN, null, false,
+                    suggested, channels);
         }
         return new XmppSettings(enabled, domain, host, port, null, null, trust,
-                false, CredentialSource.NONE, null, suggested, channels);
+                false, CredentialSource.NONE, null, false, suggested, channels);
     }
 
     private static final class Channels {
@@ -269,6 +285,47 @@ public final class XmppSettings {
         prefs.edit().remove(KEY_PASSWORD).apply();
     }
 
+    /**
+     * Stores the password the user entered for a TAK server of which ATAK keeps only the
+     * username; used while ATAK keeps that username.
+     */
+    public static void saveTakPassword(final String takServer, final String username,
+            final String password) {
+        AtakAuthenticationDatabase.saveCredentials(TAK_PASSWORD_TYPE, site(takServer), username,
+                password, false);
+    }
+
+    public static void deleteTakPassword(final String takServer) {
+        AtakAuthenticationDatabase.delete(TAK_PASSWORD_TYPE, site(takServer));
+    }
+
+    /** Deletes every TAK server password the user entered. */
+    public static void clearTakPasswords() {
+        final AtakAuthenticationCredentials[] all =
+                AtakAuthenticationDatabase.getDistinctSitesAndTypes();
+        if (all == null) {
+            return;
+        }
+        for (final AtakAuthenticationCredentials c : all) {
+            if (c != null && TAK_PASSWORD_TYPE.equals(c.type)) {
+                AtakAuthenticationDatabase.delete(TAK_PASSWORD_TYPE, c.site);
+            }
+        }
+    }
+
+    /** The password the user entered for that TAK server and username, or null. */
+    private static String enteredTakPassword(final String takServer, final String username) {
+        final AtakAuthenticationCredentials entered =
+                AtakAuthenticationDatabase.getCredentials(TAK_PASSWORD_TYPE, site(takServer));
+        // another user's, if ATAK's username changed
+        return entered != null && username.equals(entered.username)
+                && !TextUtils.isEmpty(entered.password) ? entered.password : null;
+    }
+
+    private static String site(final String takServer) {
+        return takServer.toLowerCase(Locale.ROOT);
+    }
+
     /** The stored XMPP login's username, or null. */
     public static String getLoginUsername() {
         final AtakAuthenticationCredentials login =
@@ -334,14 +391,24 @@ public final class XmppSettings {
 
     /** Why no account can be provisioned, or null. */
     public Problem problem() {
+        return problem(enabled, usesTakCredentials, username, password, domain);
+    }
+
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    static Problem problem(final boolean enabled, final boolean tak, final String username,
+            final String password, final String domain) {
         if (!enabled) {
             return Problem.DISABLED;
         }
-        if (username == null || TextUtils.isEmpty(password)) {
-            return usesTakCredentials ? Problem.NO_TAK_CREDENTIALS : Problem.NOT_SIGNED_IN;
+        if (username == null) {
+            return tak ? Problem.NO_TAK_CREDENTIALS : Problem.NOT_SIGNED_IN;
         }
+        // before asking for a password it couldn't use
         if (domain == null && !username.contains("@")) {
             return Problem.NO_DOMAIN;
+        }
+        if (password == null || password.isEmpty()) {
+            return tak ? Problem.NO_TAK_PASSWORD : Problem.NOT_SIGNED_IN;
         }
         return null;
     }
@@ -372,15 +439,21 @@ public final class XmppSettings {
 
     // --- TAK server credentials ---
 
-    private static final class TakCredentials {
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    static final class TakCredentials {
         final String server;
         final String username;
+        /** Null: ATAK keeps only the username, and the user hasn't entered the password. */
         final String password;
+        /** ATAK keeps only the username: the password is the user's ({@link #saveTakPassword}). */
+        final boolean fromUser;
 
-        TakCredentials(final String server, final String username, final String password) {
+        TakCredentials(final String server, final String username, final String password,
+                final boolean fromUser) {
             this.server = server;
             this.username = username;
             this.password = password;
+            this.fromUser = fromUser;
         }
     }
 
@@ -388,7 +461,7 @@ public final class XmppSettings {
      * Credentials of the TAK server {@code named} ({@link #KEY_TAK_SERVER}), and of no other:
      * another server's password must not go to the XMPP server. Without a name, of a TAK
      * server on the XMPP server's domain, else of another; connected ones first in each case.
-     * The first connected server isn't always the same one.
+     * The first connected server isn't always the same one. See {@link #choose}.
      */
     private static TakCredentials findTakCredentials(final String named, final String domain,
             final String xmppHost) {
@@ -417,14 +490,44 @@ public final class XmppSettings {
                 others.add(s);
             }
         }
-        preferred.addAll(others);
-        for (final TAKServer server : preferred) {
+        return choose(credentialsOf(preferred), credentialsOf(others));
+    }
+
+    private static List<TakCredentials> credentialsOf(final List<TAKServer> servers) {
+        final List<TakCredentials> list = new ArrayList<>();
+        for (final TAKServer server : servers) {
             final TakCredentials creds = credentialsFor(server);
             if (creds != null) {
-                return creds;
+                list.add(creds);
             }
         }
-        return null;
+        return list;
+    }
+
+    /**
+     * Among the preferred servers' credentials, else the others': the first with a password,
+     * else the first with only a username, whose password the user enters. A preferred server
+     * without a password comes before the others: the user's password for it, not another
+     * server's.
+     */
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    static TakCredentials choose(final List<TakCredentials> preferred,
+            final List<TakCredentials> others) {
+        final TakCredentials own = choose(preferred);
+        return own != null ? own : choose(others);
+    }
+
+    private static TakCredentials choose(final List<TakCredentials> candidates) {
+        TakCredentials usernameOnly = null;
+        for (final TakCredentials c : candidates) {
+            if (c.password != null) {
+                return c;
+            }
+            if (usernameOnly == null) {
+                usernameOnly = c;
+            }
+        }
+        return usernameOnly;
     }
 
     /**
@@ -481,24 +584,38 @@ public final class XmppSettings {
         return ncs != null ? ncs.getHost() : null;
     }
 
+    /**
+     * ATAK's credentials for the server; with only a username (a certificate enrollment, "Cache
+     * username"), the password the user entered for it, or none yet.
+     */
     private static TakCredentials credentialsFor(final TAKServer server) {
         final String connectString = server.getConnectString();
         final String host = hostOf(server);
+        String username = null;
         if (host != null) {
             // ATAK's encrypted credential store, keyed by host
             final AtakAuthenticationCredentials stored = AtakAuthenticationDatabase
                     .getCredentials(AtakAuthenticationCredentials.TYPE_COT_SERVICE, host);
-            if (stored != null && !TextUtils.isEmpty(stored.username)
-                    && !TextUtils.isEmpty(stored.password)) {
-                return new TakCredentials(host, stored.username, stored.password);
+            if (stored != null && !TextUtils.isEmpty(stored.username)) {
+                if (!TextUtils.isEmpty(stored.password)) {
+                    return new TakCredentials(host, stored.username, stored.password, false);
+                }
+                username = stored.username;
             }
         }
         final String user = server.getUsername();
         final String pass = server.getPassword();
         if (!TextUtils.isEmpty(user) && !TextUtils.isEmpty(pass)) {
-            return new TakCredentials(host != null ? host : connectString, user, pass);
+            // entered in ATAK's credentials dialog, which may not have stored them
+            return new TakCredentials(host != null ? host : connectString, user, pass, false);
         }
-        return null;
+        if (username == null && !TextUtils.isEmpty(user)) {
+            username = user;
+        }
+        if (host == null || username == null) {
+            return null;
+        }
+        return new TakCredentials(host, username, enteredTakPassword(host, username), true);
     }
 
     private static void addAll(final List<TAKServer> list, final TAKServer[] servers) {
@@ -567,6 +684,7 @@ public final class XmppSettings {
         return "XmppSettings{enabled=" + enabled + ", jid=" + jid() + ", host=" + host
                 + ", port=" + port + ", credentials=" + credentialSource
                 + (credentialOrigin != null ? " (" + credentialOrigin + ")" : "")
+                + (takPasswordFromUser ? " password from the user" : "")
                 + ", trust=" + (useTakTrustStore ? "tak " : "")
                 + (useAndroidCaStore ? "android " : "")
                 + (trustedCaPath != null ? trustedCaPath : "")

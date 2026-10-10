@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# Prints the :conversations fork's changes as a unified diff against upstream Conversations.
+# Prints the :conversations module's changes as a unified diff against its base: the
+# besteffortdev/conversation fork of Conversations (upstream 2.20.4 plus message retraction, the
+# long-press message overlay, short names and app config).
 #
-#   tools/fork-diff.sh [tag] > fork.patch        (default tag: the one the fork is based on)
-#   tools/fork-diff.sh --stat [tag]              (only the list of changed files)
-#   UPSTREAM_DIR=<clone> tools/fork-diff.sh ...  (compare with a local checkout of the tag
-#                                                 instead of cloning, e.g. when offline)
+#   tools/fork-diff.sh [ref] > fork.patch        (default: the base commit the module is on)
+#   tools/fork-diff.sh --stat [ref]              (only the list of changed files)
+#   UPSTREAM_DIR=<clone> tools/fork-diff.sh ...  (compare with a local checkout of the ref
+#                                                 instead of fetching, e.g. when offline)
+#   UPSTREAM_URL=https://codeberg.org/iNPUTmice/Conversations.git tools/fork-diff.sh 2.20.4
+#                                                (against plain upstream: also the base's own
+#                                                 changes)
 #
-# Only the source sets the fork imports are compared: src/main, src/conversations, src/free,
+# Only the source sets the module imports are compared: src/main, src/conversations, src/free,
 # src/conversationsFree and libs/. Upstream's store metadata (fastlane) and launcher artwork are
 # not imported and are left out. See docs/05-conversations-fork.md.
 set -euo pipefail
@@ -16,8 +21,8 @@ if [ "${1:-}" = "--stat" ]; then
     STAT=true
     shift
 fi
-TAG=${1:-2.20.4}
-UPSTREAM_URL=https://codeberg.org/iNPUTmice/Conversations.git
+TAG=${1:-92d6edd3454746eaae71cae9686673c38c6c3619}
+UPSTREAM_URL=${UPSTREAM_URL:-https://github.com/besteffortdev/conversation.git}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
@@ -27,10 +32,13 @@ if [ -n "${UPSTREAM_DIR:-}" ]; then
     mkdir -p "$WORK/upstream"
     cp -r "$UPSTREAM_DIR/src" "$UPSTREAM_DIR/libs" "$WORK/upstream/"
 else
-    echo "cloning $UPSTREAM_URL at $TAG" >&2
-    # long paths: some upstream paths exceed Windows' 260 characters under a temp directory
-    git -c core.longpaths=true -c advice.detachedHead=false \
-        clone -q --depth 1 --branch "$TAG" "$UPSTREAM_URL" "$WORK/upstream"
+    echo "fetching $UPSTREAM_URL at $TAG" >&2
+    # fetch, not clone --branch: the base is a commit. Long paths: some upstream paths exceed
+    # Windows' 260 characters under a temp directory
+    git init -q "$WORK/upstream"
+    git -C "$WORK/upstream" fetch -q --depth 1 "$UPSTREAM_URL" "$TAG"
+    git -C "$WORK/upstream" -c core.longpaths=true -c advice.detachedHead=false \
+        checkout -q FETCH_HEAD
 fi
 
 # diff from inside WORK so that the file names read upstream/... and fork/...

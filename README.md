@@ -6,7 +6,11 @@ running in ATAK's process, in ATAK panes, connected to the organisation's XMPP s
 user's TAK identity.
 
 - **XMPP in ATAK**: 1:1 chats and group chats (MUC), OMEMO encryption, file transfer
-  (HTTP upload), reactions, search, history (MAM). The engine and UI are Conversations 2.20.4.
+  (HTTP upload), reactions, search, history (MAM), deleting a sent message for everyone
+  (XEP-0424 retraction). The engine and UI are Conversations 2.20.4 as forked in
+  [besteffortdev/conversation](https://github.com/besteffortdev/conversation), which adds
+  retraction, a long-press menu with quick reactions and short names for users on other
+  servers.
 - **Zero typing**: the XMPP domain comes from a `.pref` file, a mission package or the MDM that
   installs the plugin (Android app config, e.g. SOTI MobiControl); the login reuses the TAK
   server's username and password. An XMPP login screen exists for other setups.
@@ -68,7 +72,7 @@ providers can run. TAK Convo gives Conversations what it expects anyway:
   chats and reports unread counts and presence. Conversations' notifications are posted as
   ATAK's; their taps, actions and alarms are redirected to ATAK's activity and to a receiver in
   ATAK's process, and their icons drawn as bitmaps.
-- **Fork**: 30 upstream files changed and one added, all marked `TAKCONVO`: no Android service,
+- **Fork**: 56 files of that base changed and 2 added, all marked `TAKCONVO`: no Android service,
   hooks for trust, compatibility with the libraries ATAK loads, activities in a pane, files
   through ATAK's FileProvider, PendingIntents and notifications that work as ATAK's.
 
@@ -190,7 +194,8 @@ app/                      the ATAK plugin
     ui/                   account pane, tool preferences
     ui/host/              chat pane: EmbeddedActivityHost, HostParent, PaneFrame, ChatDropDown
     debug/                DebugReceiver (debug builds)
-conversations/            Conversations 2.20.4 fork, as an Android library (GPLv3)
+conversations/            besteffortdev/conversation (Conversations 2.20.4 fork), as an
+                          Android library (GPLv3)
   UPSTREAM.md             base version, imported source sets
   upstream/               upstream manifests and proguard rules, for reference
 gradle/atak-runtime.gradle  library versions ATAK provides at runtime
@@ -210,8 +215,8 @@ embedding a full Android app in ATAK ([docs/11](docs/11-findings.md)).
 
 ## License
 
-`conversations/` is Conversations by Daniel Gultsch and contributors, GPLv3
-([conversations/LICENSE](conversations/LICENSE)). The plugin APK includes it and is distributed
+`conversations/` is Conversations by Daniel Gultsch and contributors, with the changes of
+besteffortdev/conversation, GPLv3 ([conversations/LICENSE](conversations/LICENSE)). The plugin APK includes it and is distributed
 under the GPLv3 ([LICENSE](LICENSE)). The plugin's icons are Conversations' launcher icons. The plugin skeleton
 comes from the ATAK-CIV SDK's plugin template.
 

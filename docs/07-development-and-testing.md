@@ -408,7 +408,11 @@ After an upstream merge, a dependency change or a change to the host:
    chats at the top, with the chat room icon; tapping one opens it.
 8. Overflow menus: search messages; Settings opens the plugin's preferences; Manage accounts
    opens the account pane.
-9. Long-press a message: context menu, add a reaction.
+9. Long-press a message: the bubble lifts out, lined up with it inside the pane, with the
+   whole reactions row above (the add-reaction button included) and the options below,
+   scrolling when they don't fit. Add a reaction. On your own message in the self chat,
+   **Delete for everyone** → **Delete**: it reads "You deleted this message"
+   ("received retraction for ..." in `tak convo` for those from other clients).
 10. Text field: select text (floating toolbar), paste as quote.
 11. Attachment row: File → pick a file → send to yourself → open it with another app.
     Camera opens (cancel it). Voice message (the microphone send button): the recorder floats

@@ -135,6 +135,13 @@ public class UIHelper {
         return getMessagePreview(context, message, null, ' ');
     }
 
+    public static String getRetractedText(final Context context, final Message message) {
+        return context.getString(
+                message.getStatus() == Message.STATUS_RECEIVED
+                        ? R.string.message_retracted
+                        : R.string.message_retracted_by_you);
+    }
+
     public static Pair<CharSequence, Boolean> getMessagePreview(
             final Context context, final Message message, final char separator) {
         return getMessagePreview(context, message, null, separator);
@@ -150,6 +157,9 @@ public class UIHelper {
             final Message message,
             final @Nullable @ColorInt Integer textColor,
             @Nullable final Character separator) {
+        if (message.isRetracted()) {
+            return new Pair<>(getRetractedText(context, message), true);
+        }
         final Transferable d = message.getTransferable();
         if (d != null) {
             switch (d.getStatus()) {
@@ -479,6 +489,61 @@ public class UIHelper {
                     return displayName;
                 }
             }
+        }
+    }
+
+    /**
+     * Display names that are themselves the address of a user on another server (for example a nick
+     * or roster name of 'user@other.example') are reduced to the local part.
+     */
+    public static String shortenForeignAddress(final String displayName, final Account account) {
+        final Jid address = asUserAddress(displayName);
+        if (address == null || address.getDomain().equals(account.getDomain())) {
+            return displayName;
+        }
+        return address.getLocal();
+    }
+
+    /**
+     * @return the full address of the sender: the display name if that already is an address,
+     *     otherwise the real address if known
+     */
+    @Nullable
+    public static String getMessageSenderAddress(final Message message) {
+        final String displayName = getMessageDisplayName(message);
+        if (asUserAddress(displayName) != null) {
+            return displayName;
+        }
+        final Conversational conversation = message.getConversation();
+        final Jid address;
+        if (message.getStatus() == Message.STATUS_RECEIVED) {
+            if (conversation.getMode() == Conversation.MODE_MULTI) {
+                if (conversation instanceof Conversation c) {
+                    address = c.getMucOptions().getUserOrStub(message).getRealJid();
+                } else {
+                    address = message.getTrueCounterpart();
+                }
+            } else {
+                address = message.getCounterpart();
+            }
+        } else {
+            address = conversation.getAccount().getJid();
+        }
+        return address == null || address.getLocal() == null
+                ? null
+                : address.asBareJid().toString();
+    }
+
+    @Nullable
+    private static Jid asUserAddress(@Nullable final String name) {
+        if (name == null || name.indexOf('@') <= 0) {
+            return null;
+        }
+        try {
+            final Jid address = Jid.of(name);
+            return address.getLocal() == null ? null : address;
+        } catch (final IllegalArgumentException e) {
+            return null;
         }
     }
 

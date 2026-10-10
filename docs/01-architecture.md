@@ -88,7 +88,7 @@ flowchart TB
 | `XmppContacts`, `XmppRoomContact` | `plugin.contacts` | ATAK's handler for XMPP connectors: opens chats, unread counts and presence for ATAK's contacts, group chats as contacts, the toolbar badge | [08](08-contacts-and-notifications.md) |
 | `GroupChatSends` | `plugin.contacts` | Map items and data packages sent to a group chat from ATAK's send list | [10](10-atak-map-integration.md#map-items-to-a-group-chat) |
 | `MapLocations`, `AtakIntegration`, `CoordinateFinder`, `ChatSender` | `plugin.map` | Locations on ATAK's map, positions in messages, quick messages, Show on map, imports into ATAK, TAK Convo in ATAK's Send dialog | [10](10-atak-map-integration.md) |
-| `:conversations` | `eu.siacs.conversations` | Conversations 2.20.4, built as a library, with a small set of marked changes | [05](05-conversations-fork.md) |
+| `:conversations` | `eu.siacs.conversations` | Conversations 2.20.4 as forked in besteffortdev/conversation (message retraction, long-press overlay, short names), built as a library, with a small set of marked changes | [05](05-conversations-fork.md) |
 | `gradle/atak-runtime.gradle`, `tools/AtakLinkCheck.java` | build | Compile against what ATAK loads at runtime and check for it | [06](06-atak-runtime-and-classloading.md) |
 | `DebugReceiver` | `plugin.debug` | Debug builds: drive the plugin from `adb` | [07](07-development-and-testing.md) |
 | `SensitiveLog` | `plugin` | Debug logs that name users, left out of release builds | [09](09-code-guidelines.md#logging) |

@@ -1,4 +1,5 @@
-// Conversations 2.20.4, rebuilt as an Android library to embed inside the TAK Convo ATAK plugin.
+// besteffortdev/conversation (Conversations 2.20.4 fork), rebuilt as an Android library to embed
+// inside the TAK Convo ATAK plugin.
 // Adapted from upstream's app build.gradle ("conversations" + "free" variant).
 
 apply plugin: 'com.android.library'

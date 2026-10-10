@@ -133,6 +133,7 @@ import eu.siacs.conversations.ui.util.ShareUtil;
 import eu.siacs.conversations.ui.util.ToolbarUtils;
 import eu.siacs.conversations.ui.util.ViewUtil;
 import eu.siacs.conversations.ui.widget.EditMessage;
+import eu.siacs.conversations.ui.widget.MessageOptionsDialog;
 import eu.siacs.conversations.utils.AccountUtils;
 import eu.siacs.conversations.utils.CharSequences;
 import eu.siacs.conversations.utils.Compatibility;
@@ -160,6 +161,7 @@ import eu.siacs.conversations.xmpp.manager.MessageArchiveManager;
 import eu.siacs.conversations.xmpp.manager.ModerationManager;
 import eu.siacs.conversations.xmpp.manager.MultiUserChatManager;
 import eu.siacs.conversations.xmpp.manager.PresenceManager;
+import eu.siacs.conversations.xmpp.manager.RetractionManager;
 import im.conversations.android.model.AttachmentChoice;
 import im.conversations.android.provider.ApplicationProvider;
 import im.conversations.android.provider.VCardProvider;
@@ -529,6 +531,7 @@ public class ConversationFragment extends XmppFragment
                 return true;
             };
     private Message selectedMessage;
+    private MessageOptionsDialog messageOptionsDialog;
     private final OnClickListener mEnableAccountListener =
             new OnClickListener() {
                 @Override
@@ -1473,6 +1476,9 @@ public class ConversationFragment extends XmppFragment
         binding.messagesView.setAdapter(messageListAdapter);
 
         registerForContextMenu(binding.messagesView);
+        // consulted before the context menu; replaces it for messages that have options
+        binding.messagesView.setOnItemLongClickListener(
+                (parent, view, position, id) -> showMessageOptions(position));
 
         this.binding.textInput.setCustomInsertionActionModeCallback(
                 new EditMessageActionModeCallback(this.binding.textInput));
@@ -1545,17 +1551,66 @@ public class ConversationFragment extends XmppFragment
         }
     }
 
+    private boolean showMessageOptions(final int position) {
+        final Message message;
+        synchronized (this.messageList) {
+            if (position < 0 || position >= this.messageList.size()) {
+                return false;
+            }
+            message = this.messageList.get(position);
+        }
+        final ListView messagesView = binding.messagesView;
+        final View row = messagesView.getChildAt(position - messagesView.getFirstVisiblePosition());
+        final View bubble = row == null ? null : row.findViewById(R.id.message_box);
+        if (bubble == null) {
+            return false;
+        }
+        this.selectedMessage = message;
+        final Menu menu = new PopupMenu(requireContext(), bubble).getMenu();
+        populateContextMenu(menu);
+        final List<MenuItem> options = new ArrayList<>();
+        for (int i = 0; i < menu.size(); ++i) {
+            final MenuItem item = menu.getItem(i);
+            // reactions are offered right above the message instead
+            if (item.isVisible() && item.getItemId() != R.id.action_add_reaction) {
+                options.add(item);
+            }
+        }
+        final boolean showReactions = MessageUtils.canAddReaction(message);
+        if (options.isEmpty() && !showReactions) {
+            return false;
+        }
+        // This should cancel any remaining click events that would otherwise trigger links
+        messagesView.dispatchTouchEvent(
+                MotionEvent.obtain(0, 0, MotionEvent.ACTION_CANCEL, 0f, 0f, 0));
+        this.messageOptionsDialog =
+                new MessageOptionsDialog(
+                        requireActivity(),
+                        message,
+                        bubble,
+                        options,
+                        item -> {
+                            this.selectedMessage = message;
+                            onContextItemSelected(item);
+                        },
+                        showReactions,
+                        reactions -> requireXmppActivity().sendReactions(message, reactions));
+        this.messageOptionsDialog.show();
+        return true;
+    }
+
     private static boolean isAckedModerationDisclaimer() {
         return ackModeration.isAfter(Instant.now());
     }
 
-    private void populateContextMenu(final ContextMenu menu) {
+    private void populateContextMenu(final Menu menu) {
         final Message m = this.selectedMessage;
         final Transferable t = m.getTransferable();
         if (m.getType() != Message.TYPE_STATUS && m.getType() != Message.TYPE_RTP_SESSION) {
 
             if (m.getEncryption() == Message.ENCRYPTION_AXOLOTL_NOT_FOR_THIS_DEVICE
-                    || m.getEncryption() == Message.ENCRYPTION_AXOLOTL_FAILED) {
+                    || m.getEncryption() == Message.ENCRYPTION_AXOLOTL_FAILED
+                    || m.isRetracted()) {
                 return;
             }
 
@@ -1575,7 +1630,9 @@ public class ConversationFragment extends XmppFragment
                             && (t instanceof JingleFileTransferConnection
                                     || t instanceof HttpDownloadConnection);
             requireActivity().getMenuInflater().inflate(R.menu.message_context, menu);
-            menu.setHeaderTitle(R.string.message_options);
+            if (menu instanceof ContextMenu contextMenu) {
+                contextMenu.setHeaderTitle(R.string.message_options);
+            }
             final MenuItem addReaction = menu.findItem(R.id.action_add_reaction);
             final MenuItem reportAndBlock = menu.findItem(R.id.action_report_and_block);
             final MenuItem openWith = menu.findItem(R.id.open_with);
@@ -1617,26 +1674,19 @@ public class ConversationFragment extends XmppFragment
                         c.getMode() == Conversational.MODE_SINGLE
                                 || (c.getMucOptions().occupantId()
                                         && c.getMucOptions().participating());
-                final var reactionBaseConditions =
-                        m.getStatus() != Message.STATUS_SEND_FAILED
-                                && !m.isDeleted()
-                                && singleOrOccupantId;
                 if (m.getStatus() != Message.STATUS_SEND_FAILED
                         && c.getMode() == Conversational.MODE_MULTI) {
                     final var mucOptions = c.getMucOptions();
-                    final var restrictions = mucOptions.getReactionsRestrictions();
-                    final var reactionsRemaining =
-                            restrictions.reactionsPerUserRemaining(m.getReactions());
                     moderateMessage.setVisible(
                             !mucOptions.isPrivateAndNonAnonymous()
                                     && mucOptions.moderation()
                                     && mucOptions.getSelf().ranks(Role.MODERATOR)
                                     && m.getServerMsgId() != null);
-                    addReaction.setVisible(reactionBaseConditions && reactionsRemaining);
                 } else {
-                    addReaction.setVisible(reactionBaseConditions);
                     moderateMessage.setVisible(false);
                 }
+                addReaction.setVisible(MessageUtils.canAddReaction(m));
+                menu.findItem(R.id.retract_message).setVisible(RetractionManager.isRetractable(m));
                 moderateMessage.setTitle(
                         isAckedModerationDisclaimer()
                                 ? R.string.moderate_delete
@@ -1794,6 +1844,9 @@ public class ConversationFragment extends XmppFragment
             return true;
         } else if (itemId == R.id.moderation) {
             moderate(selectedMessage);
+            return true;
+        } else if (itemId == R.id.retract_message) {
+            retractMessage(selectedMessage);
             return true;
         } else if (itemId == R.id.show_error_message) {
             showErrorMessage(selectedMessage);
@@ -2602,6 +2655,29 @@ public class ConversationFragment extends XmppFragment
                 ContextCompat.getMainExecutor(requireContext()));
     }
 
+    private void retractMessage(final Message message) {
+        final MaterialAlertDialogBuilder builder =
+                new MaterialAlertDialogBuilder(requireActivity());
+        builder.setTitle(R.string.retract_message_question);
+        builder.setMessage(R.string.retract_message_explanation);
+        builder.setNegativeButton(R.string.cancel, null);
+        builder.setPositiveButton(
+                R.string.delete,
+                (dialog, which) -> {
+                    final var connection =
+                            message.getConversation().getAccount().getXmppConnection();
+                    if (connection == null
+                            || !connection.getManager(RetractionManager.class).retract(message)) {
+                        Toast.makeText(
+                                        requireActivity(),
+                                        R.string.could_not_retract_message,
+                                        Toast.LENGTH_LONG)
+                                .show();
+                    }
+                });
+        builder.create().show();
+    }
+
     private void moderate(final Message message) {
         final var manager =
                 message.getConversation()
@@ -2866,6 +2942,10 @@ public class ConversationFragment extends XmppFragment
     @Override
     public void onStop() {
         super.onStop();
+        if (messageOptionsDialog != null) {
+            messageOptionsDialog.dismiss();
+            messageOptionsDialog = null;
+        }
         final Activity activity = getActivity();
         messageListAdapter.unregisterListenerInAudioPlayer();
         if (activity == null || !activity.isChangingConfigurations()) {

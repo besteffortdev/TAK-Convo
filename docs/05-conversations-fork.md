@@ -1,9 +1,22 @@
 # 05 — The Conversations fork
 
-`:conversations` is a fork of **Conversations 2.20.4**
-(<https://codeberg.org/iNPUTmice/Conversations>, tag `2.20.4`, commit `bf3269cd`), GPLv3.
-This document lists every difference from upstream, why each exists, and how to move the fork
-to a newer upstream release.
+`:conversations` is built from **besteffortdev/conversation**
+(<https://github.com/besteffortdev/conversation>, branch `master`, commit `92d6edd3`), a fork
+of **Conversations 2.20.4** (<https://codeberg.org/iNPUTmice/Conversations>, tag `2.20.4`,
+commit `bf3269cd`), GPLv3. That base adds, on top of 2.20.4:
+
+- **XEP-0424 message retraction**: "Delete for everyone" on your own messages, retractions
+  received live and from the archive (MAM, with MUC stanza-ids), retractions that arrive
+  before their message kept until it does (`RetractionManager`, `PendingRetractions`; a
+  `retracted` column and a `pending_retractions` table, created when the database opens);
+- **a long-press message overlay** (`MessageOptionsDialog`): the message lifts out, with a row
+  of reactions above it and the message options below, instead of the context menu;
+- **short names** for users on other servers (`UIHelper`, `MessageAdapter`);
+- **managed configuration** (MDM app config) for the standalone app, which stays off inside
+  ATAK (section P).
+
+This document lists every difference between `:conversations` and that base, why each exists,
+and how to move to a newer base.
 
 The exact, current diff can always be regenerated:
 
@@ -12,16 +25,19 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-10-03 (credentials encrypted, OMEMO key size) it is **53 modified files, 2 added
-files, 2 removed manifests** (132 hunks), and the patch applies cleanly to 2.20.4. Every code change carries a `TAKCONVO`
-comment: `grep -rn TAKCONVO conversations/src`. When codeberg is unreachable,
-`UPSTREAM_DIR=<a checkout of the tag> tools/fork-diff.sh` compares with a local clone.
+As of 2026-10-09 (moved to besteffortdev/conversation `92d6edd3`) it is **56 modified files,
+2 added files, 4 removed files** (the two flavor manifests and the base's app config schema,
+section P; 146 hunks), and the patch applies cleanly to the base. Every code change carries a
+`TAKCONVO` comment: `grep -rn TAKCONVO conversations/src`. When GitHub is unreachable,
+`UPSTREAM_DIR=<a checkout of the base> tools/fork-diff.sh` compares with a local clone.
+`UPSTREAM_URL=https://codeberg.org/iNPUTmice/Conversations.git tools/fork-diff.sh 2.20.4`
+compares with plain upstream instead, the base's own changes included.
 
 ## What was imported
 
 | Upstream | Fork | Notes |
 |---|---|---|
-| `src/main` | `conversations/src/main` | modified, see below |
+| `src/main` | `conversations/src/main` | modified, see below; the base's `res/xml/app_restrictions.xml` and `res/values/fork_app_config.xml` not imported (section P) |
 | `src/conversations` | `conversations/src/conversations` | Java and resources as-is; `AndroidManifest.xml`, `fastlane/`, `new_launcher-web.png` not imported |
 | `src/free` | `conversations/src/free` | as-is; `AndroidManifest.xml` not imported |
 | `src/conversationsFree` | `conversations/src/conversationsFree` | as-is |
@@ -30,7 +46,9 @@ comment: `grep -rn TAKCONVO conversations/src`. When codeberg is unreachable,
 | `AndroidManifest.xml` of main, conversations, free | `conversations/upstream/AndroidManifest.*.xml` | kept for reference only, not built |
 | `proguard-rules.pro` | `conversations/upstream/proguard-rules.pro` | used as `consumerProguardFiles` |
 
-Not imported: the `playstore`, `quicksy*` and `test` source sets, `art/`, `docs/`, `fastlane/`.
+Not imported: the `playstore`, `quicksy*`, `test` and `debug` source sets (the base's
+`debug` one only holds an adb receiver that simulates an MDM), `art/`, `docs/`, `fastlane/`.
+The base changes no build file, so the build changes below are the same as against 2.20.4.
 
 The fork is the upstream **`conversations` + `free`** variant: the library keeps upstream's two
 flavor dimensions (`mode`, `distribution`) with one flavor each, so the source-set overlays
@@ -302,6 +320,33 @@ no other library. Tested on the PC against the two jars:
 
 Upgrading protobuf would mean regenerating libsignal's 2.5-generated classes.
 
+### P. The base's own features inside ATAK
+
+Message retraction and short names work inside ATAK unchanged. Two of the base's features
+needed changes.
+
+**The long-press overlay** lines itself up with the activity's window. Inside ATAK that window
+is never shown: its decor view is unattached, 0 pixels wide, which made the options card's width
+negative and placed the overlay against ATAK's whole window. It now lines up with the pane's
+content (`BaseActivity.embeddedContent`) when there is one. The reactions row also needs
+7 × 44 dp, more than a pane's ~310 dp: the reaction buttons shrink to fit.
+
+**Managed configuration** reads `RestrictionsManager`, which in ATAK's process returns ATAK's
+app config, and listens for `ACTION_APPLICATION_RESTRICTIONS_CHANGED`, which would be ATAK's.
+The plugin reads its own app config from a process of its package
+([03](03-provisioning-and-trust.md#managed-configuration-mdm)) and applies it through its
+settings and account pane, so the base's stays empty inside ATAK: nothing is locked,
+enforced or trusted from it. Its schema isn't imported: the plugin APK declares its own
+`app_restrictions.xml`, which would override it anyway, and its console strings would only be
+dead weight.
+
+| File | Change |
+|---|---|
+| `java/eu/siacs/conversations/ui/widget/MessageOptionsDialog.java` | `container()`: `embeddedContent` if set, else the decor view. `layout()` measures the bubble from the container, gives the column the container's width, and fits `emojiSize` to it; `animateIn()` moves the column to the container and centres it on it vertically (the pane is half of the screen in portrait), within the dialog. `addReactions()` uses `emojiSize`. |
+| `java/eu/siacs/conversations/services/AppConfig.java` | `read()`: an empty configuration when `TakConvoCompat.EMBEDDED`. |
+| `java/eu/siacs/conversations/services/AppConfigService.java` | `start()` and `stop()` do nothing when `TakConvoCompat.EMBEDDED`: no reading, no preference lock, no receiver. |
+| `res/xml/app_restrictions.xml`, `res/values/fork_app_config.xml` | **Not imported.** |
+
 ## What the plugin relies on
 
 An upstream update can also break the plugin without touching a fork change. These are the
@@ -325,24 +370,33 @@ Conversations APIs the plugin (`app/`) uses directly:
 | `ui/AccountView` | layout `activity_edit_account` and its view ids (`toolbar`, `editor`, `avater`, `account_jid(_layout)`, `account_password(_layout)` and that they share a parent, `save_button`, `cancel_button`, `stats`, `account_main_layout`, and the ids it hides), string `account_status_connecting`, `Account.State` and `getReadableId()`, style `Theme.Conversations3.Dark`, `AxolotlService`, `UIHelper`, `XmppConnection` and its managers (`Blocking`, `Carbons`, `ClientStateIndication`, `ExternalServiceDiscovery`, `HttpUpload`, `MessageArchive`, `Pep`, `Roster`) |
 | `ui/host/EmbeddedActivityHost` | activity class names (the `SUPPORTED` and `FLOATING` lists, `ui.activity.SettingsActivity`, `EditAccountActivity`, `ManageAccountActivity`), `ConversationsActivity.ACTION_VIEW_CONVERSATION` / `EXTRA_CONVERSATION`, styles `Theme.Conversations3` and `Theme.Conversations3.Dialog`, `BaseActivity.embeddedContent` |
 
-## Moving to a newer upstream release
+## Moving to a newer base
 
-1. **Read upstream's changelog** between 2.20.4 and the target tag, looking for changes to the
-   files in the tables above, to `XmppConnectionService`'s lifecycle, and to dependencies.
-2. **Rebase the fork.** In a scratch directory:
+The same steps move `:conversations` to a newer commit of besteffortdev/conversation (new
+features there, or that fork merging a newer upstream release), or to another base.
+
+1. **Read what changed** between the current base (`92d6edd3`) and the target commit: the
+   base's commits, and upstream's changelog if it merged a newer release. Look for changes to
+   the files in the tables above, to `XmppConnectionService`'s lifecycle, to dependencies, and
+   for new windows, dialogs or popups that measure the activity's window (section P).
+2. **Rebase the changes.** In a scratch directory:
    ```bash
-   tools/fork-diff.sh 2.20.4 > takconvo.patch      # the fork's changes, against its base
-   git -c core.longpaths=true clone --depth 1 --branch <new-tag> \
-       https://codeberg.org/iNPUTmice/Conversations.git new
-   cd new && git apply -p1 --reject --whitespace=nowarn ../takconvo.patch
+   tools/fork-diff.sh > takconvo.patch      # the changes, against the current base
+   git init new && cd new
+   git fetch --depth 1 https://github.com/besteffortdev/conversation.git <commit>
+   git -c core.longpaths=true checkout FETCH_HEAD
+   git apply -p1 --reject --whitespace=nowarn ../takconvo.patch
    ```
    The patch uses `upstream/` and `fork/` prefixes; `-p1` strips them. Hunks that don't apply
    are left in `*.rej` files next to their file (the patch is a plain diff, so `--3way` can't
    merge). They are usually the `requestPermissions` and `MenuProvider` ones, which move with
-   upstream refactoring: re-apply them by hand, keeping the `TAKCONVO` comments.
+   upstream refactoring, or the manifest and `dimens.xml`: re-apply them by hand, keeping the
+   `TAKCONVO` comments. The main manifest is the plugin's empty one whatever the base has.
 3. **Copy** the patched `src/main`, `src/conversations`, `src/free`, `src/conversationsFree`
-   and `libs/` over `conversations/`. Skip `fastlane/`, the launcher artwork and the flavor
-   manifests. Update `conversations/upstream/` with the new manifests and proguard rules.
+   and `libs/` over `conversations/`. Skip `fastlane/`, the launcher artwork, the flavor
+   manifests and what section P leaves out. Update `conversations/upstream/` with the new
+   manifests and proguard rules, the default commit in `tools/fork-diff.sh`, and the base named
+   in this document and `conversations/UPSTREAM.md`.
 4. **Merge the build.** Diff upstream's new `build.gradle` against the previous one and carry
    the changes into `conversations/build.gradle`: new dependencies, new `BuildConfig` fields,
    new flavor source sets. Keep the ATAK-provided versions from `gradle/atak-runtime.gradle`.
@@ -381,4 +435,5 @@ Conversations APIs the plugin (`app/`) uses directly:
    switches and lists in `res/xml/preferences_*.xml`. Add new settings that work inside ATAK,
    drop removed ones, and keep the allowed values of lists in step. Update the template's list.
 10. **Test on the device**, see [07](07-development-and-testing.md#device-test-checklist).
-11. **Update this document**: the base tag at the top, the file tables and the dependency table.
+11. **Update this document**: the base at the top and its features, the counts, the file
+    tables and the dependency table.

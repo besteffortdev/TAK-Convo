@@ -35,6 +35,7 @@ import eu.siacs.conversations.xmpp.manager.ModerationManager;
 import eu.siacs.conversations.xmpp.manager.MultiUserChatManager;
 import eu.siacs.conversations.xmpp.manager.PubSubManager;
 import eu.siacs.conversations.xmpp.manager.ReactionManager;
+import eu.siacs.conversations.xmpp.manager.RetractionManager;
 import eu.siacs.conversations.xmpp.manager.RosterManager;
 import eu.siacs.conversations.xmpp.manager.StanzaIdManager;
 import im.conversations.android.xmpp.model.Extension;
@@ -351,21 +352,22 @@ public class MessageParser extends AbstractParser
                 return;
             }
         }
+        // XEP-0424: the body of a retraction must never be displayed, fallback indication or not
+        final boolean isRetraction = packet.hasExtension(Retract.class);
         final boolean bodyIsFallback;
         if (body != null && packet.hasExtension(Reactions.class)) {
             final var range = Fallback.get(packet, Reactions.class, Body.class);
             bodyIsFallback = range.isPresent() && range.get().isEntire(body);
-        } else if (body != null && packet.hasExtension(Retract.class)) {
-            final var range = Fallback.get(packet, Retract.class, Body.class);
-            bodyIsFallback = range.isPresent() && range.get().isEntire(body);
         } else {
-            bodyIsFallback = false;
+            bodyIsFallback = isRetraction;
         }
 
-        if ((body != null && !bodyIsFallback)
-                || pgpEncrypted != null
-                || (axolotlEncrypted != null && axolotlEncrypted.hasExtension(Payload.class))
-                || oobUrl != null) {
+        if (!isRetraction
+                && ((body != null && !bodyIsFallback)
+                        || pgpEncrypted != null
+                        || (axolotlEncrypted != null
+                                && axolotlEncrypted.hasExtension(Payload.class))
+                        || oobUrl != null)) {
             final boolean conversationIsProbablyMuc =
                     isTypeGroupChat
                             || mucUserElement != null
@@ -386,6 +388,15 @@ public class MessageParser extends AbstractParser
                 serverMsgId =
                         getManager(StanzaIdManager.class)
                                 .get(packet, isTypeGroupChat, conversation);
+            } else if (query != null && isTypeGroupChat) {
+                // some archives (for example Openfire) use an archive id that differs from the
+                // stanza-id everyone else knows the message by. retractions and reactions refer
+                // to the latter, so prefer the room's stanza-id inside the archived message
+                final var stanzaId =
+                        getManager(StanzaIdManager.class).get(packet, true, conversation);
+                if (stanzaId != null) {
+                    serverMsgId = stanzaId;
+                }
             }
 
             if (selfAddressed) {
@@ -564,6 +575,11 @@ public class MessageParser extends AbstractParser
                                 replacementId,
                                 occupantIdFilter,
                                 message.getStatus() == Message.STATUS_RECEIVED);
+                if (replacedMessage != null && replacedMessage.isRetracted()) {
+                    // a correction must not bring back the content of a retracted message
+                    Log.d(Config.LOGTAG, "ignoring correction of retracted message");
+                    return;
+                }
                 if (replacedMessage != null && replacedMessage.acceptMessageCorrection()) {
                     synchronized (replacedMessage) {
                         if (!replacedMessage.putEdited(message)) {
@@ -659,6 +675,10 @@ public class MessageParser extends AbstractParser
                 }
             }
 
+            // the retraction may have arrived first, for example when MAM pages are loaded newest
+            // first; the message is then stored as a tombstone right away
+            getManager(RetractionManager.class).applyPendingRetraction(conversation, message);
+
             if (query != null
                     && query.getPagingOrder() == MessageArchiveManager.PagingOrder.REVERSE) {
                 conversation.prepend(query.getActualInThisQuery(), message);
@@ -690,6 +710,10 @@ public class MessageParser extends AbstractParser
                                 .decrypt(message, notify);
             } else if (message.getEncryption() == Message.ENCRYPTION_AXOLOTL_NOT_FOR_THIS_DEVICE
                     || message.getEncryption() == Message.ENCRYPTION_AXOLOTL_FAILED) {
+                notify = false;
+            }
+            if (message.isRetracted()) {
+                message.markRead();
                 notify = false;
             }
 
@@ -812,8 +836,12 @@ public class MessageParser extends AbstractParser
 
             if (original.hasExtension(Retract.class)
                     && originalFrom != null
-                    && originalFrom.isBareJid()) {
+                    && originalFrom.isBareJid()
+                    && original.getType()
+                            == im.conversations.android.xmpp.model.stanza.Message.Type.GROUPCHAT) {
                 getManager(ModerationManager.class).handleRetraction(original);
+            } else if (isRetraction) {
+                getManager(RetractionManager.class).processRetraction(packet, counterpart, query);
             }
 
             // end no body

@@ -139,7 +139,7 @@ button.
 
 | Tested on a device | Allowed, not yet tested |
 |---|---|
-| `ConversationsActivity`, `StartConversationActivity`, `ConferenceDetailsActivity`, `SearchActivity`, `RecordingActivity` (floating), `ScanQrCodeActivity`, `PublishProfilePictureActivity` (picking without the cropper, see [05](05-conversations-fork.md#e-activities-shown-in-an-atak-pane)) | `ContactDetailsActivity`, `TrustKeysActivity`, `AddReactionActivity` (the full emoji picker; quick reactions are a dialog and work), `MucUsersActivity`, `ChooseContactActivity`, `ChannelDiscoveryActivity`, `EditHistoryActivity`, `MediaBrowserActivity`, `BlocklistActivity` |
+| `ConversationsActivity`, `StartConversationActivity`, `ConferenceDetailsActivity`, `SearchActivity`, `RecordingActivity` (floating), `ScanQrCodeActivity`, `PublishProfilePictureActivity` (picking without the cropper, see [05](05-conversations-fork.md#e-activities-shown-in-an-atak-pane)) | `ContactDetailsActivity`, `TrustKeysActivity`, `AddReactionActivity` (the full emoji picker, the overlay's add-reaction button; the quick reactions above a long-pressed message work), `MucUsersActivity`, `ChooseContactActivity`, `ChannelDiscoveryActivity`, `EditHistoryActivity`, `MediaBrowserActivity`, `BlocklistActivity` |
 
 A failure in `onCreate` is caught (toast, `RESULT_CANCELED`); a failure later, e.g. in a click
 handler, would still crash ATAK, so test an activity before relying on it.

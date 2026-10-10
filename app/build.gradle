@@ -9,7 +9,7 @@
 buildscript {
 
     // +0.1.0 with each set of changes pushed (docs/07, "Versions")
-    ext.PLUGIN_VERSION = "0.3.0"
+    ext.PLUGIN_VERSION = "0.5.0"
     // chosen in the root build.gradle (atakVersion), with its SDK
     ext.ATAK_VERSION = rootProject.ATAK_VERSION
     // the takdev plugin finds main.jar and the keystore here; local.properties must not set it.

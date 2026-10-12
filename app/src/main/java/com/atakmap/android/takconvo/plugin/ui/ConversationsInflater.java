@@ -1,12 +1,19 @@
 package com.atakmap.android.takconvo.plugin.ui;
 
 import android.content.Context;
+import android.content.res.Configuration;
 import android.util.AttributeSet;
+import android.view.ContextThemeWrapper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
+import androidx.core.content.ContextCompat;
+
+import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 import com.google.android.material.theme.MaterialComponentsViewInflater;
+
+import eu.siacs.conversations.R;
 
 /**
  * Inflates Conversations layouts as its AppCompatActivity would, with Material and AppCompat
@@ -21,6 +28,17 @@ public final class ConversationsInflater {
     }
 
     private ConversationsInflater() {
+    }
+
+    /**
+     * A context for Conversations views in one of ATAK's panes: the plugin's resources for
+     * {@code override} (see {@link UiScale}), Conversations' dark theme.
+     */
+    public static Context paneContext(final XmppEngine engine, final Context atakActivity,
+            final Configuration override) {
+        return new ContextThemeWrapper(engine.newUiContext(
+                ContextCompat.getDisplayOrDefault(atakActivity), override),
+                R.style.Theme_Conversations3_Dark);
     }
 
     /** {@code themed}: the plugin's resources with a Conversations theme. */

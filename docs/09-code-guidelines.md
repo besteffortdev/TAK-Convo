@@ -7,6 +7,26 @@ Conversations' code keeps its own style, so the fork diff stays small.
 
 The project is Java. Kotlin's conventions are listed too, for any Kotlin added later.
 
+## Whose style
+
+- **The plugin is ATAK code.** Its formatting is the ATAK SDK's formatter profile
+  (`android-formatting.xml` in the SDK): 4 spaces, 8 for continuation lines, 100 columns,
+  braces at the end of the line, `} else {` and `} catch` on the closing brace's line. Imports
+  are grouped as in the SDK's plugin template.
+- **Code inside Conversations follows Conversations.** `TakConvoCompat` and the `TAKCONVO`
+  hunks are formatted as upstream's google-java-format (AOSP) code: one import block, `{}` for
+  an empty body, a wrapped call with one argument per line.
+- **Deliberate differences from ATAK's own sources:** no `_field` prefix (ATAK's core uses it,
+  its SDK samples and Conversations don't); log tags `TakConvo.<Area>` rather than the class
+  name, so one filter shows the plugin (`tools/deploy.ps1` and [07](07-development-and-testing.md)
+  use them); `final` on parameters, locals and caught exceptions, as Conversations writes them.
+- **Each side's helpers.** Code that works with Conversations uses what Conversations uses:
+  Guava (`Strings`, `Hashing`, `ImmutableSet`, `Joiner`, `MoreObjects`) and its own classes
+  (`TextChangeListener`). The androidx compat classes replace version checks and deprecated
+  calls (`IntentCompat.getParcelableExtra`, `ContextCompat.getDisplayOrDefault`). A helper the
+  libraries have isn't written again. `TextUtils` is a stub in the JVM tests: logic the tests
+  cover uses Guava's `Strings`.
+
 ## Error handling
 
 | Do | Don't |
@@ -70,8 +90,9 @@ data isn't meant for.
   plugin's package, in its process `:appconfig`
   ([03](03-provisioning-and-trust.md#managed-configuration-mdm)). It is exported, because ATAK
   calls it, and `call()` refuses any other package (`getCallingPackage()`, which the system
-  checks against the caller's uid), and a package with ATAK's name but not its signing key. ATAK's classes don't exist in that process: code there uses
-  Android's APIs only (`android.util.Log`). ATAK reaches it with an unstable
+  checks against the caller's uid), and a package with ATAK's name but not its signing key.
+  ATAK's classes don't exist in that process: code there uses Android's APIs and the libraries
+  the APK packages (Guava), never ATAK's (`android.util.Log`). ATAK reaches it with an unstable
   `ContentProviderClient`, so ATAK survives that process dying.
 - **ATAK's internal broadcasts are reachable from other apps**: ATAK's launcher activity is
   exported and rebroadcasts any `internalIntent` extra through `AtakBroadcast`. A receiver that
@@ -110,12 +131,22 @@ From the Google Java style guide, which Android's own guide follows:
 
 - 100-character lines, 4-space indent, 8 for continuation lines.
 - Braces on every `if`/`else`/`for`/`while`, even for one statement.
-- No wildcard imports. Imports in groups: android, androidx/com/gov, the fork's (`eu.`, `im.`),
-  then `java`/`javax`, each sorted.
-- `@Override` wherever it applies.
+- No wildcard imports. Imports in groups: `android`, `androidx`, `com`/`gov`, the fork's
+  (`eu.`, `im.`, `de.`), `org`, then `java`/`javax`, each sorted.
+- `@Override` wherever it applies. `@Nullable` (androidx) on a method that can return null,
+  as ATAK's and Conversations' APIs mark theirs.
 - Constants `UPPER_SNAKE_CASE`, everything else `lowerCamelCase`. Acronyms as words
-  (`XmppEngine`, `jid`).
-- No dead code. Unused template classes are removed.
+  (`XmppEngine`, `jid`). A local or parameter doesn't take a field's name, except a
+  constructor's.
+- A number whose meaning isn't obvious is a named constant (`DIALOG_CORNER_DP`,
+  `TOKEN_BYTES`).
+- No nested ternaries: `if`/`else`, or a small method that returns.
+- No dead code. Unused template classes and fields are removed. Fields are `private`, and
+  `final` when they can be.
+- No section banners (`// --- actions ---`): neither ATAK nor Conversations divides a class so.
+  A long class is ordered by what calls what.
+- A method does one thing: a `switch` of handlers rather than one long `if`/`else` chain
+  (`DebugReceiver`).
 - Java 17: TAK.gov's pipeline has no newer JDK. No pattern `switch`, record patterns or
   `case null`; use `instanceof` chains (see [05](05-conversations-fork.md#k-java-17-for-takgovs-pipeline)).
 - A TLS socket of our own verifies the server through `HostnameVerifier.verify(host, session)`:
@@ -149,7 +180,7 @@ From the Google Java style guide, which Android's own guide follows:
 - `tools/deploy.ps1` builds, link-checks against ATAK and installs: run it for each change.
 - Before committing:
   - `tools/check-style.sh` finds nothing: lines over 100 characters, wildcard imports,
-    catch-alls outside the boundaries listed above;
+    section banners, catch-alls outside the boundaries listed above;
   - the JVM tests pass (`gradlew testCivDebugUnitTest`, see
     [07](07-development-and-testing.md#tests-and-ci)), with a test for logic that decides
     where credentials go or what is trusted;
@@ -162,6 +193,13 @@ From the Google Java style guide, which Android's own guide follows:
   exceptions, logging levels, line length, TODOs.
 - [Google Java style guide](https://google.github.io/styleguide/javaguide.html): Javadoc, caught
   exceptions, `@Override`, formatting.
+- The ATAK SDK's `android-formatting.xml` and its samples, ATAK-CIV's sources, and upstream
+  Conversations: the conventions in "Whose style".
+- Studies of code AI writes: the "Debt Behind the AI Boom" study of AI-authored commits
+  ([arXiv 2603.28592](https://arxiv.org/abs/2603.28592)), CodeRabbit's
+  [AI vs human code report](https://coderabbit.ai/blog/state-of-ai-vs-human-code-generation-report)
+  and the smell taxonomies they cite: catch-alls, dead code, shadowing, long methods,
+  duplication, comments that repeat the code.
 - [Android Kotlin style guide](https://developer.android.com/kotlin/style-guide) and
   [Kotlin coding conventions](https://kotlinlang.org/docs/coding-conventions.html).
 - [Log info disclosure](https://developer.android.com/privacy-and-security/risks/log-info-disclosure)

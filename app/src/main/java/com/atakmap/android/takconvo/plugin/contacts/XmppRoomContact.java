@@ -2,6 +2,8 @@ package com.atakmap.android.takconvo.plugin.contacts;
 
 import android.content.SharedPreferences;
 
+import androidx.annotation.Nullable;
+
 import com.atakmap.android.contact.Connector;
 import com.atakmap.android.contact.IndividualContact;
 import com.atakmap.android.contact.IpConnector;
@@ -25,22 +27,16 @@ final class XmppRoomContact extends IndividualContact implements FOVFilter.Filte
     static final String SEND_ACTION =
             "com.atakmap.android.takconvo.SEND_TO_GROUP_CHAT." + UUID.randomUUID();
 
-    private final String address;
-
     XmppRoomContact(final String name, final String address) {
         super(name, UID_PREFIX + address);
-        this.address = address;
         // ATAK's chat room icon
         getExtras().putBoolean("fakeGroup", true);
         addConnector(new XmppConnector(address));
         addConnector(new IpConnector(SEND_ACTION));
     }
 
-    String getAddress() {
-        return address;
-    }
-
     /** The group chat's address, or null if the contact isn't one of ours. */
+    @Nullable
     static String addressOf(final String uid) {
         return uid != null && uid.startsWith(UID_PREFIX) ? uid.substring(UID_PREFIX.length())
                 : null;

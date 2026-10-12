@@ -57,13 +57,7 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable refreshTask = this::refresh;
     private final NavButtonManager.OnModelListChangedListener toolbarListener =
-            new NavButtonManager.OnModelListChangedListener() {
-                @Override
-                public void onModelListChanged() {
-                    // e.g. the button was added or moved
-                    handler.post(() -> updateToolbar(engine.getUnreadCount()));
-                }
-            };
+            this::onToolbarChanged;
     /** Unread count by lower-case bare JID, 1:1 and group chats. */
     private volatile Map<String, Integer> unread = Collections.emptyMap();
     /** Presence of subscribed contacts and of group chats (joined or not). */
@@ -117,8 +111,6 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
         updateToolbar(0);
         updateContacts();
     }
-
-    // --- XmppEngine.Listener ---
 
     @Override
     public void onXmppStateChanged() {
@@ -217,6 +209,11 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
         return changed;
     }
 
+    /** E.g. the button was added or moved. */
+    private void onToolbarChanged() {
+        handler.post(() -> updateToolbar(engine.getUnreadCount()));
+    }
+
     /** Has ATAK recount unread messages and redraw the rows. */
     private static void updateContacts() {
         final Contacts contacts = Contacts.getInstance();
@@ -235,8 +232,6 @@ public final class XmppContacts extends ContactConnectorManager.ContactConnector
         model.setBadgeCount(count);
         buttons.notifyModelChanged(model);
     }
-
-    // --- ContactConnectorHandler ---
 
     @Override
     public boolean isSupported(final String connectorType) {

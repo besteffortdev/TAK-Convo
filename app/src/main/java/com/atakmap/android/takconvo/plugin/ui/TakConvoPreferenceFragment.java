@@ -225,7 +225,7 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
      * doesn't have it (yet).
      */
     private void showTakServers(final String value) {
-        final String current = value == null ? "" : value.trim();
+        final String current = value.trim();
         final List<CharSequence> entries = new ArrayList<>();
         final List<CharSequence> values = new ArrayList<>();
         entries.add(pluginContext.getString(R.string.takconvo_pref_tak_server_auto));
@@ -291,8 +291,7 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
     }
 
     private String channelServer() {
-        final String value = prefs().getString(XmppSettings.KEY_CHANNEL_SERVER, "");
-        return value == null ? "" : value;
+        return prefs().getString(XmppSettings.KEY_CHANNEL_SERVER, "");
     }
 
     /** A server or group chat service address: no user, no resource. */
@@ -403,16 +402,9 @@ public class TakConvoPreferenceFragment extends PluginPreferenceFragment {
                 }, getActivity());
     }
 
+    /** Empty for the default port, or a port number. */
     private static boolean validPort(final String value) {
-        if (value == null || value.trim().isEmpty()) {
-            return true;
-        }
-        try {
-            final int port = Integer.parseInt(value.trim());
-            return port > 0 && port < 65536;
-        } catch (final NumberFormatException e) {
-            return false;
-        }
+        return value.trim().isEmpty() || XmppSettings.isPort(value);
     }
 
     private SharedPreferences prefs() {

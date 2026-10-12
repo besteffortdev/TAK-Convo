@@ -3,16 +3,10 @@ package com.atakmap.android.takconvo.plugin.ui;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.Configuration;
-import android.text.Editable;
-import android.text.TextUtils;
-import android.text.TextWatcher;
-import android.view.ContextThemeWrapper;
-import android.view.Display;
 import android.view.KeyEvent;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
@@ -31,10 +25,13 @@ import com.atakmap.android.takconvo.plugin.ui.host.ChatDropDown;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.textfield.TextInputLayout;
+import com.google.common.base.Joiner;
+import com.google.common.base.Strings;
 
 import eu.siacs.conversations.R;
 import eu.siacs.conversations.crypto.axolotl.AxolotlService;
 import eu.siacs.conversations.entities.Account;
+import eu.siacs.conversations.ui.TextChangeListener;
 import eu.siacs.conversations.utils.CryptoHelper;
 import eu.siacs.conversations.utils.UIHelper;
 import eu.siacs.conversations.xmpp.XmppConnection;
@@ -125,20 +122,13 @@ public final class AccountView implements XmppEngine.Listener {
     public AccountView(final Context pluginContext, final Context atakActivity,
             final XmppEngine engine, final Host host) {
         // scaled and sized like the chat pane, or Conversations picks its wide layouts
-        final Display display = ((WindowManager) atakActivity
-                .getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
         final Configuration override = UiScale.override(atakActivity);
-        final MapView mapView = MapView.getMapView();
-        if (mapView != null) {
-            final int[] pane = ChatDropDown.estimatePaneSize(mapView);
-            final float density = UiScale.density(atakActivity);
-            override.screenWidthDp = Math.round(pane[0] / density);
-            override.screenHeightDp = Math.round(pane[1] / density);
-            override.smallestScreenWidthDp =
-                    Math.min(override.screenWidthDp, override.screenHeightDp);
-        }
-        this.ui = new ContextThemeWrapper(engine.newUiContext(display, override),
-                R.style.Theme_Conversations3_Dark);
+        final int[] pane = ChatDropDown.estimatePaneSize(MapView.getMapView());
+        final float density = UiScale.density(atakActivity);
+        override.screenWidthDp = Math.round(pane[0] / density);
+        override.screenHeightDp = Math.round(pane[1] / density);
+        override.smallestScreenWidthDp = Math.min(override.screenWidthDp, override.screenHeightDp);
+        this.ui = ConversationsInflater.paneContext(engine, atakActivity, override);
         this.dialogContext = atakActivity;
         this.engine = engine;
         this.host = host;
@@ -224,27 +214,7 @@ public final class AccountView implements XmppEngine.Listener {
                 .setVisible(BuildConfig.DEBUG);
         toolbar.setOnMenuItemClickListener(this::onMenuItem);
 
-        final TextWatcher watcher = new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-            }
-
-            @Override
-            public void afterTextChanged(final Editable s) {
-                if (!updating) {
-                    edited = true;
-                    correcting = true;
-                    jidLayout.setError(null);
-                    passwordLayout.setError(null);
-                    updateSuffix();
-                    updateButtons();
-                }
-            }
-        };
+        final TextChangeListener watcher = new TextChangeListener(text -> onTyped());
         jid.addTextChangedListener(watcher);
         password.addTextChangedListener(watcher);
         // refresh() fills them: ATAK's restored state would count as an edit, and a password
@@ -268,7 +238,17 @@ public final class AccountView implements XmppEngine.Listener {
         refresh();
     }
 
-    // --- actions ---
+    private void onTyped() {
+        if (updating) {
+            return;
+        }
+        edited = true;
+        correcting = true;
+        jidLayout.setError(null);
+        passwordLayout.setError(null);
+        updateSuffix();
+        updateButtons();
+    }
 
     private boolean onMenuItem(final MenuItem item) {
         final int id = item.getItemId();
@@ -365,8 +345,6 @@ public final class AccountView implements XmppEngine.Listener {
         }
     }
 
-    // --- state ---
-
     /** Shows the account's state; from clicks, timeouts and engine changes. */
     private void refresh() {
         // it reads the connection's managers, which change on Conversations' threads
@@ -436,10 +414,11 @@ public final class AccountView implements XmppEngine.Listener {
         passwordLayout.setVisibility(View.VISIBLE);
         final boolean loggedIn = showsAccount(false, account);
         if (!edited) {
-            final String stored = XmppSettings.getLoginUsername();
-            setText(jid, stored != null ? stored
-                    : settings != null && settings.suggestedUsername != null
-                            ? settings.suggestedUsername : "");
+            String username = XmppSettings.getLoginUsername();
+            if (username == null && settings != null) {
+                username = settings.suggestedUsername;
+            }
+            setText(jid, Strings.nullToEmpty(username));
             setText(password, loggedIn ? PASSWORD_PLACEHOLDER : "");
         }
         jidLayout.setHint(ui.getString(settings != null && settings.domain != null
@@ -469,7 +448,7 @@ public final class AccountView implements XmppEngine.Listener {
             return;
         }
         final Account account = engine.getAccount();
-        final boolean filled = jid.getText().toString().trim().length() > 0
+        final boolean filled = !jid.getText().toString().trim().isEmpty()
                 && password.getText().length() > 0;
         if (signingIn) {
             save.setVisibility(View.VISIBLE);
@@ -628,22 +607,28 @@ public final class AccountView implements XmppEngine.Listener {
         if (server.caPath != null) {
             trust.add(server.caPath);
         }
-        final String credentials = !server.takCredentials
-                ? ui.getString(
-                        com.atakmap.android.takconvo.plugin.R.string.takconvo_credentials_login)
-                : server.takServer == null
-                        ? ui.getString(com.atakmap.android.takconvo.plugin.R.string
-                                .takconvo_credentials_tak)
-                        : ui.getString(com.atakmap.android.takconvo.plugin.R.string
-                                .takconvo_credentials_tak_server, server.takServer);
+        if (trust.isEmpty()) {
+            trust.add(ui.getString(
+                    com.atakmap.android.takconvo.plugin.R.string.takconvo_trust_none));
+        }
         return ui.getString(
                 com.atakmap.android.takconvo.plugin.R.string.takconvo_notice_server_unconfirmed,
-                where,
-                credentials,
-                trust.isEmpty()
-                        ? ui.getString(
-                                com.atakmap.android.takconvo.plugin.R.string.takconvo_trust_none)
-                        : TextUtils.join(", ", trust));
+                where, describeCredentials(server), Joiner.on(", ").join(trust));
+    }
+
+    /** Whose credentials would go to the server. */
+    private String describeCredentials(final ServerIdentity server) {
+        if (!server.takCredentials) {
+            return ui.getString(
+                    com.atakmap.android.takconvo.plugin.R.string.takconvo_credentials_login);
+        }
+        if (server.takServer == null) {
+            return ui.getString(
+                    com.atakmap.android.takconvo.plugin.R.string.takconvo_credentials_tak);
+        }
+        return ui.getString(
+                com.atakmap.android.takconvo.plugin.R.string.takconvo_credentials_tak_server,
+                server.takServer);
     }
 
     private void approveServer(final ServerIdentity server) {
@@ -707,8 +692,7 @@ public final class AccountView implements XmppEngine.Listener {
         }
         root.findViewById(R.id.server_info_more).setVisibility(View.VISIBLE);
         root.findViewById(R.id.server_info_login_mechanism).setVisibility(View.VISIBLE);
-        text(R.id.login_mechanism, TextUtils.isEmpty(features.loginMechanism())
-                ? "" : features.loginMechanism());
+        text(R.id.login_mechanism, Strings.nullToEmpty(features.loginMechanism()));
         text(R.id.stanza_rx_tx, connection.getStanzaRxTx().rx() + "/"
                 + connection.getStanzaRxTx().tx());
 
@@ -723,8 +707,6 @@ public final class AccountView implements XmppEngine.Listener {
                     CryptoHelper.prettifyFingerprint(fingerprint.substring(2)));
         }
     }
-
-    // --- helpers ---
 
     private static int problemStatus(final XmppSettings.Problem problem) {
         if (problem == null) {

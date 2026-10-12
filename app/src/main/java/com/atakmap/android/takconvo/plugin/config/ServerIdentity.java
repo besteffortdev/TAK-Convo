@@ -1,15 +1,16 @@
 package com.atakmap.android.takconvo.plugin.config;
 
+import androidx.annotation.Nullable;
+
 import com.atakmap.coremap.log.Log;
+import com.google.common.hash.Hashing;
+import com.google.common.io.Files;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.FileInputStream;
+import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -55,6 +56,7 @@ public final class ServerIdentity {
     }
 
     /** The server the settings connect to, or null without a domain. Reads the CA file. */
+    @Nullable
     public static ServerIdentity of(final XmppSettings settings) {
         final String jid = settings.jid();
         final String domain = jid != null ? domainOf(jid) : settings.domain;
@@ -85,6 +87,7 @@ public final class ServerIdentity {
     }
 
     /** What {@link #serialize} wrote, or null. */
+    @Nullable
     public static ServerIdentity parse(final String serialized) {
         if (serialized == null) {
             return null;
@@ -139,14 +142,8 @@ public final class ServerIdentity {
 
     /** The file's SHA-256 in hex, "" if it can't be read. */
     static String sha256(final String path) {
-        try (InputStream in = new FileInputStream(path)) {
-            final MessageDigest digest = sha256();
-            final byte[] buffer = new byte[8192];
-            int n;
-            while ((n = in.read(buffer)) > 0) {
-                digest.update(buffer, 0, n);
-            }
-            return hex(digest.digest());
+        try {
+            return Files.asByteSource(new File(path)).hash(Hashing.sha256()).toString();
         } catch (final IOException | SecurityException e) {
             // a file that appears later changes the identity
             Log.w(TAG, "unable to read the trusted CA file", e);
@@ -155,23 +152,7 @@ public final class ServerIdentity {
     }
 
     static String sha256(final byte[] data) {
-        return hex(sha256().digest(data));
-    }
-
-    private static MessageDigest sha256() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (final NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private static String hex(final byte[] bytes) {
-        final StringBuilder hex = new StringBuilder();
-        for (final byte b : bytes) {
-            hex.append(String.format(Locale.ROOT, "%02x", b));
-        }
-        return hex.toString();
+        return Hashing.sha256().hashBytes(data).toString();
     }
 
     /** The same server and trust, whichever TAK server's credentials go there. */

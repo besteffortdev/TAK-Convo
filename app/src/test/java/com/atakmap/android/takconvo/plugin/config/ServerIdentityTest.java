@@ -8,7 +8,10 @@ import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 
 public class ServerIdentityTest {
 
@@ -86,5 +89,19 @@ public class ServerIdentityTest {
     public void sha256OfBytes() {
         assertEquals("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
                 ServerIdentity.sha256("abc".getBytes(StandardCharsets.US_ASCII)));
+    }
+
+    @Test
+    public void sha256OfFile() throws IOException {
+        final File file = File.createTempFile("takconvo-ca", ".pem");
+        try {
+            Files.write(file.toPath(), "abc".getBytes(StandardCharsets.US_ASCII));
+            assertEquals("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+                    ServerIdentity.sha256(file.getAbsolutePath()));
+        } finally {
+            assertTrue(file.delete());
+        }
+        // unreadable: a file that appears later changes the identity
+        assertEquals("", ServerIdentity.sha256(file.getAbsolutePath()));
     }
 }

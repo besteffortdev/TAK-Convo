@@ -17,6 +17,8 @@ import android.os.Looper;
 import android.security.KeyChain;
 import android.view.Display;
 
+import androidx.annotation.Nullable;
+
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.android.takconvo.plugin.Guard;
 import com.atakmap.android.takconvo.plugin.SensitiveLog;
@@ -29,6 +31,7 @@ import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.comms.CommsMapComponent;
 import com.atakmap.comms.CotServiceRemote;
 import com.atakmap.coremap.log.Log;
+import com.google.common.base.Strings;
 
 import eu.siacs.conversations.AppSettings;
 import eu.siacs.conversations.entities.Account;
@@ -109,7 +112,7 @@ public final class XmppEngine {
     private final KeystoreCredentials credentials = new KeystoreCredentials();
     private volatile int unreadCount;
     private final Runnable provisionTask = this::provision;
-    private final Runnable conversationsSettingsTask;
+    private final Runnable conversationsSettingsTask = this::applyConversationsSettings;
     /** Reads ATAK's credential and certificate stores, which are on disk. */
     private final ExecutorService loader =
             Executors.newSingleThreadExecutor(r -> new Thread(r, "TakConvo.Provision"));
@@ -118,9 +121,68 @@ public final class XmppEngine {
     /** The stored accounts may connect: the first provisioning set their trust and approval. */
     private boolean connectionsReleased;
     private boolean stopped;
-    private final SharedPreferences.OnSharedPreferenceChangeListener prefListener;
-    private final CotServiceRemote.OutputsChangedListener takServerListener;
-    private final BroadcastReceiver trustStoreReceiver;
+    /** Our preferences change, e.g. through a .pref import. */
+    private final SharedPreferences.OnSharedPreferenceChangeListener prefListener =
+            this::onPreferenceChanged;
+    /** The TAK credentials are often not there yet when the plugin starts. */
+    private final CotServiceRemote.OutputsChangedListener takServerListener =
+            new CotServiceRemote.OutputsChangedListener() {
+                @Override
+                public void onCotOutputUpdated(final Bundle descBundle) {
+                    scheduleProvision();
+                }
+
+                @Override
+                public void onCotOutputRemoved(final Bundle descBundle) {
+                    scheduleProvision();
+                }
+            };
+    /** A CA added to or removed from the device. */
+    private final BroadcastReceiver trustStoreReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(final Context c, final Intent intent) {
+            Log.d(TAG, "device trust store changed");
+            scheduleProvision();
+        }
+    };
+    /**
+     * The MDM may have changed its configuration while ATAK was in the background. Android
+     * tells only the plugin's own process of changes, which isn't running.
+     */
+    private final Application.ActivityLifecycleCallbacks resumeCallbacks =
+            new Application.ActivityLifecycleCallbacks() {
+                @Override
+                public void onActivityResumed(final Activity activity) {
+                    refreshAppConfig();
+                }
+
+                // only resumes matter
+
+                @Override
+                public void onActivityCreated(final Activity activity, final Bundle state) {
+                }
+
+                @Override
+                public void onActivityStarted(final Activity activity) {
+                }
+
+                @Override
+                public void onActivityPaused(final Activity activity) {
+                }
+
+                @Override
+                public void onActivityStopped(final Activity activity) {
+                }
+
+                @Override
+                public void onActivitySaveInstanceState(final Activity activity,
+                        final Bundle state) {
+                }
+
+                @Override
+                public void onActivityDestroyed(final Activity activity) {
+                }
+            };
     private XmppSettings settings;
     /** See {@link TrustSources#fingerprint}. */
     private String trustFingerprint;
@@ -137,8 +199,6 @@ public final class XmppEngine {
     private boolean appConfigReading;
     /** Read again once the read in progress is done. */
     private boolean appConfigAgain;
-    /** The MDM may have changed it while ATAK was in the background. */
-    private final Application.ActivityLifecycleCallbacks resumeCallbacks;
 
     public static synchronized XmppEngine start(final Context atakContext,
             final Context pluginContext) {
@@ -148,6 +208,8 @@ public final class XmppEngine {
         return instance;
     }
 
+    /** The running engine, or null. */
+    @Nullable
     public static synchronized XmppEngine get() {
         return instance;
     }
@@ -222,10 +284,8 @@ public final class XmppEngine {
         // the MDM's values as last read, put back before anything reads the preferences: a
         // .pref import may have changed them while the plugin wasn't running
         appConfig = AppConfig.restore(this.atakContext);
-        appConfig.applyTo(AtakPreferences.getInstance(this.atakContext).getSharedPrefs(),
-                AppConfig.NONE);
-        ConversationsSettings.apply(AtakPreferences.getInstance(this.atakContext).getSharedPrefs(),
-                defaultPreferences());
+        appConfig.applyTo(atakPreferences(), AppConfig.NONE);
+        applyConversationsSettings();
         // the stored accounts wait for the first provisioning, which installs the trust
         // manager and checks the server's approval; it reads in the background (provision())
         TakConvoCompat.HOLD_CONNECTIONS = true;
@@ -247,95 +307,19 @@ public final class XmppEngine {
                     eu.siacs.conversations.BuildConfig.APP_NAME, CryptoHelper.random(3)));
         }
 
-        // re-provision on our preferences (e.g. a .pref import) and TAK server changes; the
-        // TAK credentials are often not there yet when the plugin starts
-        final SharedPreferences atakPrefs =
-                AtakPreferences.getInstance(this.atakContext).getSharedPrefs();
-        conversationsSettingsTask =
-                () -> ConversationsSettings.apply(atakPrefs, defaultPreferences());
-        prefListener = (prefs, key) -> {
-            if (key == null) {
-                return;
-            }
-            if (appConfig.enforce(prefs, key)) {
-                // the MDM's value is back, and its change comes next
-                return;
-            }
-            if (key.startsWith(XmppSettings.KEY_PREFIX)) {
-                scheduleProvision();
-            } else if (key.startsWith(ConversationsSettings.PREFIX)) {
-                // once for a .pref import's keys, not once per key
-                mainHandler.removeCallbacks(conversationsSettingsTask);
-                mainHandler.postDelayed(conversationsSettingsTask, DEBOUNCE_MS);
-            } else if (XmppSettings.KEY_ATAK_CALLSIGN.equals(key)) {
-                mainHandler.post(Guard.wrap(TAG, "set the callsign as nickname", nicknames::sync));
-            }
-        };
+        // re-provisions on changes of the preferences, the TAK servers and the trust store
         AtakPreferences.getInstance(this.atakContext).registerListener(prefListener);
-        takServerListener = new CotServiceRemote.OutputsChangedListener() {
-            @Override
-            public void onCotOutputUpdated(final Bundle descBundle) {
-                scheduleProvision();
-            }
-
-            @Override
-            public void onCotOutputRemoved(final Bundle descBundle) {
-                scheduleProvision();
-            }
-        };
         CommsMapComponent.getInstance().addOutputsChangedListener(takServerListener);
-
-        // a CA added to or removed from the device
-        trustStoreReceiver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(final Context c, final Intent intent) {
-                Log.d(TAG, "device trust store changed");
-                scheduleProvision();
-            }
-        };
         final IntentFilter trustFilter = new IntentFilter(KeyChain.ACTION_TRUST_STORE_CHANGED);
         trustFilter.addAction(KeyChain.ACTION_KEYCHAIN_CHANGED);
+        // the system sends these; before Android 13 ContextCompat's NOT_EXPORTED would also
+        // require ATAK's signature permission of the sender
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             this.atakContext.registerReceiver(trustStoreReceiver, trustFilter,
                     Context.RECEIVER_NOT_EXPORTED);
         } else {
             this.atakContext.registerReceiver(trustStoreReceiver, trustFilter);
         }
-
-        // Android tells only the plugin's own process of changes, which isn't running
-        resumeCallbacks = new Application.ActivityLifecycleCallbacks() {
-            @Override
-            public void onActivityResumed(final Activity activity) {
-                refreshAppConfig();
-            }
-
-            // only resumes matter
-
-            @Override
-            public void onActivityCreated(final Activity activity, final Bundle state) {
-            }
-
-            @Override
-            public void onActivityStarted(final Activity activity) {
-            }
-
-            @Override
-            public void onActivityPaused(final Activity activity) {
-            }
-
-            @Override
-            public void onActivityStopped(final Activity activity) {
-            }
-
-            @Override
-            public void onActivitySaveInstanceState(final Activity activity,
-                    final Bundle state) {
-            }
-
-            @Override
-            public void onActivityDestroyed(final Activity activity) {
-            }
-        };
         if (this.atakContext instanceof Application) {
             ((Application) this.atakContext).registerActivityLifecycleCallbacks(resumeCallbacks);
         }
@@ -345,10 +329,37 @@ public final class XmppEngine {
         refreshAppConfig();
     }
 
+    private void onPreferenceChanged(final SharedPreferences prefs, final String key) {
+        if (key == null) {
+            return;
+        }
+        if (appConfig.enforce(prefs, key)) {
+            // the MDM's value is back, and its change comes next
+            return;
+        }
+        if (key.startsWith(XmppSettings.KEY_PREFIX)) {
+            scheduleProvision();
+        } else if (key.startsWith(ConversationsSettings.PREFIX)) {
+            // once for a .pref import's keys, not once per key
+            mainHandler.removeCallbacks(conversationsSettingsTask);
+            mainHandler.postDelayed(conversationsSettingsTask, DEBOUNCE_MS);
+        } else if (XmppSettings.KEY_ATAK_CALLSIGN.equals(key)) {
+            mainHandler.post(Guard.wrap(TAG, "set the callsign as nickname", nicknames::sync));
+        }
+    }
+
     /** Debounced: a .pref import changes several keys at once. */
     private void scheduleProvision() {
         mainHandler.removeCallbacks(provisionTask);
         mainHandler.postDelayed(provisionTask, DEBOUNCE_MS);
+    }
+
+    private void applyConversationsSettings() {
+        ConversationsSettings.apply(atakPreferences(), defaultPreferences());
+    }
+
+    private SharedPreferences atakPreferences() {
+        return AtakPreferences.getInstance(atakContext).getSharedPrefs();
     }
 
     private void stop() {
@@ -434,7 +445,7 @@ public final class XmppEngine {
 
     /** Reads the settings and builds their trust manager; disk work, any thread. */
     private Loaded load() {
-        final SharedPreferences prefs = AtakPreferences.getInstance(atakContext).getSharedPrefs();
+        final SharedPreferences prefs = atakPreferences();
         XmppSettings.importLogin(prefs, !appConfig.managesLogin());
         XmppSettings.normalize(prefs);
         final XmppSettings loaded = XmppSettings.load(atakContext);
@@ -522,7 +533,7 @@ public final class XmppEngine {
             service.createAccount(account);
         } else {
             final boolean changed = !Objects.equals(account.getPassword(), settings.password)
-                    || !Objects.equals(account.getHostname(), nullToEmpty(settings.host))
+                    || !Objects.equals(account.getHostname(), Strings.nullToEmpty(settings.host))
                     || account.getPort() != settings.port
                     || account.isOptionSet(Account.OPTION_DISABLED);
             if (changed) {
@@ -593,8 +604,8 @@ public final class XmppEngine {
             if (!account.isOptionSet(Account.OPTION_DISABLED)
                     && account.isOptionSet(Account.OPTION_LOGGED_IN_SUCCESSFULLY)
                     && server.domain.equalsIgnoreCase(account.getDomain().toString())
-                    && nullToEmpty(server.host).equalsIgnoreCase(
-                            nullToEmpty(account.getHostname()))
+                    && Strings.nullToEmpty(server.host).equalsIgnoreCase(
+                            Strings.nullToEmpty(account.getHostname()))
                     && server.port == account.getPort()) {
                 return true;
             }
@@ -658,7 +669,7 @@ public final class XmppEngine {
         final AppConfig previous = appConfig;
         appConfig = fresh;
         // also when unchanged: puts back what changed while the plugin wasn't listening
-        fresh.applyTo(AtakPreferences.getInstance(atakContext).getSharedPrefs(), previous);
+        fresh.applyTo(atakPreferences(), previous);
         if (!fresh.equals(previous) || fresh.savedLogin()) {
             Log.i(TAG, fresh.isEmpty() ? "no managed configuration"
                     : "managed configuration changed");
@@ -690,6 +701,7 @@ public final class XmppEngine {
     }
 
     /** The server waiting for the user's approval, or null. */
+    @Nullable
     public ServerIdentity getPendingServer() {
         return pendingServer;
     }
@@ -736,12 +748,8 @@ public final class XmppEngine {
     public boolean signIn(final String user, final String password) {
         final String username = user.trim();
         final String domain = settings == null ? null : settings.domain;
-        if (username.isEmpty() || (!username.contains("@") && domain == null)) {
-            return false;
-        }
-        try {
-            Jid.ofUserInput(username.contains("@") ? username : username + "@" + domain);
-        } catch (final IllegalArgumentException e) {
+        if (username.isEmpty() || (!username.contains("@") && domain == null)
+                || bareJid(username.contains("@") ? username : username + "@" + domain) == null) {
             return false;
         }
         SensitiveLog.d(TAG, "signing in as " + username);
@@ -798,7 +806,7 @@ public final class XmppEngine {
     }
 
     private void applyConnectionSettings(final Account account) {
-        account.setHostname(nullToEmpty(settings.host));
+        account.setHostname(Strings.nullToEmpty(settings.host));
         account.setPort(settings.port);
     }
 
@@ -814,6 +822,7 @@ public final class XmppEngine {
     }
 
     /** The account of the current configuration, or null. */
+    @Nullable
     public Account getAccount() {
         return provisionedJid == null ? null : service.findAccountByJid(provisionedJid);
     }
@@ -823,6 +832,7 @@ public final class XmppEngine {
     }
 
     /** The Conversations screen a tapped notification opens, or null if the tap isn't ours. */
+    @Nullable
     public Intent unwrapNotificationTap(final Intent open, final ClassLoader classLoader) {
         return pendingIntents.unwrapActivity(open, classLoader);
     }
@@ -848,10 +858,13 @@ public final class XmppEngine {
     }
 
     /** Why provisioning failed, or null. */
+    @Nullable
     public XmppSettings.Problem getProblem() {
         return lastProblem;
     }
 
+    /** The settings last provisioned; null until the first provisioning. */
+    @Nullable
     public XmppSettings getSettings() {
         return settings;
     }
@@ -859,13 +872,8 @@ public final class XmppEngine {
     /** Sends a plain-text message; false if there is no account or the address is invalid. */
     public boolean sendMessage(final String to, final String body) {
         final Account account = getAccount();
-        if (account == null || to == null || body == null || body.isEmpty()) {
-            return false;
-        }
-        final Jid jid;
-        try {
-            jid = Jid.ofUserInput(to).asBareJid();
-        } catch (final IllegalArgumentException e) {
+        final Jid jid = bareJid(to);
+        if (account == null || jid == null || body == null || body.isEmpty()) {
             return false;
         }
         final Conversation conversation =
@@ -877,6 +885,7 @@ public final class XmppEngine {
     }
 
     /** The 1:1 chat with an address, created if needed; null without account or valid JID. */
+    @Nullable
     public Conversation openConversation(final String address) {
         final Account account = getAccount();
         final Jid jid = bareJid(address);
@@ -887,6 +896,7 @@ public final class XmppEngine {
     }
 
     /** The bare JID of a typed or advertised address, or null if it isn't one. */
+    @Nullable
     public static Jid bareJid(final String address) {
         if (address == null || address.trim().isEmpty()) {
             return null;
@@ -932,9 +942,5 @@ public final class XmppEngine {
         for (final Listener l : listeners) {
             Guard.run(TAG, "update " + l.getClass().getSimpleName(), l::onXmppStateChanged);
         }
-    }
-
-    private static String nullToEmpty(final String s) {
-        return s == null ? "" : s;
     }
 }

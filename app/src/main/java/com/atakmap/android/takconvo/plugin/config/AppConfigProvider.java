@@ -16,9 +16,8 @@ import android.os.Bundle;
 import android.util.Log;
 
 import com.atakmap.android.takconvo.plugin.BuildConfig;
+import com.google.common.hash.Hashing;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Locale;
@@ -30,7 +29,8 @@ import java.util.Set;
  * only the package itself read it, and the plugin's code runs as ATAK, so this runs in the
  * plugin's own process ({@code :appconfig}). Only ATAK may call it. See docs/03.
  *
- * <p>ATAK's classes don't exist in this process: android.util.Log, not ATAK's.
+ * <p>ATAK's classes don't exist in this process, only the plugin APK's: android.util.Log, not
+ * ATAK's.
  */
 public final class AppConfigProvider extends ContentProvider {
 
@@ -123,36 +123,28 @@ public final class AppConfigProvider extends ContentProvider {
     private static Set<String> signers(final PackageManager pm, final String packageName) {
         final Set<String> digests = new HashSet<>();
         try {
-            final Signature[] signatures;
+            Signature[] signatures = null;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 final SigningInfo info = pm.getPackageInfo(packageName,
                         PackageManager.GET_SIGNING_CERTIFICATES).signingInfo;
-                signatures = info == null ? null : info.hasMultipleSigners()
-                        ? info.getApkContentsSigners() : info.getSigningCertificateHistory();
+                if (info != null && info.hasMultipleSigners()) {
+                    signatures = info.getApkContentsSigners();
+                } else if (info != null) {
+                    signatures = info.getSigningCertificateHistory();
+                }
             } else {
                 signatures = pm.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
                         .signatures;
             }
             if (signatures != null) {
-                final MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
                 for (final Signature signature : signatures) {
-                    digests.add(hex(sha256.digest(signature.toByteArray())));
+                    digests.add(Hashing.sha256().hashBytes(signature.toByteArray()).toString());
                 }
             }
         } catch (final PackageManager.NameNotFoundException e) {
             Log.w(TAG, "unable to read the signing key of " + packageName, e);
-        } catch (final NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
         }
         return digests;
-    }
-
-    private static String hex(final byte[] bytes) {
-        final StringBuilder hex = new StringBuilder();
-        for (final byte b : bytes) {
-            hex.append(String.format(Locale.ROOT, "%02x", b));
-        }
-        return hex.toString();
     }
 
     /** What DEBUG_APP_CONFIG set, over the MDM's values: devices without an MDM can test. */
@@ -170,6 +162,7 @@ public final class AppConfigProvider extends ContentProvider {
         }
     }
 
+    @SuppressWarnings("deprecation") // Bundle.get: the values are of several types
     private static void setDebugValues(final Context context, final Bundle values) {
         final SharedPreferences.Editor editor =
                 context.getSharedPreferences(DEBUG_PREFS, Context.MODE_PRIVATE).edit().clear();

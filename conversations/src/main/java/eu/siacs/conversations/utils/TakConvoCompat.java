@@ -11,6 +11,7 @@ import de.gultsch.common.MiniUri;
 import eu.siacs.conversations.xmpp.Jid;
 import java.io.File;
 import java.util.List;
+import javax.net.ssl.X509TrustManager;
 
 /**
  * TAKCONVO: SDK 37 constants (the build is on SDK 36, the newest AGP 8 supports) and the hooks
@@ -32,7 +33,7 @@ public final class TakConvoCompat {
     public static volatile boolean EMBEDDED = false;
 
     /** CAs the plugin adds, checked after the system's; hostname verification is unchanged. */
-    public static volatile javax.net.ssl.X509TrustManager EXTRA_TRUST_MANAGER = null;
+    public static volatile X509TrustManager EXTRA_TRUST_MANAGER = null;
 
     /**
      * The service doesn't connect the stored accounts: the plugin hasn't installed its trust
@@ -41,7 +42,7 @@ public final class TakConvoCompat {
     public static volatile boolean HOLD_CONNECTIONS = false;
 
     /** Where "Discover channels" looks on XMPP servers; null for the account's server. */
-    public static volatile eu.siacs.conversations.xmpp.Jid CHANNEL_DISCOVERY_SERVER = null;
+    public static volatile Jid CHANNEL_DISCOVERY_SERVER = null;
 
     /** Makes the PendingIntents, whose Conversations targets ATAK's package doesn't have. */
     public interface PendingIntentFactory {

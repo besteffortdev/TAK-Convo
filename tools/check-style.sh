@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The checks of docs/09-code-guidelines.md a script can make, on the plugin's code (app/):
-# lines over 100 characters, wildcard imports, and catch-alls outside the boundaries docs/09
-# lists. Prints what it finds; exits 1 if anything. Run before committing; CI runs it too.
+# lines over 100 characters, wildcard imports, section banner comments, and catch-alls outside
+# the boundaries docs/09 lists. Prints what it finds; exits 1 if anything. Run before
+# committing; CI runs it too.
 #
 #   tools/check-style.sh
 set -euo pipefail
@@ -20,6 +21,8 @@ report() {
 
 report "lines over 100 characters" "$(grep -rnE '^.{101,}$' "${dirs[@]}" || true)"
 report "wildcard imports" "$(grep -rnE '^import (static )?[a-zA-Z0-9_.]+\.\*;' "${dirs[@]}" || true)"
+# "// --- actions ---": neither ATAK's code nor Conversations' divides classes so
+report "section banner comments" "$(grep -rnE '^\s*// ?(-{3,}|={3,})' "${dirs[@]}" || true)"
 # EmbeddedActivityHost.guarded and its create/relaunch: the boundary docs/09 names, which
 # checked exceptions cross (Instrumentation, reflection)
 report "catch-alls outside the documented boundaries" "$(grep -rnE \

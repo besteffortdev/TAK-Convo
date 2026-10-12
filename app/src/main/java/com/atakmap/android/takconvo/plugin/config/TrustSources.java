@@ -1,23 +1,26 @@
 package com.atakmap.android.takconvo.plugin.config;
 
+import androidx.annotation.Nullable;
+
 import com.atakmap.coremap.log.Log;
 import com.atakmap.net.CertificateManager;
+import com.google.common.base.Joiner;
+import com.google.common.hash.Hashing;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
-import java.security.MessageDigest;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
 
 /**
@@ -33,6 +36,7 @@ public final class TrustSources {
     }
 
     /** A trust manager over the enabled sources, or null if none has a CA. */
+    @Nullable
     public static X509TrustManager build(final XmppSettings settings) {
         final Map<String, X509TrustManager> sources = new LinkedHashMap<>();
         if (settings.useTakTrustStore) {
@@ -58,18 +62,14 @@ public final class TrustSources {
             return "";
         }
         try {
-            final MessageDigest digest = MessageDigest.getInstance("SHA-256");
             final List<String> issuers = new ArrayList<>();
             for (final X509Certificate cert : trust.getAcceptedIssuers()) {
-                issuers.add(Arrays.toString(MessageDigest.getInstance("SHA-256")
-                        .digest(cert.getEncoded())));
+                issuers.add(Hashing.sha256().hashBytes(cert.getEncoded()).toString());
             }
-            issuers.sort(null);
-            for (final String issuer : issuers) {
-                digest.update(issuer.getBytes(StandardCharsets.UTF_8));
-            }
-            return Arrays.toString(digest.digest());
-        } catch (final GeneralSecurityException e) {
+            Collections.sort(issuers);
+            return Hashing.sha256()
+                    .hashString(Joiner.on(',').join(issuers), StandardCharsets.UTF_8).toString();
+        } catch (final CertificateEncodingException e) {
             // unique per trust manager: counts as a change
             Log.w(TAG, "unable to fingerprint the trusted CAs", e);
             return String.valueOf(System.identityHashCode(trust));
@@ -92,18 +92,11 @@ public final class TrustSources {
         try {
             final KeyStore store = KeyStore.getInstance("AndroidCAStore");
             store.load(null, null);
-            final TrustManagerFactory tmf =
-                    TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            tmf.init(store);
-            for (final TrustManager tm : tmf.getTrustManagers()) {
-                if (tm instanceof X509TrustManager) {
-                    return (X509TrustManager) tm;
-                }
-            }
+            return TrustedCa.trustManager(store);
         } catch (final GeneralSecurityException | IOException e) {
             Log.e(TAG, "unable to read the Android CA store", e);
+            return null;
         }
-        return null;
     }
 
     private static void put(final Map<String, X509TrustManager> sources, final String name,

@@ -3,6 +3,8 @@ package com.atakmap.android.takconvo.plugin.config;
 import android.content.Context;
 import android.util.AtomicFile;
 
+import androidx.annotation.Nullable;
+
 import com.atakmap.coremap.log.Log;
 
 import java.io.File;
@@ -30,6 +32,7 @@ public final class PrivateFiles {
     }
 
     /** The value stored under {@code name}, or null. Disk work. */
+    @Nullable
     public static String read(final Context atakContext, final String name) {
         final AtomicFile file = new AtomicFile(new File(dir(atakContext), name));
         try {

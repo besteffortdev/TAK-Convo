@@ -13,6 +13,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Base64;
 
+import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import com.atakmap.android.takconvo.plugin.config.PrivateFiles;
@@ -47,6 +48,7 @@ public final class EmbeddedPendingIntents implements TakConvoCompat.PendingInten
     private static final String CONVERSATIONS_PACKAGE = "eu.siacs.conversations.";
     /** {@link PrivateFiles} name of {@link #token}. */
     private static final String TOKEN_FILE = "open_token";
+    private static final int TOKEN_BYTES = 16;
 
     private final Context atak;
     /**
@@ -72,7 +74,7 @@ public final class EmbeddedPendingIntents implements TakConvoCompat.PendingInten
         if (stored != null && !stored.isEmpty()) {
             token = stored;
         } else {
-            final byte[] random = new byte[16];
+            final byte[] random = new byte[TOKEN_BYTES];
             new SecureRandom().nextBytes(random);
             token = Base64.encodeToString(random, Base64.NO_WRAP | Base64.URL_SAFE);
             // if it can't be stored, the taps work until ATAK restarts
@@ -193,6 +195,7 @@ public final class EmbeddedPendingIntents implements TakConvoCompat.PendingInten
     }
 
     /** The activity intent of an {@link #ACTION_OPEN} broadcast, or null if it isn't ours. */
+    @Nullable
     Intent unwrapActivity(final Intent open, final ClassLoader classLoader) {
         final String name = open.getStringExtra(EXTRA_CLASS);
         if (!ACTION_OPEN.equals(open.getAction()) || name == null
@@ -219,6 +222,7 @@ public final class EmbeddedPendingIntents implements TakConvoCompat.PendingInten
     }
 
     /** The Conversations class an intent aims at, or null. */
+    @Nullable
     private static String conversationsClass(final Intent intent) {
         final ComponentName component = intent == null ? null : intent.getComponent();
         final String name = component == null ? null : component.getClassName();

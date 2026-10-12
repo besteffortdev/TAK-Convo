@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.os.RemoteException;
 import android.util.Base64;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import com.atakmap.coremap.log.Log;
@@ -49,6 +50,10 @@ public final class AppConfig {
     /** {@link PrivateFiles} name of the configuration last applied. */
     private static final String SNAPSHOT = "managed_config";
     private static final String CA_FILE_PREFIX = "managed_ca_";
+    /** Hex digits of the certificate's SHA-256 in its file name. */
+    private static final int CA_FILE_DIGITS = 16;
+    /** Base64 characters per PEM line (RFC 7468). */
+    private static final int PEM_LINE_LENGTH = 64;
     private static final Pattern PEM = Pattern.compile(
             "-----BEGIN CERTIFICATE-----(.*?)-----END CERTIFICATE-----", Pattern.DOTALL);
     /** Whitespace, and line breaks a text field kept as {@code \n}: never Base64. */
@@ -115,6 +120,7 @@ public final class AppConfig {
      * The MDM's values for the plugin's package, read in the plugin's own process; null if that
      * process can't be reached. IPC: not on the main thread.
      */
+    @Nullable
     public static Bundle read(final Context atakContext) {
         return call(atakContext, AppConfigProvider.METHOD_GET, null);
     }
@@ -223,21 +229,11 @@ public final class AppConfig {
                 return "true".equalsIgnoreCase(text) || "false".equalsIgnoreCase(text)
                         ? Boolean.valueOf(text.toLowerCase(Locale.ROOT)) : null;
             case PORT:
-                try {
-                    final int port = Integer.parseInt(text);
-                    return port > 0 && port < 65536 ? String.valueOf(port) : null;
-                } catch (final NumberFormatException e) {
-                    // the caller logs the invalid value
-                    return null;
-                }
+                return XmppSettings.isPort(text) ? String.valueOf(Integer.parseInt(text)) : null;
             case CHANNEL_DISCOVERY:
-                for (final XmppSettings.ChannelDiscovery c
-                        : XmppSettings.ChannelDiscovery.values()) {
-                    if (c.value.equalsIgnoreCase(text)) {
-                        return c.value;
-                    }
-                }
-                return null;
+                final XmppSettings.ChannelDiscovery discovery =
+                        XmppSettings.ChannelDiscovery.of(text);
+                return discovery == null ? null : discovery.value;
             case STRING:
             default:
                 return text;
@@ -277,12 +273,13 @@ public final class AppConfig {
      */
     private static File storeCertificate(final Context atakContext, final String text,
             final AppConfig previous) {
-        final byte[] pem = text == null || text.trim().isEmpty() ? null : certificatePem(text);
-        if (text != null && !text.trim().isEmpty() && pem == null) {
+        final boolean given = text != null && !text.trim().isEmpty();
+        final byte[] pem = given ? certificatePem(text) : null;
+        if (given && pem == null) {
             Log.w(TAG, "invalid managed value for " + KEY_TRUSTED_CA_CERTIFICATE);
         }
-        final String name = pem == null ? null
-                : CA_FILE_PREFIX + ServerIdentity.sha256(pem).substring(0, 16) + ".pem";
+        final String name = pem == null ? null : CA_FILE_PREFIX
+                + ServerIdentity.sha256(pem).substring(0, CA_FILE_DIGITS) + ".pem";
         final File dir = PrivateFiles.dir(atakContext);
         // the one the preferences may still name until the new configuration is applied
         final Object inUse = previous.values.get(XmppSettings.KEY_TRUSTED_CA);
@@ -329,8 +326,9 @@ public final class AppConfig {
                 factory.generateCertificate(new ByteArrayInputStream(der));
                 final String base64 = Base64.encodeToString(der, Base64.NO_WRAP);
                 pem.append("-----BEGIN CERTIFICATE-----\n");
-                for (int i = 0; i < base64.length(); i += 64) {
-                    pem.append(base64, i, Math.min(base64.length(), i + 64)).append('\n');
+                for (int i = 0; i < base64.length(); i += PEM_LINE_LENGTH) {
+                    pem.append(base64, i, Math.min(base64.length(), i + PEM_LINE_LENGTH))
+                            .append('\n');
                 }
                 pem.append("-----END CERTIFICATE-----\n");
             }
@@ -341,9 +339,10 @@ public final class AppConfig {
         return pem.toString().getBytes(StandardCharsets.US_ASCII);
     }
 
-    // --- the configuration last applied, which applies again before the next read ---
-
-    /** The configuration last saved, or {@link #NONE}. Disk work. */
+    /**
+     * The configuration last saved, or {@link #NONE}; it applies again before the next read.
+     * Disk work.
+     */
     public static AppConfig restore(final Context atakContext) {
         final String saved = PrivateFiles.read(atakContext, SNAPSHOT);
         if (saved == null) {
@@ -356,8 +355,13 @@ public final class AppConfig {
             for (final Iterator<String> keys = v.keys(); keys.hasNext(); ) {
                 final String key = keys.next();
                 final Object value = v.get(key);
-                values.put(key, value == JSONObject.NULL ? DEFAULT
-                        : value instanceof Boolean ? value : String.valueOf(value));
+                if (value == JSONObject.NULL) {
+                    values.put(key, DEFAULT);
+                } else if (value instanceof Boolean) {
+                    values.put(key, value);
+                } else {
+                    values.put(key, String.valueOf(value));
+                }
             }
             return new AppConfig(values, o.optBoolean("login"),
                     ServerIdentity.parse(o.optString("server", null)), false);
@@ -386,8 +390,6 @@ public final class AppConfig {
             throw new IllegalStateException(e);
         }
     }
-
-    // --- in ATAK's preferences ---
 
     /**
      * Writes the managed values into ATAK's preferences, and puts the keys {@code previous}
@@ -453,8 +455,6 @@ public final class AppConfig {
         }
     }
 
-    // --- state ---
-
     public boolean isEmpty() {
         return values.isEmpty() && !managesLogin;
     }
@@ -469,19 +469,13 @@ public final class AppConfig {
         return managesLogin;
     }
 
-    /** The server the MDM's settings connect to; or null. */
-    public ServerIdentity server() {
-        return server;
-    }
-
     /**
-     * Whether the MDM's settings connect to {@code server}, which needs no approval then. Any
+     * Whether the MDM's settings connect to {@code other}, which needs no approval then. Any
      * TAK server's credentials, unless the MDM names the TAK server.
      */
-    public boolean approves(final ServerIdentity server) {
-        return this.server != null && this.server.sameServer(server)
-                && (this.server.takServer == null
-                        || this.server.takServer.equals(server.takServer));
+    public boolean approves(final ServerIdentity other) {
+        return server != null && server.sameServer(other)
+                && (server.takServer == null || server.takServer.equals(other.takServer));
     }
 
     /** Whether reading it stored a new login, which the account then uses. */

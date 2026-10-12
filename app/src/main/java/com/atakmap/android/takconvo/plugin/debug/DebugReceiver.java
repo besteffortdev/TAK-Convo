@@ -22,6 +22,7 @@ import com.atakmap.android.ipc.AtakBroadcast;
 import com.atakmap.android.maps.MapItem;
 import com.atakmap.android.maps.MapView;
 import com.atakmap.android.preference.AtakPreferences;
+import com.atakmap.android.takconvo.plugin.Guard;
 import com.atakmap.android.takconvo.plugin.TakConvoPlugin;
 import com.atakmap.android.takconvo.plugin.map.ChatSender;
 import com.atakmap.android.takconvo.plugin.ui.TakConvoPreferenceFragment;
@@ -39,7 +40,9 @@ import com.atakmap.coremap.maps.coords.GeoPoint;
 import com.atakmap.coremap.maps.time.CoordinatedTime;
 import com.atakmap.net.AtakAuthenticationCredentials;
 import com.atakmap.net.AtakAuthenticationDatabase;
+import com.google.common.base.MoreObjects;
 
+import eu.siacs.conversations.entities.Account;
 import eu.siacs.conversations.entities.Conversation;
 import eu.siacs.conversations.entities.Message;
 import eu.siacs.conversations.services.XmppConnectionService;
@@ -182,165 +185,267 @@ public final class DebugReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(final Context c, final Intent intent) {
         final String action = intent.getAction();
-        final XmppEngine engine = XmppEngine.get();
         Log.d(TAG, "received " + action);
-        if (ACTION_SET_PREF.equals(action)) {
-            final String key = intent.getStringExtra("key");
-            final String value = intent.getStringExtra("value");
-            if (key != null && value == null) {
-                AtakPreferences.getInstance(context).remove(key);
-                Log.d(TAG, "removed " + key);
-            } else if (key != null) {
-                AtakPreferences.getInstance(context).set(key, value);
-                Log.d(TAG, "set " + key);
-            }
-        } else if (ACTION_PROVISION.equals(action) && engine != null) {
-            engine.provision();
-        } else if (ACTION_APP_CONFIG.equals(action) && engine != null) {
-            final Bundle values = intent.getExtras() == null ? new Bundle()
-                    : new Bundle(intent.getExtras());
-            for (final String key : new ArrayList<>(values.keySet())) {
-                if (!key.startsWith("takconvo_")) {
-                    values.remove(key);
-                }
-            }
-            Log.d(TAG, "managed configuration for testing: " + values.keySet());
-            engine.debugSetAppConfig(values);
-        } else if (ACTION_CLEAR_CONTENT.equals(action) && clearContent != null) {
-            // ATAK calls it from its clear content task, off the main thread
-            final ClearContentRegistry.ClearContentListener listener = clearContent;
-            new Thread(() -> listener.onClearContent(false), "TakConvo.DebugClear").start();
-        } else if (ACTION_ADD_TAK_SERVER.equals(action)) {
-            // as ATAK's "add TAK server" dialog does
-            final String connect = intent.getStringExtra("connect");
-            final Bundle data = new Bundle();
-            data.putString("description", "TAK Convo test server");
-            data.putBoolean("enabled", true);
-            data.putBoolean("useAuth", true);
-            final CotService cot = CommsMapComponent.getInstance().getCotService();
-            cot.addStreaming(connect, data);
-            cot.setCredentialsForStream(connect, intent.getStringExtra("user"),
-                    intent.getStringExtra("pass"));
-            Log.d(TAG, "added TAK server " + connect);
-        } else if (ACTION_REMOVE_TAK_SERVER.equals(action)) {
-            final String connect = intent.getStringExtra("connect");
-            // not soft: that only disconnects, and keeps it in files/cotservice/cot_streams
-            CommsMapComponent.getInstance().getCotService().removeStreaming(connect, false);
-            // and the password DEBUG_ADD_TAK_SERVER stored for it
-            final NetConnectString ncs = NetConnectString.fromString(connect);
-            if (ncs != null) {
-                AtakAuthenticationDatabase.delete(AtakAuthenticationCredentials.TYPE_COT_SERVICE,
-                        ncs.getHost());
-            }
-            Log.d(TAG, "removed TAK server " + connect);
-        } else if (ACTION_IMPORT_PREF.equals(action)) {
-            // ATAK's .pref import, as mission packages use it
-            final String path = intent.getStringExtra("path");
-            final List<String> loaded = PreferenceControl.getInstance(context)
-                    .loadSettings(new File(path));
-            Log.d(TAG, "imported " + path + ": " + loaded);
-        } else if (ACTION_DUMP_SELF_SA.equals(action)) {
-            // the SA this device sends, from ATAK's private getSelfEvent(int)
-            try {
-                final Method m = CotMapComponent.class.getDeclaredMethod("getSelfEvent",
-                        int.class);
-                m.setAccessible(true);
-                Log.d(TAG, "self SA: " + m.invoke(CotMapComponent.getInstance(), 0));
-            } catch (final ReflectiveOperationException e) {
-                Log.e(TAG, "unable to build self SA", e);
-            }
-        } else if (ACTION_SHOW_ACCOUNT.equals(action)) {
-            AtakBroadcast.getInstance().sendBroadcast(
-                    new Intent(TakConvoPreferenceFragment.ACTION_SHOW_ACCOUNT));
-        } else if (ACTION_OPEN_SETTINGS.equals(action)) {
-            SettingsActivity.start(TakConvoPreferenceFragment.TOOL_KEY, null);
-        } else if (ACTION_SHOW_CHAT.equals(action)) {
-            AtakBroadcast.getInstance().sendBroadcast(
-                    new Intent(TakConvoPlugin.ACTION_SHOW_CHAT));
-        } else if (ACTION_CHAT_BACK.equals(action)) {
-            AtakBroadcast.getInstance().sendBroadcast(
-                    new Intent(TakConvoPlugin.ACTION_CHAT_BACK));
-        } else if (ACTION_SEND.equals(action) && engine != null) {
-            final boolean ok = engine.sendMessage(intent.getStringExtra("to"),
-                    intent.getStringExtra("body"));
-            Log.d(TAG, "send " + (ok ? "queued" : "rejected"));
-        } else if (ACTION_FAKE_CONTACT.equals(action)) {
-            fakeJid = orSelf(intent.getStringExtra("jid"), engine);
-            final String callsign = intent.getStringExtra("callsign");
-            injectFakeContact(fakeJid, callsign == null ? "XMPP Test" : callsign);
-        } else if (ACTION_REMOVE_FAKE_CONTACT.equals(action)) {
-            // also from its team group, where removeContactByUuid leaves it
-            final Contact contact = Contacts.getInstance().getContactByUuid(FAKE_UID);
-            if (contact != null) {
-                Contacts.getInstance().removeContact(contact);
-            }
-            final MapItem item = MapView.getMapView().getRootGroup().deepFindUID(FAKE_UID);
-            if (item != null) {
-                item.removeFromGroup();
-            }
-            Contacts.getInstance().updateTotalUnreadCount();
-            Log.d(TAG, "removed the fake contact");
-        } else if (ACTION_OPEN_CONTACT.equals(action)) {
-            // as tapping its XMPP connector
-            final boolean handled = CotMapComponent.getInstance().getContactConnectorMgr()
-                    .initiateContact(XmppConnector.CONNECTOR_TYPE, FAKE_UID,
-                            orSelf(fakeJid, engine));
-            Log.d(TAG, "initiated XMPP contact: " + handled);
-        } else if (ACTION_DUMP_CONTACT.equals(action)) {
-            final Contact contact = Contacts.getInstance().getContactByUuid(FAKE_UID);
-            if (contact instanceof IndividualContact) {
-                final IndividualContact individual = (IndividualContact) contact;
-                final Connector xmpp = individual.getConnector(XmppConnector.CONNECTOR_TYPE);
-                final Object presence = xmpp == null ? null : CotMapComponent.getInstance()
-                        .getContactConnectorMgr().getFeature(individual, xmpp,
-                                ContactConnectorManager.ConnectorFeature.Presence);
-                Log.d(TAG, "contact " + individual.getName() + ": unread="
-                        + individual.getUnreadCount() + ", xmpp unread="
-                        + (xmpp == null ? "no connector" : individual.getUnreadCount(xmpp))
-                        + ", xmpp presence=" + presence + ", default connector="
-                        + individual.getDefaultConnector(
-                                AtakPreferences.getInstance(context).getSharedPrefs()));
-            } else {
-                Log.d(TAG, "no fake contact");
-            }
-            // what a chat's "Show on map" menu item asks
-            final TakConvoCompat.Atak atak = TakConvoCompat.atak();
-            final Jid jid = XmppEngine.bareJid(orSelf(fakeJid, engine));
-            if (atak != null && jid != null) {
-                final long start = System.nanoTime();
-                final boolean onMap = atak.isOnMap(jid);
-                Log.d(TAG, jid + " on the map: " + onMap + ", found in "
-                        + (System.nanoTime() - start) / 1000 + " µs");
-            }
-        } else if (ACTION_ATAK_BROADCAST.equals(action)) {
-            // e.g. com.atakmap.android.contact.CONTACT_LIST opens ATAK's contacts
-            final Intent broadcast = new Intent(intent.getStringExtra("action"));
-            copyExtras(intent, broadcast);
-            AtakBroadcast.getInstance().sendBroadcast(broadcast);
-        } else if (ACTION_SEND_TO_CONTACT.equals(action)) {
-            sendToContact(intent);
-        } else if (ACTION_SEND_FILE.equals(action) && engine != null && chatSender != null) {
-            final Conversation self = engine.openConversation(orSelf(null, engine));
-            final String path = intent.getStringExtra("path");
-            if (self == null || path == null) {
-                Log.w(TAG, "no account, or no path");
-            } else {
-                chatSender.sendFile(new File(path), self);
-            }
-        } else if (ACTION_FAKE_INCOMING.equals(action) && engine != null) {
-            fakeIncoming(engine, orSelf(intent.getStringExtra("from"), engine),
-                    intent.getStringExtra("body"));
-        } else if (ACTION_SEND_MAP_ITEM.equals(action) && engine != null && chatSender != null) {
-            // what a group chat gets from ATAK's send list, sent to the self chat instead
-            final MapItem item = MapView.getMapView().getRootGroup()
-                    .deepFindUID(intent.getStringExtra("uid"));
-            final Conversation self = engine.openConversation(orSelf(null, engine));
-            if (item == null || self == null) {
-                Log.w(TAG, "no such map item, or no account");
-            } else {
-                chatSender.sendMapItems(Collections.singletonList(item), self);
+        if (action != null) {
+            Guard.run(TAG, "run " + action, () -> handle(action, intent));
+        }
+    }
+
+    /** The commands that work without the engine, then the engine's. */
+    private void handle(final String action, final Intent intent) {
+        switch (action) {
+            case ACTION_SET_PREF:
+                setPref(intent.getStringExtra("key"), intent.getStringExtra("value"));
+                return;
+            case ACTION_ADD_TAK_SERVER:
+                addTakServer(intent);
+                return;
+            case ACTION_REMOVE_TAK_SERVER:
+                removeTakServer(intent.getStringExtra("connect"));
+                return;
+            case ACTION_IMPORT_PREF:
+                importPref(intent.getStringExtra("path"));
+                return;
+            case ACTION_DUMP_SELF_SA:
+                dumpSelfSa();
+                return;
+            case ACTION_SHOW_ACCOUNT:
+                AtakBroadcast.getInstance().sendBroadcast(
+                        new Intent(TakConvoPreferenceFragment.ACTION_SHOW_ACCOUNT));
+                return;
+            case ACTION_OPEN_SETTINGS:
+                SettingsActivity.start(TakConvoPreferenceFragment.TOOL_KEY, null);
+                return;
+            case ACTION_SHOW_CHAT:
+                AtakBroadcast.getInstance().sendBroadcast(
+                        new Intent(TakConvoPlugin.ACTION_SHOW_CHAT));
+                return;
+            case ACTION_CHAT_BACK:
+                AtakBroadcast.getInstance().sendBroadcast(
+                        new Intent(TakConvoPlugin.ACTION_CHAT_BACK));
+                return;
+            case ACTION_FAKE_CONTACT:
+                fakeJid = orSelf(intent.getStringExtra("jid"));
+                injectFakeContact(fakeJid, MoreObjects.firstNonNull(
+                        intent.getStringExtra("callsign"), "XMPP Test"));
+                return;
+            case ACTION_REMOVE_FAKE_CONTACT:
+                removeFakeContact();
+                return;
+            case ACTION_OPEN_CONTACT:
+                openFakeContact();
+                return;
+            case ACTION_DUMP_CONTACT:
+                dumpFakeContact();
+                return;
+            case ACTION_ATAK_BROADCAST:
+                sendAtakBroadcast(intent);
+                return;
+            case ACTION_SEND_TO_CONTACT:
+                sendToContact(intent);
+                return;
+            case ACTION_CLEAR_CONTENT:
+                runClearContent();
+                return;
+            default:
+                break;
+        }
+        final XmppEngine engine = XmppEngine.get();
+        if (engine == null) {
+            Log.w(TAG, "no engine for " + action);
+            return;
+        }
+        switch (action) {
+            case ACTION_PROVISION:
+                engine.provision();
+                break;
+            case ACTION_APP_CONFIG:
+                setAppConfig(engine, intent);
+                break;
+            case ACTION_SEND:
+                Log.d(TAG, "send " + (engine.sendMessage(intent.getStringExtra("to"),
+                        intent.getStringExtra("body")) ? "queued" : "rejected"));
+                break;
+            case ACTION_SEND_FILE:
+                sendFile(engine, intent.getStringExtra("path"));
+                break;
+            case ACTION_SEND_MAP_ITEM:
+                sendMapItem(engine, intent.getStringExtra("uid"));
+                break;
+            case ACTION_FAKE_INCOMING:
+                fakeIncoming(engine, orSelf(intent.getStringExtra("from")),
+                        intent.getStringExtra("body"));
+                break;
+            default:
+                Log.w(TAG, "unknown command " + action);
+        }
+    }
+
+    /** Without a value: removes the key. */
+    private void setPref(final String key, final String value) {
+        if (key == null) {
+            return;
+        }
+        if (value == null) {
+            AtakPreferences.getInstance(context).remove(key);
+            Log.d(TAG, "removed " + key);
+        } else {
+            AtakPreferences.getInstance(context).set(key, value);
+            Log.d(TAG, "set " + key);
+        }
+    }
+
+    /** As ATAK's "add TAK server" dialog does. */
+    private static void addTakServer(final Intent intent) {
+        final String connect = intent.getStringExtra("connect");
+        final Bundle data = new Bundle();
+        data.putString("description", "TAK Convo test server");
+        data.putBoolean("enabled", true);
+        data.putBoolean("useAuth", true);
+        final CotService cot = CommsMapComponent.getInstance().getCotService();
+        cot.addStreaming(connect, data);
+        cot.setCredentialsForStream(connect, intent.getStringExtra("user"),
+                intent.getStringExtra("pass"));
+        Log.d(TAG, "added TAK server " + connect);
+    }
+
+    /** Also deletes the password {@link #ACTION_ADD_TAK_SERVER} stored for it. */
+    private static void removeTakServer(final String connect) {
+        // not soft: that only disconnects, and keeps it in files/cotservice/cot_streams
+        CommsMapComponent.getInstance().getCotService().removeStreaming(connect, false);
+        final NetConnectString ncs = NetConnectString.fromString(connect);
+        if (ncs != null) {
+            AtakAuthenticationDatabase.delete(AtakAuthenticationCredentials.TYPE_COT_SERVICE,
+                    ncs.getHost());
+        }
+        Log.d(TAG, "removed TAK server " + connect);
+    }
+
+    /** ATAK's .pref import, as mission packages use it. */
+    private void importPref(final String path) {
+        final List<String> loaded = PreferenceControl.getInstance(context)
+                .loadSettings(new File(path));
+        Log.d(TAG, "imported " + path + ": " + loaded);
+    }
+
+    /** The SA this device sends, from ATAK's private getSelfEvent(int). */
+    private static void dumpSelfSa() {
+        try {
+            final Method m = CotMapComponent.class.getDeclaredMethod("getSelfEvent", int.class);
+            m.setAccessible(true);
+            Log.d(TAG, "self SA: " + m.invoke(CotMapComponent.getInstance(), 0));
+        } catch (final ReflectiveOperationException e) {
+            Log.e(TAG, "unable to build self SA", e);
+        }
+    }
+
+    /** Also from its team group, where removeContactByUuid leaves it. */
+    private static void removeFakeContact() {
+        final Contact contact = Contacts.getInstance().getContactByUuid(FAKE_UID);
+        if (contact != null) {
+            Contacts.getInstance().removeContact(contact);
+        }
+        final MapItem item = MapView.getMapView().getRootGroup().deepFindUID(FAKE_UID);
+        if (item != null) {
+            item.removeFromGroup();
+        }
+        Contacts.getInstance().updateTotalUnreadCount();
+        Log.d(TAG, "removed the fake contact");
+    }
+
+    /** As tapping its XMPP connector. */
+    private void openFakeContact() {
+        final boolean handled = CotMapComponent.getInstance().getContactConnectorMgr()
+                .initiateContact(XmppConnector.CONNECTOR_TYPE, FAKE_UID, orSelf(fakeJid));
+        Log.d(TAG, "initiated XMPP contact: " + handled);
+    }
+
+    /** Its unread counts and presence, and how long "Show on map" takes to find it. */
+    private void dumpFakeContact() {
+        final Contact contact = Contacts.getInstance().getContactByUuid(FAKE_UID);
+        if (contact instanceof IndividualContact) {
+            final IndividualContact individual = (IndividualContact) contact;
+            final Connector xmpp = individual.getConnector(XmppConnector.CONNECTOR_TYPE);
+            final Object presence = xmpp == null ? null : CotMapComponent.getInstance()
+                    .getContactConnectorMgr().getFeature(individual, xmpp,
+                            ContactConnectorManager.ConnectorFeature.Presence);
+            Log.d(TAG, "contact " + individual.getName() + ": unread="
+                    + individual.getUnreadCount() + ", xmpp unread="
+                    + (xmpp == null ? "no connector" : individual.getUnreadCount(xmpp))
+                    + ", xmpp presence=" + presence + ", default connector="
+                    + individual.getDefaultConnector(
+                            AtakPreferences.getInstance(context).getSharedPrefs()));
+        } else {
+            Log.d(TAG, "no fake contact");
+        }
+        // what a chat's "Show on map" menu item asks
+        final TakConvoCompat.Atak atak = TakConvoCompat.atak();
+        final Jid jid = XmppEngine.bareJid(orSelf(fakeJid));
+        if (atak != null && jid != null) {
+            final long start = System.nanoTime();
+            final boolean onMap = atak.isOnMap(jid);
+            Log.d(TAG, jid + " on the map: " + onMap + ", found in "
+                    + (System.nanoTime() - start) / 1000 + " µs");
+        }
+    }
+
+    /** E.g. com.atakmap.android.contact.CONTACT_LIST opens ATAK's contacts. */
+    private static void sendAtakBroadcast(final Intent intent) {
+        final Intent broadcast = new Intent(intent.getStringExtra("action"));
+        copyExtras(intent, broadcast);
+        AtakBroadcast.getInstance().sendBroadcast(broadcast);
+    }
+
+    /** As ATAK calls it: from its clear content task, off the main thread. */
+    private void runClearContent() {
+        final ClearContentRegistry.ClearContentListener listener = clearContent;
+        if (listener == null) {
+            Log.w(TAG, "no Clear Content listener");
+            return;
+        }
+        new Thread(() -> listener.onClearContent(false), "TakConvo.DebugClear").start();
+    }
+
+    /** The takconvo_* extras, as if the MDM had set them; none without any. */
+    private static void setAppConfig(final XmppEngine engine, final Intent intent) {
+        final Bundle values = intent.getExtras() == null ? new Bundle()
+                : new Bundle(intent.getExtras());
+        for (final String key : new ArrayList<>(values.keySet())) {
+            if (!key.startsWith("takconvo_")) {
+                values.remove(key);
             }
         }
+        Log.d(TAG, "managed configuration for testing: " + values.keySet());
+        engine.debugSetAppConfig(values);
+    }
+
+    /** A file to the self chat, as ATAK's Send dialog would send it. */
+    private void sendFile(final XmppEngine engine, final String path) {
+        if (chatSender == null) {
+            Log.w(TAG, "no map integration");
+            return;
+        }
+        final Conversation self = engine.openConversation(orSelf(null));
+        if (self == null || path == null) {
+            Log.w(TAG, "no account, or no path");
+            return;
+        }
+        chatSender.sendFile(new File(path), self);
+    }
+
+    /** What a group chat gets from ATAK's send list, sent to the self chat instead. */
+    private void sendMapItem(final XmppEngine engine, final String uid) {
+        if (chatSender == null) {
+            Log.w(TAG, "no map integration");
+            return;
+        }
+        final MapItem item = MapView.getMapView().getRootGroup().deepFindUID(uid);
+        final Conversation self = engine.openConversation(orSelf(null));
+        if (item == null || self == null) {
+            Log.w(TAG, "no such map item, or no account");
+            return;
+        }
+        chatSender.sendMapItems(Collections.singletonList(item), self);
     }
 
     /** The plugin's sender, for {@link #ACTION_SEND_MAP_ITEM}. */
@@ -370,7 +475,7 @@ public final class DebugReceiver extends BroadcastReceiver {
             return;
         }
         final Intent send = new Intent(sendIntent);
-        send.putExtra("contactUID", contact.getUID());
+        send.putExtra("contactUID", contact.getUid());
         copyExtras(intent, send);
         AtakBroadcast.getInstance().sendBroadcast(send);
         Log.d(TAG, "sent the contact's send broadcast");
@@ -388,11 +493,14 @@ public final class DebugReceiver extends BroadcastReceiver {
         }
     }
 
-    private static String orSelf(final String jid, final XmppEngine engine) {
-        if (jid != null || engine == null || engine.getAccount() == null) {
+    /** {@code jid}, or else this device's own address: the self chat. */
+    private static String orSelf(final String jid) {
+        final XmppEngine engine = XmppEngine.get();
+        final Account account = engine == null ? null : engine.getAccount();
+        if (jid != null || account == null) {
             return jid;
         }
-        return engine.getAccount().getJid().asBareJid().toString();
+        return account.getJid().asBareJid().toString();
     }
 
     /** Dispatches locally the SA of a TAK user advertising an XMPP address. */

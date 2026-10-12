@@ -21,12 +21,11 @@ import android.util.SparseArray;
 import com.atakmap.android.preference.AtakPreferences;
 import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.coremap.log.Log;
+import com.google.common.collect.ImmutableSet;
 
 import eu.siacs.conversations.R;
 import eu.siacs.conversations.utils.TakConvoCompat;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -47,7 +46,7 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
     private static final String MESSAGES_GROUP = "eu.siacs.conversations.messages";
     /** The groups of Conversations' channels, ours included. */
     private static final Set<String> CONVERSATIONS_CHANNEL_GROUPS =
-            new HashSet<>(Arrays.asList("status", "chats", "calls"));
+            ImmutableSet.of("status", "chats", "calls");
     /** Conversations' notification groups, e.g. its messages'. */
     private static final String CONVERSATIONS_GROUP_PREFIX = "eu.siacs.conversations.";
 
@@ -158,12 +157,7 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
         final NotificationManager manager = atak.getSystemService(NotificationManager.class);
         if (manager.getNotificationChannel(id) == null) {
             final NotificationChannel created = new NotificationChannel(id,
-                    plugin.getString(sound ? com.atakmap.android.takconvo.plugin.R.string
-                            .takconvo_channel_messages_no_vibration
-                            : vibrate ? com.atakmap.android.takconvo.plugin.R.string
-                                    .takconvo_channel_messages_no_sound
-                                    : com.atakmap.android.takconvo.plugin.R.string
-                                            .takconvo_channel_messages_silent),
+                    plugin.getString(channelName(sound, vibrate)),
                     // still heads-up, only quieter
                     NotificationManager.IMPORTANCE_HIGH);
             created.setGroup("chats"); // Conversations' channel group
@@ -184,6 +178,18 @@ final class EmbeddedNotifications implements TakConvoCompat.NotificationFilter {
             Log.d(TAG, "created notification channel " + id);
         }
         return id;
+    }
+
+    /** The name of the message channel without sound, vibration or both. */
+    private static int channelName(final boolean sound, final boolean vibrate) {
+        if (sound) {
+            return com.atakmap.android.takconvo.plugin.R.string
+                    .takconvo_channel_messages_no_vibration;
+        }
+        if (vibrate) {
+            return com.atakmap.android.takconvo.plugin.R.string.takconvo_channel_messages_no_sound;
+        }
+        return com.atakmap.android.takconvo.plugin.R.string.takconvo_channel_messages_silent;
     }
 
     private Notification.Action withBitmapIcon(final Notification.Action action) {

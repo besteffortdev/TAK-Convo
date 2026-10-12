@@ -15,6 +15,7 @@ import com.atakmap.android.maps.MapItem;
 import com.atakmap.android.maps.MapTouchController;
 import com.atakmap.android.maps.MapView;
 import com.atakmap.android.maps.Marker;
+import com.atakmap.android.takconvo.plugin.Guard;
 import com.atakmap.android.takconvo.plugin.R;
 import com.atakmap.android.takconvo.plugin.ui.host.EmbeddedActivityHost;
 import com.atakmap.android.toolbar.ToolManagerBroadcastReceiver;
@@ -52,18 +53,7 @@ public final class MapLocations implements EmbeddedActivityHost.Redirect {
     private final BroadcastReceiver pickedReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(final Context context, final Intent intent) {
-            final EmbeddedActivityHost.Result result = picking;
-            picking = null;
-            if (result == null) {
-                return;
-            }
-            final String point = intent.getStringExtra("point");
-            final GeoPoint picked = point == null ? null : GeoPoint.parseGeoPoint(point);
-            if (picked == null || !picked.isValid()) {
-                result.deliver(Activity.RESULT_CANCELED, null);
-            } else {
-                deliver(result, picked);
-            }
+            Guard.run(TAG, "share the point picked", () -> onPicked(intent));
         }
     };
 
@@ -157,6 +147,22 @@ public final class MapLocations implements EmbeddedActivityHost.Redirect {
                 })
                 .setOnCancelListener(dialog -> result.deliver(Activity.RESULT_CANCELED, null))
                 .show();
+    }
+
+    /** ATAK's map click tool answers with the point tapped. */
+    private void onPicked(final Intent intent) {
+        final EmbeddedActivityHost.Result result = picking;
+        picking = null;
+        if (result == null) {
+            return;
+        }
+        final String point = intent.getStringExtra("point");
+        final GeoPoint picked = point == null ? null : GeoPoint.parseGeoPoint(point);
+        if (picked == null || !picked.isValid()) {
+            result.deliver(Activity.RESULT_CANCELED, null);
+        } else {
+            deliver(result, picked);
+        }
     }
 
     private void shareSelf(final EmbeddedActivityHost.Result result) {

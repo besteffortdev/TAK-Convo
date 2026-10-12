@@ -1,15 +1,12 @@
 package com.atakmap.android.takconvo.plugin.ui;
 
 import android.content.Context;
-import android.view.ContextThemeWrapper;
-import android.view.Display;
 import android.view.View;
-import android.view.WindowManager;
 import android.widget.TextView;
 
+import com.atakmap.android.takconvo.plugin.R;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 
-import eu.siacs.conversations.R;
 import eu.siacs.conversations.entities.Account;
 
 /**
@@ -28,22 +25,15 @@ public final class ConnectionBanner implements XmppEngine.Listener {
 
     public ConnectionBanner(final Context atakActivity, final XmppEngine engine,
             final Runnable showAccount) {
-        final Display display = ((WindowManager) atakActivity
-                .getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay();
         // scaled like the screens below it
-        this.ui = new ContextThemeWrapper(
-                engine.newUiContext(display, UiScale.override(atakActivity)),
-                R.style.Theme_Conversations3_Dark);
+        this.ui = ConversationsInflater.paneContext(engine, atakActivity,
+                UiScale.override(atakActivity));
         this.engine = engine;
-        root = ConversationsInflater.inflate(ui,
-                com.atakmap.android.takconvo.plugin.R.layout.takconvo_connection_banner, null,
+        root = ConversationsInflater.inflate(ui, R.layout.takconvo_connection_banner, null,
                 false);
-        progress = root.findViewById(
-                com.atakmap.android.takconvo.plugin.R.id.takconvo_connection_progress);
-        icon = root.findViewById(
-                com.atakmap.android.takconvo.plugin.R.id.takconvo_connection_icon);
-        text = root.findViewById(
-                com.atakmap.android.takconvo.plugin.R.id.takconvo_connection_text);
+        progress = root.findViewById(R.id.takconvo_connection_progress);
+        icon = root.findViewById(R.id.takconvo_connection_icon);
+        text = root.findViewById(R.id.takconvo_connection_text);
         root.setOnClickListener(v -> showAccount.run());
         refresh();
     }
@@ -70,10 +60,9 @@ public final class ConnectionBanner implements XmppEngine.Listener {
         progress.setVisibility(connecting ? View.VISIBLE : View.GONE);
         icon.setVisibility(connecting ? View.GONE : View.VISIBLE);
         text.setText(connecting
-                ? ui.getString(com.atakmap.android.takconvo.plugin.R.string
-                        .takconvo_banner_connecting)
-                : ui.getString(com.atakmap.android.takconvo.plugin.R.string
-                        .takconvo_banner_problem, ui.getString(status.getReadableId())));
+                ? ui.getString(R.string.takconvo_banner_connecting)
+                : ui.getString(R.string.takconvo_banner_problem,
+                        ui.getString(status.getReadableId())));
         root.setVisibility(View.VISIBLE);
     }
 }

@@ -142,8 +142,6 @@ final class EmbeddedContext extends ContextWrapper {
         return app != null ? app : root();
     }
 
-    // --- code and resources come from the plugin APK ---
-
     @Override
     public Resources getResources() {
         return plugin.getResources();
@@ -201,8 +199,6 @@ final class EmbeddedContext extends ContextWrapper {
         }
         return super.getSystemService(name);
     }
-
-    // --- storage lives in ATAK's data dir, namespaced ---
 
     @Override
     public SharedPreferences getSharedPreferences(final String name, final int mode) {
@@ -366,32 +362,29 @@ final class EmbeddedContext extends ContextWrapper {
         return dir;
     }
 
-    // --- XmppConnectionService is an object here, not an Android service ---
-
     @Override
     public ComponentName startService(final Intent service) {
-        final ServiceRouter r = root().router;
-        if (r != null && r.handles(service)) {
-            mainHandler.post(startCommand(r, service));
-            return service.getComponent();
-        }
-        return super.startService(service);
+        return startInProcess(service) ? service.getComponent() : super.startService(service);
     }
 
     @Override
     public ComponentName startForegroundService(final Intent service) {
-        final ServiceRouter r = root().router;
-        if (r != null && r.handles(service)) {
-            mainHandler.post(startCommand(r, service));
-            return service.getComponent();
-        }
-        return super.startForegroundService(service);
+        return startInProcess(service) ? service.getComponent()
+                : super.startForegroundService(service);
     }
 
-    /** The service's onStartCommand, guarded: it runs in ATAK's main thread. */
-    private static Runnable startCommand(final ServiceRouter r, final Intent service) {
-        return Guard.wrap(TAG, "run the XMPP service's command " + service.getAction(),
-                () -> r.startCommand(service));
+    /**
+     * Posts the in-process service's onStartCommand, guarded: it runs in ATAK's main thread.
+     * False if the intent isn't for that service.
+     */
+    private boolean startInProcess(final Intent service) {
+        final ServiceRouter r = root().router;
+        if (r == null || !r.handles(service)) {
+            return false;
+        }
+        mainHandler.post(Guard.wrap(TAG, "run the XMPP service's command "
+                + service.getAction(), () -> r.startCommand(service)));
+        return true;
     }
 
     @Override

@@ -22,6 +22,7 @@ import com.atakmap.android.takconvo.plugin.R;
 import com.atakmap.android.takconvo.plugin.config.XmppSettings;
 import com.atakmap.android.util.ATAKUtilities;
 import com.atakmap.coremap.log.Log;
+import com.google.common.collect.ImmutableSet;
 
 import eu.siacs.conversations.entities.Account;
 import eu.siacs.conversations.utils.TakConvoCompat;
@@ -29,8 +30,6 @@ import eu.siacs.conversations.xmpp.Jid;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -44,9 +43,9 @@ public final class AtakIntegration implements TakConvoCompat.Atak {
 
     private static final String TAG = "TakConvo.Map";
     /** What ATAK's importer takes: data packages, KML, GPX, CoT, GeoJSON, imagery. */
-    private static final Set<String> MAP_FILES = new HashSet<>(Arrays.asList(
+    private static final Set<String> MAP_FILES = ImmutableSet.of(
             "zip", "dpk", "kml", "kmz", "gpx", "cot", "geojson", "tif", "tiff", "ntf", "nitf",
-            "mbtiles", "sqlite"));
+            "mbtiles", "sqlite");
     /** Where ATAK keeps the XMPP address a TAK user advertises. */
     private static final String XMPP_META = "xmppUsername";
 
@@ -118,7 +117,7 @@ public final class AtakIntegration implements TakConvoCompat.Atak {
                 continue;
             }
             // a TAK user's contact has its marker's uid, which the root group indexes
-            final MapItem item = mapView.getRootGroup().deepFindUID(contact.getUID());
+            final MapItem item = mapView.getRootGroup().deepFindUID(contact.getUid());
             if (item != null && wanted.equalsIgnoreCase(item.getMetaString(XMPP_META, null))) {
                 return item;
             }

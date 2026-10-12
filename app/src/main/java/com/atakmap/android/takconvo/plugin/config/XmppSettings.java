@@ -2,8 +2,8 @@ package com.atakmap.android.takconvo.plugin.config;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.text.TextUtils;
 
+import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
 import com.atakmap.android.preference.AtakPreferences;
@@ -13,6 +13,8 @@ import com.atakmap.comms.TAKServerListener;
 import com.atakmap.coremap.log.Log;
 import com.atakmap.net.AtakAuthenticationCredentials;
 import com.atakmap.net.AtakAuthenticationDatabase;
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Strings;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -63,6 +65,7 @@ public final class XmppSettings {
     public static final String CREDENTIALS_TYPE = "takconvo.xmpp";
 
     public static final int DEFAULT_PORT = 5222;
+    private static final int MAX_PORT = 65535;
 
     public enum CredentialSource {
         TAK_SERVER,
@@ -87,13 +90,21 @@ public final class XmppSettings {
             this.value = value;
         }
 
-        public static ChannelDiscovery parse(final String value) {
+        /** The choice a preference value names, or null if it names none. */
+        @Nullable
+        public static ChannelDiscovery of(final String value) {
+            final String trimmed = Strings.nullToEmpty(value).trim();
             for (final ChannelDiscovery c : values()) {
-                if (c.value.equalsIgnoreCase(value == null ? "" : value.trim())) {
+                if (c.value.equalsIgnoreCase(trimmed)) {
                     return c;
                 }
             }
-            return XMPP_SERVER;
+            return null;
+        }
+
+        /** The choice a preference value names; the account's server if none. */
+        public static ChannelDiscovery parse(final String value) {
+            return MoreObjects.firstNonNull(of(value), XMPP_SERVER);
         }
     }
 
@@ -193,8 +204,8 @@ public final class XmppSettings {
         }
         final AtakAuthenticationCredentials login =
                 AtakAuthenticationDatabase.getCredentials(CREDENTIALS_TYPE);
-        if (login != null && !TextUtils.isEmpty(login.username)
-                && !TextUtils.isEmpty(login.password)) {
+        if (login != null && !Strings.isNullOrEmpty(login.username)
+                && !Strings.isNullOrEmpty(login.password)) {
             return new XmppSettings(enabled, domain, host, port, login.username.trim(),
                     login.password, trust, false, CredentialSource.LOGIN, null, suggested,
                     channels);
@@ -270,6 +281,7 @@ public final class XmppSettings {
     }
 
     /** The stored XMPP login's username, or null. */
+    @Nullable
     public static String getLoginUsername() {
         final AtakAuthenticationCredentials login =
                 AtakAuthenticationDatabase.getCredentials(CREDENTIALS_TYPE);
@@ -281,6 +293,7 @@ public final class XmppSettings {
     }
 
     /** This device's ATAK callsign, or null. */
+    @Nullable
     public static String atakCallsign(final SharedPreferences prefs) {
         return trimToNull(getString(prefs, KEY_ATAK_CALLSIGN));
     }
@@ -333,11 +346,12 @@ public final class XmppSettings {
     }
 
     /** Why no account can be provisioned, or null. */
+    @Nullable
     public Problem problem() {
         if (!enabled) {
             return Problem.DISABLED;
         }
-        if (username == null || TextUtils.isEmpty(password)) {
+        if (username == null || Strings.isNullOrEmpty(password)) {
             return usesTakCredentials ? Problem.NO_TAK_CREDENTIALS : Problem.NOT_SIGNED_IN;
         }
         if (domain == null && !username.contains("@")) {
@@ -347,6 +361,7 @@ public final class XmppSettings {
     }
 
     /** The XMPP address the credentials sign in as, or null. */
+    @Nullable
     public String jid() {
         return jid(username, domain, credentialSource == CredentialSource.TAK_SERVER);
     }
@@ -356,6 +371,7 @@ public final class XmppSettings {
      * address, though: with a domain set, user@corp.example (a Windows login, say) is
      * user@domain, as a TAK username without '@' is. Null without a domain to add.
      */
+    @Nullable
     static String jid(final String username, final String domain, final boolean takUsername) {
         if (username == null) {
             return null;
@@ -369,8 +385,6 @@ public final class XmppSettings {
         }
         return username;
     }
-
-    // --- TAK server credentials ---
 
     private static final class TakCredentials {
         final String server;
@@ -488,14 +502,14 @@ public final class XmppSettings {
             // ATAK's encrypted credential store, keyed by host
             final AtakAuthenticationCredentials stored = AtakAuthenticationDatabase
                     .getCredentials(AtakAuthenticationCredentials.TYPE_COT_SERVICE, host);
-            if (stored != null && !TextUtils.isEmpty(stored.username)
-                    && !TextUtils.isEmpty(stored.password)) {
+            if (stored != null && !Strings.isNullOrEmpty(stored.username)
+                    && !Strings.isNullOrEmpty(stored.password)) {
                 return new TakCredentials(host, stored.username, stored.password);
             }
         }
         final String user = server.getUsername();
         final String pass = server.getPassword();
-        if (!TextUtils.isEmpty(user) && !TextUtils.isEmpty(pass)) {
+        if (!Strings.isNullOrEmpty(user) && !Strings.isNullOrEmpty(pass)) {
             return new TakCredentials(host != null ? host : connectString, user, pass);
         }
         return null;
@@ -511,8 +525,6 @@ public final class XmppSettings {
             }
         }
     }
-
-    // --- .pref values are strings or typed ---
 
     private static String value(final Map<String, ?> prefs, final String key) {
         final Object value = prefs.get(key);
@@ -536,6 +548,16 @@ public final class XmppSettings {
         } catch (final ClassCastException e) {
             // a .pref string, until normalize() stores it as a Boolean
             return parseBoolean(value(prefs.getAll(), key), def);
+        }
+    }
+
+    /** Whether {@code text} is a port number, 1 to 65535. */
+    public static boolean isPort(final String text) {
+        try {
+            final int port = Integer.parseInt(text.trim());
+            return port > 0 && port <= MAX_PORT;
+        } catch (final NumberFormatException e) {
+            return false;
         }
     }
 

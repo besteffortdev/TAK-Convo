@@ -41,6 +41,14 @@ import com.atakmap.android.util.NotificationUtil;
 import com.atakmap.app.SettingsActivity;
 import com.atakmap.app.preferences.ToolsPreferenceFragment;
 import com.atakmap.coremap.log.Log;
+import gov.tak.api.plugin.IPlugin;
+import gov.tak.api.plugin.IServiceController;
+import gov.tak.api.ui.IHostUIService;
+import gov.tak.api.ui.Pane;
+import gov.tak.api.ui.PaneBuilder;
+import gov.tak.api.ui.ToolbarItem;
+import gov.tak.api.ui.ToolbarItemAdapter;
+import gov.tak.platform.marshal.MarshalManager;
 
 import eu.siacs.conversations.entities.Account;
 import eu.siacs.conversations.entities.Conversation;
@@ -58,15 +66,6 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import gov.tak.api.plugin.IPlugin;
-import gov.tak.api.plugin.IServiceController;
-import gov.tak.api.ui.IHostUIService;
-import gov.tak.api.ui.Pane;
-import gov.tak.api.ui.PaneBuilder;
-import gov.tak.api.ui.ToolbarItem;
-import gov.tak.api.ui.ToolbarItemAdapter;
-import gov.tak.platform.marshal.MarshalManager;
-
 public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView.Host,
         EmbeddedActivityHost.Listener {
 
@@ -79,10 +78,9 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     /** How long a Clear Content waits for the engine to stop before deleting its data. */
     private static final long WIPE_STOP_TIMEOUT_S = 15;
 
-    IServiceController serviceController;
-    Context pluginContext;
-    IHostUIService uiService;
-    ToolbarItem toolbarItem;
+    private final Context pluginContext;
+    private final IHostUIService uiService;
+    private final ToolbarItem toolbarItem;
     private final Bitmap toolIconBitmap;
 
     private XmppEngine engine;
@@ -124,14 +122,11 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
     };
 
-    public TakConvoPlugin(IServiceController serviceController) {
-        this.serviceController = serviceController;
-        final PluginContextProvider ctxProvider = serviceController
-                .getService(PluginContextProvider.class);
-        if (ctxProvider != null) {
-            pluginContext = ctxProvider.getPluginContext();
-            pluginContext.setTheme(R.style.ATAKPluginTheme);
-        }
+    public TakConvoPlugin(final IServiceController serviceController) {
+        // ATAK provides it to every plugin; nothing works without the plugin's resources
+        pluginContext = serviceController.getService(PluginContextProvider.class)
+                .getPluginContext();
+        pluginContext.setTheme(R.style.ATAKPluginTheme);
 
         uiService = serviceController.getService(IHostUIService.class);
         // drawn once: the toolbar, the tool preferences and ATAK's Send dialog show it
@@ -172,8 +167,6 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
                 Log.e(TAG, "unable to join ATAK's contacts", e);
                 contacts = null;
             }
-        }
-        if (engine != null) {
             try {
                 startMapIntegration(atakContext);
             } catch (final RuntimeException | LinkageError e) {
@@ -490,7 +483,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
 
     @Override
     public void onShowSettings() {
-        SettingsActivity.start(TakConvoPreferenceFragment.TOOL_KEY, null);
+        openSettings();
     }
 
     private void showAccountPane() {
@@ -553,8 +546,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
     }
 
-    // --- test pane (debug builds): send a plain message, list the traffic ---
-
+    /** Debug builds: sends a plain message and lists the traffic. */
     @Override
     public void showTestMessagePane() {
         if (uiService == null) {
@@ -612,14 +604,14 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
         showChatIfSignedIn(account);
         notifyServerApproval();
-        final String status = describe(engine);
+        final String status = describeState();
         if (!status.equals(lastStatus)) {
             lastStatus = status;
             // tools/deploy.ps1 waits for "status: ONLINE"
             SensitiveLog.d(TAG, "status: " + status.replace('\n', ' '));
         }
         if (testPane != null) {
-            collectMessages(engine);
+            collectMessages();
             statusView.setText(status);
             logView.setText(log);
         }
@@ -648,7 +640,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
         }
     }
 
-    private static String describe(final XmppEngine engine) {
+    private String describeState() {
         final StringBuilder sb = new StringBuilder();
         final Account account = engine.getAccount();
         if (account == null) {
@@ -668,7 +660,7 @@ public class TakConvoPlugin implements IPlugin, XmppEngine.Listener, AccountView
     }
 
     /** Adds each chat's latest message to the test pane, not to logcat. */
-    private void collectMessages(final XmppEngine engine) {
+    private void collectMessages() {
         final SimpleDateFormat time = new SimpleDateFormat("HH:mm:ss", Locale.US);
         for (final Conversation conversation : engine.getConversations()) {
             final Message latest = conversation.getLatestMessage();

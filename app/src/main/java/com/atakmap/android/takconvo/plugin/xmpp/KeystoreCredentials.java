@@ -34,6 +34,7 @@ final class KeystoreCredentials implements TakConvoCompat.CredentialCipher {
     private static final String TRANSFORMATION = "AES/GCM/NoPadding";
     /** Marks an encrypted value; anything else was stored before encryption. */
     private static final String PREFIX = "takconvo-gcm1:";
+    private static final int KEY_BITS = 256;
     private static final int IV_BYTES = 12;
     private static final int TAG_BITS = 128;
 
@@ -113,7 +114,7 @@ final class KeystoreCredentials implements TakConvoCompat.CredentialCipher {
                         KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
                         .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                         .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                        .setKeySize(256)
+                        .setKeySize(KEY_BITS)
                         .build());
                 key = generator.generateKey();
             }

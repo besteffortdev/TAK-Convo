@@ -65,6 +65,23 @@ public class XmppSettingsTest {
                 XmppSettings.ChannelDiscovery.parse("nonsense"));
         assertEquals(XmppSettings.ChannelDiscovery.XMPP_SERVER,
                 XmppSettings.ChannelDiscovery.parse(null));
+        // what a managed configuration checks: no fallback
+        assertEquals(XmppSettings.ChannelDiscovery.PUBLIC,
+                XmppSettings.ChannelDiscovery.of("PUBLIC"));
+        assertNull(XmppSettings.ChannelDiscovery.of("nonsense"));
+        assertNull(XmppSettings.ChannelDiscovery.of(null));
+    }
+
+    @Test
+    public void portsAreOneTo65535() {
+        assertTrue(XmppSettings.isPort("5222"));
+        assertTrue(XmppSettings.isPort(" 1 "));
+        assertTrue(XmppSettings.isPort("65535"));
+        assertFalse(XmppSettings.isPort("0"));
+        assertFalse(XmppSettings.isPort("65536"));
+        assertFalse(XmppSettings.isPort("-5222"));
+        assertFalse(XmppSettings.isPort("xmpp"));
+        assertFalse(XmppSettings.isPort(""));
     }
 
     @Test

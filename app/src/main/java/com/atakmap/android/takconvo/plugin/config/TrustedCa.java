@@ -1,5 +1,7 @@
 package com.atakmap.android.takconvo.plugin.config;
 
+import androidx.annotation.Nullable;
+
 import com.atakmap.coremap.log.Log;
 
 import java.io.File;
@@ -21,9 +23,11 @@ public final class TrustedCa {
 
     private static final String TAG = "TakConvo.TrustedCa";
 
-    private TrustedCa() {}
+    private TrustedCa() {
+    }
 
     /** A trust manager for the certificates in {@code path}, or null if unusable. */
+    @Nullable
     public static X509TrustManager load(final String path) {
         if (path == null) {
             return null;
@@ -46,17 +50,28 @@ public final class TrustedCa {
             for (final Certificate cert : certs) {
                 keyStore.setCertificateEntry("takconvo-ca-" + i++, cert);
             }
-            final TrustManagerFactory tmf =
-                    TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            tmf.init(keyStore);
-            for (final TrustManager tm : tmf.getTrustManagers()) {
-                if (tm instanceof X509TrustManager) {
-                    Log.d(TAG, "trusting " + certs.size() + " certificate(s) from " + path);
-                    return (X509TrustManager) tm;
-                }
+            final X509TrustManager trust = trustManager(keyStore);
+            if (trust != null) {
+                Log.d(TAG, "trusting " + certs.size() + " certificate(s) from " + path);
             }
+            return trust;
         } catch (final IOException | GeneralSecurityException | SecurityException e) {
             Log.e(TAG, "unable to load trusted CA " + path, e);
+            return null;
+        }
+    }
+
+    /** The platform's X.509 trust manager over the CAs in {@code keyStore}, or null. */
+    @Nullable
+    static X509TrustManager trustManager(final KeyStore keyStore)
+            throws GeneralSecurityException {
+        final TrustManagerFactory tmf =
+                TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(keyStore);
+        for (final TrustManager tm : tmf.getTrustManagers()) {
+            if (tm instanceof X509TrustManager) {
+                return (X509TrustManager) tm;
+            }
         }
         return null;
     }

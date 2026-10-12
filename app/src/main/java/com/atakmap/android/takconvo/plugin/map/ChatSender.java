@@ -12,6 +12,7 @@ import android.text.TextUtils;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 
 import com.atakmap.android.data.URIContentSender;
 import com.atakmap.android.data.URIHelper;
@@ -206,8 +207,7 @@ public final class ChatSender implements URIContentSender {
                     TextUtils.join(", ", names));
         }
         final MapItem item = items.get(0);
-        final GeoPoint point = item instanceof PointMapItem ? ((PointMapItem) item).getPoint()
-                : item instanceof Shape ? ((Shape) item).getCenter().get() : null;
+        final GeoPoint point = positionOf(item);
         final String name = ATAKUtilities.getDisplayName(item);
         if (point == null || !point.isValid()) {
             return name;
@@ -216,6 +216,18 @@ public final class ChatSender implements URIContentSender {
         final String mgrs = CoordinateFinder.plainSpaces(
                 CoordinateFormatUtilities.formatToString(point, CoordinateFormat.MGRS));
         return plugin.getString(R.string.takconvo_shared_item, name, mgrs);
+    }
+
+    /** A marker's point or a shape's center; null for other items. */
+    @Nullable
+    private static GeoPoint positionOf(final MapItem item) {
+        if (item instanceof PointMapItem) {
+            return ((PointMapItem) item).getPoint();
+        }
+        if (item instanceof Shape) {
+            return ((Shape) item).getCenter().get();
+        }
+        return null;
     }
 
     /** A text message, encrypted as the chat's next message is. */

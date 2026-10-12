@@ -5,6 +5,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.widget.Toast;
 
+import androidx.core.content.IntentCompat;
+
 import com.atakmap.android.ipc.AtakBroadcast;
 import com.atakmap.android.maps.MapItem;
 import com.atakmap.android.maps.MapView;
@@ -71,10 +73,11 @@ public final class GroupChatSends extends BroadcastReceiver {
             toast(R.string.takconvo_send_no_group_chat);
             return;
         }
-        final Object manifest =
-                intent.getParcelableExtra(MissionPackageApi.INTENT_EXTRA_MISSIONPACKAGEMANIFEST);
-        if (manifest instanceof MissionPackageManifest) {
-            sender.sendDataPackage((MissionPackageManifest) manifest, chat);
+        final MissionPackageManifest manifest = IntentCompat.getParcelableExtra(intent,
+                MissionPackageApi.INTENT_EXTRA_MISSIONPACKAGEMANIFEST,
+                MissionPackageManifest.class);
+        if (manifest != null) {
+            sender.sendDataPackage(manifest, chat);
             return;
         }
         final List<MapItem> items = mapItems(intent);

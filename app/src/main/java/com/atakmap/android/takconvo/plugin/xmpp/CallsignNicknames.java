@@ -44,7 +44,7 @@ final class CallsignNicknames {
     private final Context atakContext;
     private final XmppConnectionService service;
     private final Handler handler;
-    private final Supplier<Account> account;
+    private final Supplier<Account> currentAccount;
     private final SharedPreferences rooms;
     /** Room address to the callsign its bookmark nickname was set to. */
     private final Map<String, String> renamedBookmarks = new HashMap<>();
@@ -55,11 +55,11 @@ final class CallsignNicknames {
 
     CallsignNicknames(final Context atakContext, final Context engineContext,
             final XmppConnectionService service, final Handler handler,
-            final Supplier<Account> account) {
+            final Supplier<Account> currentAccount) {
         this.atakContext = atakContext;
         this.service = service;
         this.handler = handler;
-        this.account = account;
+        this.currentAccount = currentAccount;
         this.rooms = engineContext.getSharedPreferences("room_nicknames", Context.MODE_PRIVATE);
     }
 
@@ -70,7 +70,7 @@ final class CallsignNicknames {
     /** Applies the callsign while the account is online; called on every change. */
     void sync() {
         handler.removeCallbacks(recheck);
-        final Account account = this.account.get();
+        final Account account = currentAccount.get();
         final SharedPreferences prefs = AtakPreferences.getInstance(atakContext).getSharedPrefs();
         if (account == null || !account.isOnlineAndConnected()
                 || !XmppSettings.usesCallsign(prefs)) {

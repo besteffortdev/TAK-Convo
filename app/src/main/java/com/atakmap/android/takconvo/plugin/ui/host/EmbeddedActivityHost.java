@@ -29,13 +29,16 @@ import android.widget.Toast;
 
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedDispatcher;
+import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContract;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatDelegate;
 import androidx.appcompat.widget.ActionBarOverlayLayout;
 import androidx.appcompat.widget.FitWindowsFrameLayout;
 import androidx.appcompat.widget.FitWindowsLinearLayout;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleEventObserver;
 import androidx.lifecycle.LifecycleOwner;
@@ -44,6 +47,7 @@ import androidx.lifecycle.LifecycleRegistry;
 import com.atakmap.android.takconvo.plugin.ui.UiScale;
 import com.atakmap.android.takconvo.plugin.xmpp.XmppEngine;
 import com.atakmap.coremap.log.Log;
+import com.google.common.collect.ImmutableSet;
 
 import eu.siacs.conversations.R;
 import eu.siacs.conversations.ui.BaseActivity;
@@ -54,10 +58,9 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Runs Conversations' activities inside an ATAK pane: created with
@@ -100,7 +103,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     }
 
     /** Activities that work embedded; others are refused with a toast. */
-    private static final Set<String> SUPPORTED = new HashSet<>(Arrays.asList(
+    private static final Set<String> SUPPORTED = ImmutableSet.of(
             "eu.siacs.conversations.ui.ConversationsActivity",
             "eu.siacs.conversations.ui.StartConversationActivity",
             "eu.siacs.conversations.ui.ContactDetailsActivity",
@@ -118,23 +121,23 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             // its camera preview is a TextureView, which draws in ATAK's window
             "eu.siacs.conversations.ui.ScanQrCodeActivity",
             // the fork picks the image without the cropper's activity
-            "eu.siacs.conversations.ui.PublishProfilePictureActivity"));
+            "eu.siacs.conversations.ui.PublishProfilePictureActivity");
 
     /** Dialog-themed: shown over the activity below, which stays visible and paused. */
-    private static final Set<String> FLOATING = new HashSet<>(Arrays.asList(
-            "eu.siacs.conversations.ui.RecordingActivity"));
+    private static final Set<String> FLOATING =
+            ImmutableSet.of("eu.siacs.conversations.ui.RecordingActivity");
 
     private static final String SETTINGS_ACTIVITY =
             "eu.siacs.conversations.ui.activity.SettingsActivity";
 
     /** Brought to the front when started again, not created twice. */
-    private static final Set<String> SINGLE_INSTANCE = new HashSet<>(Arrays.asList(
+    private static final Set<String> SINGLE_INSTANCE = ImmutableSet.of(
             "eu.siacs.conversations.ui.ConversationsActivity",
-            "eu.siacs.conversations.ui.StartConversationActivity"));
+            "eu.siacs.conversations.ui.StartConversationActivity");
 
     /** Not relaunched when the pane's size changes: upstream declares configChanges for it. */
-    private static final Set<String> HANDLES_SIZE_CHANGES = new HashSet<>(Arrays.asList(
-            "eu.siacs.conversations.ui.RecordingActivity"));
+    private static final Set<String> HANDLES_SIZE_CHANGES =
+            ImmutableSet.of("eu.siacs.conversations.ui.RecordingActivity");
 
     /** Waits for the pane to settle, e.g. while its edge is dragged, before relaunching. */
     private static final long RELAUNCH_DELAY_MS = 400;
@@ -142,6 +145,10 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     private static final long WAIT_FOR_LAYOUT_MS = 500;
     /** Smaller differences between the pane and an activity's configuration are ignored. */
     private static final int RELAUNCH_SLACK_DP = 8;
+    /** A floating activity looks like a Material 3 dialog: corners, margins, scrim. */
+    private static final int DIALOG_CORNER_DP = 28;
+    private static final int DIALOG_MARGIN_DP = 24;
+    private static final int SCRIM_COLOR = Color.argb(153, 0, 0, 0);
 
     private static final class Record {
         /** Replaced when relaunched for another pane size. */
@@ -182,7 +189,8 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
     private final HostParent parent;
     private final FrameLayout container;
     private final List<Record> stack = new ArrayList<>();
-    private final AtomicInteger externalRequests = new AtomicInteger();
+    /** Numbers the result requests made through ATAK's activity. */
+    private int externalRequests;
     /** Follows ATAK's activity while there are activities here. */
     private LifecycleEventObserver atakObserver;
     private ActivityCompat.PermissionCompatDelegate previousPermissionDelegate;
@@ -267,8 +275,8 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
      * after it was shown, otherwise when it stops changing, e.g. while its edge is dragged.
      */
     public void setPaneSize(final int widthPx, final int heightPx) {
-        final boolean justShown = this.justShown || !laidOut;
-        this.justShown = false;
+        final boolean firstLayout = justShown || !laidOut;
+        justShown = false;
         laidOut = true;
         if (!waiting.isEmpty()) {
             // not during the layout
@@ -278,10 +286,10 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             paneWidthPx = widthPx;
             paneHeightPx = heightPx;
             Log.d(TAG, "pane size " + widthPx + "x" + heightPx);
-        } else if (!justShown) {
+        } else if (!firstLayout) {
             return;
         }
-        scheduleRelaunch(justShown ? 0 : RELAUNCH_DELAY_MS);
+        scheduleRelaunch(firstLayout ? 0 : RELAUNCH_DELAY_MS);
     }
 
     /** Starts the chat list unless something is shown already. */
@@ -358,8 +366,6 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         visible = false;
     }
 
-    // --- what activities ask for, through HostParent ---
-
     @Override
     public void startFromChild(final Activity child, final Intent intent, final int requestCode,
             final Bundle options) {
@@ -376,8 +382,6 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         record.finishing = true;
         handler.post(() -> finish(record));
     }
-
-    // --- the back stack ---
 
     private void start(final Record caller, final Intent intent, final int requestCode) {
         final Redirect r = redirect;
@@ -418,23 +422,32 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         final Record existing = findByClass(name);
         if (existing != null && (SINGLE_INSTANCE.contains(name)
                 || (intent.getFlags() & Intent.FLAG_ACTIVITY_CLEAR_TOP) != 0)) {
-            // like singleTask or CLEAR_TOP
-            while (top() != existing) {
-                final Record above = stack.remove(stack.size() - 1);
-                guarded(above, "destroy", () -> destroy(above));
-            }
-            if (canRelaunch() && isStale(existing, paneConfiguration()) && !relaunch(existing)) {
-                return;
-            }
-            guarded(existing, "new intent", () -> {
-                existing.content.setVisibility(View.VISIBLE);
-                pause(existing);
-                instrumentation.callActivityOnNewIntent(existing.activity, intent);
-                settle(existing);
-            });
+            bringToFront(existing, intent);
+        } else {
+            push(name, intent, caller, requestCode);
+        }
+    }
+
+    /** Like singleTask or CLEAR_TOP: what is above goes, and the activity gets the intent. */
+    private void bringToFront(final Record existing, final Intent intent) {
+        while (top() != existing) {
+            final Record above = stack.remove(stack.size() - 1);
+            guarded(above, "destroy", () -> destroy(above));
+        }
+        if (canRelaunch() && isStale(existing, paneConfiguration()) && !relaunch(existing)) {
             return;
         }
+        guarded(existing, "new intent", () -> {
+            existing.content.setVisibility(View.VISIBLE);
+            pause(existing);
+            instrumentation.callActivityOnNewIntent(existing.activity, intent);
+            settle(existing);
+        });
+    }
 
+    /** Creates the activity on top of the stack; hides what it covers. */
+    private void push(final String name, final Intent intent, final Record caller,
+            final int requestCode) {
         final Record previous = top();
         if (previous != null) {
             guarded(previous, "pause", () -> pause(previous));
@@ -524,7 +537,7 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         final Class<? extends Activity> cls =
                 plugin.getClassLoader().loadClass(className).asSubclass(Activity.class);
         record.configuration = paneConfiguration();
-        final Context base = engine.newUiContext(atak.getWindowManager().getDefaultDisplay(),
+        final Context base = engine.newUiContext(ContextCompat.getDisplayOrDefault(atak),
                 record.configuration);
         intent.setComponent(new ComponentName(atak.getPackageName(), className));
         intent.setExtrasClassLoader(plugin.getClassLoader());
@@ -572,8 +585,6 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             record.content.setKeepScreenOn(true);
         }
     }
-
-    // --- the pane's size ---
 
     /** Starts what waited for the pane's layout; with the estimated size if it didn't come. */
     private void startWaiting() {
@@ -694,13 +705,13 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         final GradientDrawable background = new GradientDrawable();
         background.setColor(a.getColor(0, Color.DKGRAY));
         a.recycle();
-        background.setCornerRadius(28 * density);
+        background.setCornerRadius(DIALOG_CORNER_DP * density);
         content.setBackground(background);
 
         final FrameLayout scrim = new FrameLayout(atak);
-        scrim.setBackgroundColor(Color.argb(153, 0, 0, 0));
+        scrim.setBackgroundColor(SCRIM_COLOR);
         scrim.setClickable(true);
-        final int margin = Math.round(24 * density);
+        final int margin = Math.round(DIALOG_MARGIN_DP * density);
         final FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                 Gravity.CENTER);
@@ -760,8 +771,6 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         }
         return view;
     }
-
-    // --- lifecycle ---
 
     /**
      * Resumes the top activity while the pane and ATAK are; pauses it while ATAK is only
@@ -903,8 +912,6 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
         void run() throws Exception;
     }
 
-    // --- results and activities outside Conversations ---
-
     private void startExternal(final Record caller, final Intent intent, final int requestCode) {
         try {
             if (caller == null || requestCode < 0
@@ -912,18 +919,9 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
                 atak.startActivity(intent);
                 return;
             }
-            // the system returns results to ATAK's activity only
-            final String key = "takconvo#" + externalRequests.incrementAndGet();
-            final ActivityResultLauncher<?>[] launcher = new ActivityResultLauncher<?>[1];
-            final ActivityResultLauncher<Intent> l = ((ComponentActivity) atak)
-                    .getActivityResultRegistry().register(key,
-                            new ActivityResultContracts.StartActivityForResult(), result -> {
-                                launcher[0].unregister();
-                                deliverResult(caller, requestCode, result.getResultCode(),
-                                        result.getData());
-                            });
-            launcher[0] = l;
-            l.launch(intent);
+            launchThroughAtak(new ActivityResultContracts.StartActivityForResult(), intent,
+                    result -> deliverResult(caller, requestCode, result.getResultCode(),
+                            result.getData()));
         } catch (final ActivityNotFoundException | SecurityException e) {
             Log.w(TAG, "unable to start " + intent, e);
             toastNotAvailable();
@@ -945,22 +943,40 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             deliverPermissions(record, requestCode, permissions, results);
             return;
         }
-        final String key = "takconvo#" + externalRequests.incrementAndGet();
-        final ActivityResultLauncher<?>[] launcher = new ActivityResultLauncher<?>[1];
-        final ActivityResultLauncher<String[]> l = ((ComponentActivity) atak)
-                .getActivityResultRegistry().register(key,
-                        new ActivityResultContracts.RequestMultiplePermissions(), granted -> {
-                            launcher[0].unregister();
-                            for (int i = 0; i < permissions.length; i++) {
-                                if (Boolean.TRUE.equals(granted.get(permissions[i]))) {
-                                    results[i] = PackageManager.PERMISSION_GRANTED;
-                                }
-                            }
-                            deliverPermissions(record, requestCode, permissions, results);
-                        });
-        launcher[0] = l;
         Log.d(TAG, "requesting " + Arrays.toString(permissions) + " for " + record);
-        l.launch(permissions);
+        launchThroughAtak(new ActivityResultContracts.RequestMultiplePermissions(), permissions,
+                granted -> {
+                    for (int i = 0; i < permissions.length; i++) {
+                        if (Boolean.TRUE.equals(granted.get(permissions[i]))) {
+                            results[i] = PackageManager.PERMISSION_GRANTED;
+                        }
+                    }
+                    deliverPermissions(record, requestCode, permissions, results);
+                });
+    }
+
+    /**
+     * Launches once through ATAK's activity, which the system answers, unlike an embedded one;
+     * the registration ends with the answer.
+     */
+    private <I, O> void launchThroughAtak(final ActivityResultContract<I, O> contract,
+            final I input, final ActivityResultCallback<O> callback) {
+        final String key = "takconvo#" + ++externalRequests;
+        final AtomicReference<ActivityResultLauncher<I>> launcher = new AtomicReference<>();
+        launcher.set(((ComponentActivity) atak).getActivityResultRegistry().register(key,
+                contract, result -> {
+                    launcher.get().unregister();
+                    callback.onActivityResult(result);
+                }));
+        boolean launched = false;
+        try {
+            launcher.get().launch(input);
+            launched = true;
+        } finally {
+            if (!launched) {
+                launcher.get().unregister();
+            }
+        }
     }
 
     private void deliverPermissions(final Record to, final int requestCode,
@@ -1023,8 +1039,6 @@ public final class EmbeddedActivityHost implements HostParent.Callbacks {
             return null;
         }
     }
-
-    // --- helpers ---
 
     private Record top() {
         return stack.isEmpty() ? null : stack.get(stack.size() - 1);

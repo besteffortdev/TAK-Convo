@@ -64,6 +64,9 @@ and back again to return.
 
 - *Start a chat*: the *+* button, then an XMPP address, or create or join a group chat.
   *Discover channels* lists the group chats of your XMPP server.
+- *Find people*: if your server has a user directory, *Add contact* searches it as you type;
+  tap a name to add them. Inviting people to a chat or picking the members of a new private
+  group searches it too: tap *+* next to each person, then *Add* or *Create*.
 - *Messages* are encrypted with OMEMO when the other side supports it.
 - *Attachments*: the attachment button sends files, photos, a camera picture, a voice message
   or a location.

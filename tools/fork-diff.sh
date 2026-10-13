@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prints the :conversations module's changes as a unified diff against its base: the
 # besteffortdev/conversation fork of Conversations (upstream 2.20.4 plus message retraction, the
-# long-press message overlay, short names and app config).
+# long-press message overlay, short names, user search and app config).
 #
 #   tools/fork-diff.sh [ref] > fork.patch        (default: the base commit the module is on)
 #   tools/fork-diff.sh --stat [ref]              (only the list of changed files)
@@ -21,7 +21,7 @@ if [ "${1:-}" = "--stat" ]; then
     STAT=true
     shift
 fi
-TAG=${1:-92d6edd3454746eaae71cae9686673c38c6c3619}
+TAG=${1:-45b133c4715ddfcfb0322f62dd5facb098d5459a}
 UPSTREAM_URL=${UPSTREAM_URL:-https://github.com/besteffortdev/conversation.git}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WORK=$(mktemp -d)

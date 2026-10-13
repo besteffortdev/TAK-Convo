@@ -7,10 +7,11 @@ user's TAK identity.
 
 - **XMPP in ATAK**: 1:1 chats and group chats (MUC), OMEMO encryption, file transfer
   (HTTP upload), reactions, search, history (MAM), deleting a sent message for everyone
-  (XEP-0424 retraction). The engine and UI are Conversations 2.20.4 as forked in
+  (XEP-0424 retraction), finding people in the server's user directory (XEP-0055). The engine
+  and UI are Conversations 2.20.4 as forked in
   [besteffortdev/conversation](https://github.com/besteffortdev/conversation), which adds
-  retraction, a long-press menu with quick reactions and short names for users on other
-  servers.
+  retraction, a long-press menu with quick reactions, short names for users on other servers
+  and user search.
 - **Zero typing**: the XMPP domain comes from a `.pref` file, a mission package or the MDM that
   installs the plugin (Android app config, e.g. SOTI MobiControl); the login reuses the TAK
   server's username and password. An XMPP login screen exists for other setups.

@@ -1,9 +1,9 @@
 # 05 — The Conversations fork
 
 `:conversations` is built from **besteffortdev/conversation**
-(<https://github.com/besteffortdev/conversation>, branch `master`, commit `92d6edd3`), a fork
-of **Conversations 2.20.4** (<https://codeberg.org/iNPUTmice/Conversations>, tag `2.20.4`,
-commit `bf3269cd`), GPLv3. That base adds, on top of 2.20.4:
+(<https://github.com/besteffortdev/conversation>, release `2.20.4-fork.2`, commit `45b133c4`),
+a fork of **Conversations 2.20.4** (<https://codeberg.org/iNPUTmice/Conversations>, tag
+`2.20.4`, commit `bf3269cd`), GPLv3. That base adds, on top of 2.20.4:
 
 - **XEP-0424 message retraction**: "Delete for everyone" on your own messages, retractions
   received live and from the archive (MAM, with MUC stanza-ids), retractions that arrive
@@ -12,6 +12,10 @@ commit `bf3269cd`), GPLv3. That base adds, on top of 2.20.4:
 - **a long-press message overlay** (`MessageOptionsDialog`): the message lifts out, with a row
   of reactions above it and the message options below, instead of the context menu;
 - **short names** for users on other servers (`UIHelper`, `MessageAdapter`);
+- **XEP-0055 user search** (`UserSearchManager`, `UserSearchDialog`): when the server has a
+  user directory (Openfire's search service, ejabberd's vjud), "Add contact", "Invite contact"
+  and choosing the participants of a new private group search it as you type, in a full screen
+  dialog (section P); without one, the usual dialog and contact list;
 - **managed configuration** (MDM app config) for the standalone app, which stays off inside
   ATAK (section P).
 
@@ -25,9 +29,9 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-10-09 (moved to besteffortdev/conversation `92d6edd3`) it is **56 modified files,
-2 added files, 4 removed files** (the two flavor manifests and the base's app config schema,
-section P; 146 hunks), and the patch applies cleanly to the base. Every code change carries a
+As of 2026-10-13 (moved to besteffortdev/conversation `45b133c4`, release `2.20.4-fork.2`) it
+is **57 modified files, 2 added files, 4 removed files** (the two flavor manifests and the
+base's app config schema, section P; 149 hunks), and the patch applies cleanly to the base. Every code change carries a
 `TAKCONVO` comment: `grep -rn TAKCONVO conversations/src`. When GitHub is unreachable,
 `UPSTREAM_DIR=<a checkout of the base> tools/fork-diff.sh` compares with a local clone.
 `UPSTREAM_URL=https://codeberg.org/iNPUTmice/Conversations.git tools/fork-diff.sh 2.20.4`
@@ -322,7 +326,7 @@ Upgrading protobuf would mean regenerating libsignal's 2.5-generated classes.
 
 ### P. The base's own features inside ATAK
 
-Message retraction and short names work inside ATAK unchanged. Two of the base's features
+Message retraction and short names work inside ATAK unchanged. Three of the base's features
 needed changes.
 
 **The long-press overlay** lines itself up with the activity's window. Inside ATAK that window
@@ -330,6 +334,15 @@ is never shown: its decor view is unattached, 0 pixels wide, which made the opti
 negative and placed the overlay against ATAK's whole window. It now lines up with the pane's
 content (`BaseActivity.embeddedContent`) when there is one. The reactions row also needs
 7 × 44 dp, more than a pane's ~310 dp: the reaction buttons shrink to fit.
+
+**User search** is a full screen dialog. A dialog of an embedded activity is a window of ATAK's
+(see [04](04-chat-pane-activity-host.md#the-parent-activity)), so full screen it covered the
+map and ATAK's toolbar too. Inside ATAK its window is placed on the pane's area of the screen
+instead, the map staying in view. The window is positioned in screen coordinates: it ignores
+the system bars' insets and may extend under the camera cutout (it doesn't, as the pane leaves
+it out), otherwise its position would be shifted by them. Its content still keeps clear of the
+keyboard through the base's insets listener. The bars' colors and icons are left to ATAK, as
+`Activities` does.
 
 **Managed configuration** reads `RestrictionsManager`, which in ATAK's process returns ATAK's
 app config, and listens for `ACTION_APPLICATION_RESTRICTIONS_CHANGED`, which would be ATAK's.
@@ -343,6 +356,7 @@ dead weight.
 | File | Change |
 |---|---|
 | `java/eu/siacs/conversations/ui/widget/MessageOptionsDialog.java` | `container()`: `embeddedContent` if set, else the decor view. `layout()` measures the bubble from the container, gives the column the container's width, and fits `emojiSize` to it; `animateIn()` moves the column to the container and centres it on it vertically (the pane is half of the screen in portrait), within the dialog. `addReactions()` uses `emojiSize`. |
+| `java/eu/siacs/conversations/ui/UserSearchDialog.java` | `onStart()`: when the activity has `embeddedContent`, `coverPane()` instead of the full screen layout and the system bars' colors. `coverPane()` sizes the window to the pane and places it at the pane's position on screen (`FLAG_LAYOUT_IN_SCREEN`, no fitted insets, cutout mode `ALWAYS`/`SHORT_EDGES`), and lays it out edge to edge as upstream does. |
 | `java/eu/siacs/conversations/services/AppConfig.java` | `read()`: an empty configuration when `TakConvoCompat.EMBEDDED`. |
 | `java/eu/siacs/conversations/services/AppConfigService.java` | `start()` and `stop()` do nothing when `TakConvoCompat.EMBEDDED`: no reading, no preference lock, no receiver. |
 | `res/xml/app_restrictions.xml`, `res/values/fork_app_config.xml` | **Not imported.** |
@@ -375,7 +389,7 @@ Conversations APIs the plugin (`app/`) uses directly:
 The same steps move `:conversations` to a newer commit of besteffortdev/conversation (new
 features there, or that fork merging a newer upstream release), or to another base.
 
-1. **Read what changed** between the current base (`92d6edd3`) and the target commit: the
+1. **Read what changed** between the current base (`45b133c4`) and the target commit: the
    base's commits, and upstream's changelog if it merged a newer release. Look for changes to
    the files in the tables above, to `XmppConnectionService`'s lifecycle, to dependencies, and
    for new windows, dialogs or popups that measure the activity's window (section P).

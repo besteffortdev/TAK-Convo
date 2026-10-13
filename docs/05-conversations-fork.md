@@ -1,9 +1,10 @@
 # 05 — The Conversations fork
 
 `:conversations` is built from **besteffortdev/conversation**
-(<https://github.com/besteffortdev/conversation>, release `2.20.4-fork.2`, commit `45b133c4`),
-a fork of **Conversations 2.20.4** (<https://codeberg.org/iNPUTmice/Conversations>, tag
-`2.20.4`, commit `bf3269cd`), GPLv3. That base adds, on top of 2.20.4:
+(<https://github.com/besteffortdev/conversation>, branch `master`, commit `be5a7bbf`: release
+`2.20.4-fork.2` plus the user search's compact header), a fork of **Conversations 2.20.4**
+(<https://codeberg.org/iNPUTmice/Conversations>, tag `2.20.4`, commit `bf3269cd`), GPLv3. That
+base adds, on top of 2.20.4:
 
 - **XEP-0424 message retraction**: "Delete for everyone" on your own messages, retractions
   received live and from the archive (MAM, with MUC stanza-ids), retractions that arrive
@@ -15,7 +16,8 @@ a fork of **Conversations 2.20.4** (<https://codeberg.org/iNPUTmice/Conversation
 - **XEP-0055 user search** (`UserSearchManager`, `UserSearchDialog`): when the server has a
   user directory (Openfire's search service, ejabberd's vjud), "Add contact", "Invite contact"
   and choosing the participants of a new private group search it as you type, in a full screen
-  dialog (section P); without one, the usual dialog and contact list;
+  dialog whose search field sits in the toolbar, so that it still fits above the keyboard in a
+  short window such as the pane (section P); without one, the usual dialog and contact list;
 - **managed configuration** (MDM app config) for the standalone app, which stays off inside
   ATAK (section P).
 
@@ -29,9 +31,9 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-10-13 (moved to besteffortdev/conversation `45b133c4`, release `2.20.4-fork.2`) it
-is **57 modified files, 2 added files, 4 removed files** (the two flavor manifests and the
-base's app config schema, section P; 149 hunks), and the patch applies cleanly to the base. Every code change carries a
+As of 2026-10-13 (moved to besteffortdev/conversation `be5a7bbf`) it is **57 modified files,
+2 added files, 4 removed files** (the two flavor manifests and the base's app config schema,
+section P; 149 hunks), and the patch applies cleanly to the base. Every code change carries a
 `TAKCONVO` comment: `grep -rn TAKCONVO conversations/src`. When GitHub is unreachable,
 `UPSTREAM_DIR=<a checkout of the base> tools/fork-diff.sh` compares with a local clone.
 `UPSTREAM_URL=https://codeberg.org/iNPUTmice/Conversations.git tools/fork-diff.sh 2.20.4`
@@ -389,7 +391,7 @@ Conversations APIs the plugin (`app/`) uses directly:
 The same steps move `:conversations` to a newer commit of besteffortdev/conversation (new
 features there, or that fork merging a newer upstream release), or to another base.
 
-1. **Read what changed** between the current base (`45b133c4`) and the target commit: the
+1. **Read what changed** between the current base (`be5a7bbf`) and the target commit: the
    base's commits, and upstream's changelog if it merged a newer release. Look for changes to
    the files in the tables above, to `XmppConnectionService`'s lifecycle, to dependencies, and
    for new windows, dialogs or popups that measure the activity's window (section P).

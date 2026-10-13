@@ -399,10 +399,11 @@ After an upstream merge, a dependency change or a change to the host:
    one back closes the account pane and the old chat doesn't come back.
 6. Home, then back to ATAK: `TakConvo.Host` logs pausing/stopping, then resuming.
 7. Start chat → Add contact: with a server user directory, the user search covers the pane
-   only (the map stays in view), finds users as you type, and Manual XMPP address opens the
-   address dialog; Create private group chat › Choose participants and a chat's Start group
-   chat / Invite contact open it with + buttons and chips (close it with X or back to add no
-   one). Without a directory, the Add contact dialog. Group chat → channel details → back.
+   only (the map stays in view), its field (in the toolbar) stays usable above the keyboard,
+   it finds users as you type, and Manual XMPP address opens the address dialog; Create
+   private group chat › Choose participants and a chat's Start group chat / Invite contact
+   open it with + buttons and chips (close it with its back arrow or back to add no one).
+   Without a directory, the Add contact dialog. Group chat → channel details → back.
    Chat list › QR icon:
    Show QR Code shows the address; Scan QR Code shows the camera in the pane (`dumpsys
    media.camera`: ATAK in PREVIEW), scanning another device's code opens that contact, and back

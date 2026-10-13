@@ -1,8 +1,8 @@
 # Upstream
 
 This module is built from **besteffortdev/conversation**
-(https://github.com/besteffortdev/conversation, branch `master`, commit `be5a7bbf`: release
-`2.20.4-fork.2` plus the user search's compact header), a fork of **Conversations 2.20.4**
+(https://github.com/besteffortdev/conversation, release `2.20.4-fork.3`, commit `7de7706e`),
+a fork of **Conversations 2.20.4**
 (https://codeberg.org/iNPUTmice/Conversations, tag `2.20.4`, commit `bf3269cd`) that adds
 XEP-0424 message retraction, a long-press message overlay, short names for users on other
 servers, XEP-0055 user search and MDM app config. Licensed GPLv3 (see `LICENSE`).

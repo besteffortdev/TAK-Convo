@@ -1,8 +1,8 @@
 # 05 — The Conversations fork
 
 `:conversations` is built from **besteffortdev/conversation**
-(<https://github.com/besteffortdev/conversation>, branch `master`, commit `be5a7bbf`: release
-`2.20.4-fork.2` plus the user search's compact header), a fork of **Conversations 2.20.4**
+(<https://github.com/besteffortdev/conversation>, release `2.20.4-fork.3`, commit `7de7706e`),
+a fork of **Conversations 2.20.4**
 (<https://codeberg.org/iNPUTmice/Conversations>, tag `2.20.4`, commit `bf3269cd`), GPLv3. That
 base adds, on top of 2.20.4:
 
@@ -17,9 +17,12 @@ base adds, on top of 2.20.4:
   user directory (Openfire's search service, ejabberd's vjud), "Add contact", "Invite contact"
   and choosing the participants of a new private group search it as you type, in a full screen
   dialog whose search field sits in the toolbar, so that it still fits above the keyboard in a
-  short window such as the pane (section P); without one, the usual dialog and contact list;
+  short window such as the pane (section P). Results come 20 at a time, with "Load more" at the
+  end of the list. Without a directory, the usual dialog and contact list;
 - **managed configuration** (MDM app config) for the standalone app, which stays off inside
-  ATAK (section P).
+  ATAK (section P), and with it the sign-in with only a username on the server the MDM sets;
+- **version names** from the fork's release tags (`git describe`), which the library sets by
+  hand instead (build changes).
 
 This document lists every difference between `:conversations` and that base, why each exists,
 and how to move to a newer base.
@@ -31,7 +34,7 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-10-13 (moved to besteffortdev/conversation `be5a7bbf`) it is **57 modified files,
+As of 2026-10-13 (moved to besteffortdev/conversation `2.20.4-fork.3`) it is **57 modified files,
 2 added files, 4 removed files** (the two flavor manifests and the base's app config schema,
 section P; 149 hunks), and the patch applies cleanly to the base. Every code change carries a
 `TAKCONVO` comment: `grep -rn TAKCONVO conversations/src`. When GitHub is unreachable,
@@ -54,7 +57,9 @@ compares with plain upstream instead, the base's own changes included.
 
 Not imported: the `playstore`, `quicksy*`, `test` and `debug` source sets (the base's
 `debug` one only holds an adb receiver that simulates an MDM), `art/`, `docs/`, `fastlane/`.
-The base changes no build file, so the build changes below are the same as against 2.20.4.
+The base's only build change names the app after its release tag with `git describe`, which the
+library does by hand (`VERSION_NAME` below), so the build changes below are otherwise the same
+as against 2.20.4.
 
 The fork is the upstream **`conversations` + `free`** variant: the library keeps upstream's two
 flavor dimensions (`mode`, `distribution`) with one flavor each, so the source-set overlays
@@ -68,7 +73,8 @@ Upstream's app `build.gradle` became a `com.android.library` build:
 
 - no `applicationId`, `versionCode`, `versionName`, signing or app-only settings. `BuildConfig`
   fields the code reads are declared by hand: `APP_NAME` = `TAK Convo`,
-  `VERSION_NAME` = `2.20.4+takconvo`, `VERSION_CODE`, `APPLICATION_ID`, `PRIVACY_POLICY`. The
+  `VERSION_NAME` = `2.20.4-fork.3+takconvo` (the base's release tag: update it with the base),
+  `VERSION_CODE`, `APPLICATION_ID`, `PRIVACY_POLICY`. The
   `app_name` and `applicationId` string resources are set the same way.
 - `compileSdk 36` instead of 37. AGP 8.13 is the newest AGP the ATAK `takdev` Gradle plugin
   works with, and AGP 8 can't compile against SDK 37. SDK 37 constants moved to
@@ -351,7 +357,9 @@ app config, and listens for `ACTION_APPLICATION_RESTRICTIONS_CHANGED`, which wou
 The plugin reads its own app config from a process of its package
 ([03](03-provisioning-and-trust.md#managed-configuration-mdm)) and applies it through its
 settings and account pane, so the base's stays empty inside ATAK: nothing is locked,
-enforced or trusted from it. Its schema isn't imported: the plugin APK declares its own
+enforced or trusted from it, and `AppConfig.getDomain()` is null, so `SignupUtils` and
+`EditAccountActivity` keep upstream's sign-in instead of the username-only one. Its schema isn't
+imported: the plugin APK declares its own
 `app_restrictions.xml`, which would override it anyway, and its console strings would only be
 dead weight.
 
@@ -391,7 +399,7 @@ Conversations APIs the plugin (`app/`) uses directly:
 The same steps move `:conversations` to a newer commit of besteffortdev/conversation (new
 features there, or that fork merging a newer upstream release), or to another base.
 
-1. **Read what changed** between the current base (`be5a7bbf`) and the target commit: the
+1. **Read what changed** between the current base (`7de7706e`) and the target commit: the
    base's commits, and upstream's changelog if it merged a newer release. Look for changes to
    the files in the tables above, to `XmppConnectionService`'s lifecycle, to dependencies, and
    for new windows, dialogs or popups that measure the activity's window (section P).
@@ -411,8 +419,9 @@ features there, or that fork merging a newer upstream release), or to another ba
 3. **Copy** the patched `src/main`, `src/conversations`, `src/free`, `src/conversationsFree`
    and `libs/` over `conversations/`. Skip `fastlane/`, the launcher artwork, the flavor
    manifests and what section P leaves out. Update `conversations/upstream/` with the new
-   manifests and proguard rules, the default commit in `tools/fork-diff.sh`, and the base named
-   in this document and `conversations/UPSTREAM.md`.
+   manifests and proguard rules, the default commit in `tools/fork-diff.sh`, `VERSION_NAME` in
+   `conversations/build.gradle`, and the base named in this document and
+   `conversations/UPSTREAM.md`.
 4. **Merge the build.** Diff upstream's new `build.gradle` against the previous one and carry
    the changes into `conversations/build.gradle`: new dependencies, new `BuildConfig` fields,
    new flavor source sets. Keep the ATAK-provided versions from `gradle/atak-runtime.gradle`.

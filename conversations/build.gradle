@@ -64,7 +64,7 @@ android {
 
         // A library BuildConfig has no version fields; upstream code expects them
         buildConfigField 'String', 'APP_NAME', '"TAK Convo"'
-        buildConfigField 'String', 'VERSION_NAME', '"2.20.4+takconvo"'
+        buildConfigField 'String', 'VERSION_NAME', '"2.20.4-fork.3+takconvo"'
         buildConfigField 'int', 'VERSION_CODE', '42181'
         buildConfigField 'String', 'APPLICATION_ID', '"com.atakmap.android.takconvo.plugin"'
         buildConfigField 'String', 'PRIVACY_POLICY', '"https://conversations.im/privacy.html"'

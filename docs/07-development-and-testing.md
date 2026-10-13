@@ -400,7 +400,8 @@ After an upstream merge, a dependency change or a change to the host:
 6. Home, then back to ATAK: `TakConvo.Host` logs pausing/stopping, then resuming.
 7. Start chat → Add contact: with a server user directory, the user search covers the pane
    only (the map stays in view), its field (in the toolbar) stays usable above the keyboard,
-   it finds users as you type, and Manual XMPP address opens the address dialog; Create
+   it finds users as you type (20 at a time: with more, "Load more" at the end of the list
+   adds the next 20), and Manual XMPP address opens the address dialog; Create
    private group chat › Choose participants and a chat's Start group chat / Invite contact
    open it with + buttons and chips (close it with its back arrow or back to add no one).
    Without a directory, the Add contact dialog. Group chat → channel details → back.

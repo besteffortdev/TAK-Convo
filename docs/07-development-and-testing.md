@@ -60,7 +60,8 @@ Store builds, aren't obfuscated.
 `<PLUGIN_VERSION> (<commit>) - [<ATAK version>]` and its file
 `ATAK-Plugin-takconvo-<PLUGIN_VERSION>-<commit>-<ATAK version>-civ-<type>.apk`. The user
 manual's `plugin-version` follows it (TAK.gov's pipeline writes it there anyway,
-`gradle/typst.gradle`). The version code comes from git (TAK.gov: the packaging time).
+`gradle/typst.gradle`). The version code comes from git (TAK.gov: the packaging time, ending
+in the ATAK version).
 
 ### Developer ATAK on a test device, and release ATAK
 
@@ -112,10 +113,14 @@ tools/tpp-package.sh 5.8.0            # one version
 ```
 
 Each zip holds the working tree as it is, from a temporary git index, so nothing is staged.
-Commit first: uncommitted changes make the version `<commit>-wip`. Each zip:
+Commit first: uncommitted changes make the version `<commit>-wip`, unless they are only in
+files the zip leaves out (below). Each zip:
 - sets `atakVersion` (the TPP builds the default);
-- writes `takVersionName` (the commit) and `takStaticVersion` (the packaging time, as version
-  code), because the archive has no `.git` for takdev to read them from;
+- writes `takVersionName` (the commit) and `takStaticVersion` (the version code: the packaging
+  time to 100 s, its last two digits the ATAK version, `...56` or `...58`), because the archive
+  has no `.git` for takdev to read them from. Each ATAK version's APK needs its own version
+  code: an MDM such as SOTI MobiControl refuses a second APK of the package with one it already
+  has;
 - leaves out `docs/` (except `docs/user_manual/`), `tools/`, `provisioning/`, `README.md`,
   `template.local.properties` and `.gitlab-ci.yml`: the build doesn't need them, and they name
   internal hosts. The TPP sets `ATAK_CI=1`, which makes `gradle/typst.gradle` compile
@@ -133,7 +138,8 @@ returns the signed APK, which declares `com.atakmap.app@5.6.0.CIV` or `...@5.8.0
 with only `sdk.dir` (takdev needs the file; the TPP writes its own):
 - `assembleCivRelease` succeeds for both versions, with the SDK given as
   `-Patak.sdk.5.x=<dir>`;
-- the APK's version is `<version> (<commit>) - [5.x.0]`, with the static version code;
+- the APK's version is `<version> (<commit>) - [5.x.0]`, with the static version code, which
+  ends in `56` or `58`;
 - with the TPP's flags (`-Ptakrepo.force=true -Ptakrepo.url=https://artifacts.tak.gov/artifactory/maven
   -Ptakrepo.user=... -Ptakrepo.password=...`), the build goes straight to TAK.gov's Maven for
   takdev.

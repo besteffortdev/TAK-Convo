@@ -22,24 +22,38 @@ index=$(mktemp)
 props=$(mktemp)
 trap 'rm -f "$index" "$props"' EXIT
 
-# no git in the archive: the version takdev would take from it
+# not needed to build, and they name internal hosts
+left_out=(docs tools provisioning README.md template.local.properties .gitlab-ci.yml)
+
+# no git in the archive: the version takdev would take from it. Changes to what the zip leaves
+# out don't count, except to the user manual, which it keeps. The repository's own line endings
+# setting: a file checked out again with Windows line endings is no change
 revision=$(git -C "$root" rev-parse --short=8 HEAD)
-if [ -n "$(git -C "$root" status --porcelain)" ]; then
+changes=$(command git -C "$root" status --porcelain -- . "${left_out[@]/#/:(exclude)}")
+changes+=$(command git -C "$root" status --porcelain -- docs/user_manual)
+if [ -n "$changes" ]; then
     revision="$revision-wip"
     echo "warning: uncommitted changes; the version is $revision" >&2
 fi
-versionCode=$(date +%s)
+# the version code: the packaging time to 100 s, ending in the ATAK version (...56, ...58). The
+# APKs for each ATAK version need their own: an MDM such as SOTI MobiControl refuses a second
+# APK of the package with a version code it already has
+packagedAt=$(( $(date +%s) / 100 * 100 ))
 
 for version in "${versions[@]}"; do
-    name="takconvo-atak$(echo "$version" | cut -d. -f1,2 | tr -d .)"
+    atak=$(echo "$version" | cut -d. -f1,2 | tr -d .)
+    if [ ${#atak} -ne 2 ]; then
+        echo "$version: the version code has two digits for the ATAK version" >&2
+        exit 1
+    fi
+    name="takconvo-atak$atak"
+    versionCode=$(( packagedAt + atak ))
     (
         export GIT_INDEX_FILE="$index"
         git -C "$root" read-tree HEAD
         # the working tree, without what .gitignore excludes (local.properties, build output)
         git -C "$root" add -A
-        # not needed to build, and they name internal hosts
-        git -C "$root" rm -r -q --cached --ignore-unmatch \
-            docs tools provisioning README.md template.local.properties .gitlab-ci.yml
+        git -C "$root" rm -r -q --cached --ignore-unmatch "${left_out[@]}"
         # the pipeline resolves the takdev plugin and the SDK from its own repository, whose
         # artifacts aren't in the checksums: the build would refuse them
         git -C "$root" rm -q --cached --ignore-unmatch gradle/verification-metadata.xml

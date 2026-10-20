@@ -132,7 +132,7 @@ What we learned embedding a full Android app in ATAK, roughly in the order it bi
     listed that way, at the top of the list with the users.
 35. **ATAK paints tool icons in one color, from their alpha.** A colored icon shows as a plain
     square in the tool menu. The plugin's app icon (Plugin Manager) is Conversations' launcher
-    icon; its tool icon is Conversations' speech bubble (`drawable/ic_takconvo`, from the
+    icon in grey instead of green; its tool icon is Conversations' speech bubble (`drawable/ic_takconvo`, from the
     monochrome launcher icon), drawn to a bitmap for the `ToolbarItem`.
 
 ## Maintenance

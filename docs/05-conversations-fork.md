@@ -1,7 +1,7 @@
 # 05 — The Conversations fork
 
 `:conversations` is built from **besteffortdev/conversation**
-(<https://github.com/besteffortdev/conversation>, release `2.20.4-fork.3`, commit `7de7706e`),
+(<https://github.com/besteffortdev/conversation>, release `2.20.4-fork.5`, commit `c14e015b`),
 a fork of **Conversations 2.20.4**
 (<https://codeberg.org/iNPUTmice/Conversations>, tag `2.20.4`, commit `bf3269cd`), GPLv3. That
 base adds, on top of 2.20.4:
@@ -13,16 +13,19 @@ base adds, on top of 2.20.4:
 - **a long-press message overlay** (`MessageOptionsDialog`): the message lifts out, with a row
   of reactions above it and the message options below, instead of the context menu;
 - **short names** for users on other servers (`UIHelper`, `MessageAdapter`);
-- **XEP-0055 user search** (`UserSearchManager`, `UserSearchDialog`): when the server has a
-  user directory (Openfire's search service, ejabberd's vjud), "Add contact", "Invite contact"
-  and choosing the participants of a new private group search it as you type, in a full screen
-  dialog whose search field sits in the toolbar, so that it still fits above the keyboard in a
-  short window such as the pane (section P). Results come 20 at a time, with "Load more" at the
-  end of the list. Without a directory, the usual dialog and contact list;
+- **XEP-0055 user search** (`UserSearchManager`, `UserSearchDialog`): when the server has
+  user directories (Openfire's search service, ejabberd's vjud), "Add contact", "Invite contact"
+  and choosing the participants of a new private group search all of them as you type, in a
+  full screen dialog whose search field sits in the toolbar, so that it still fits above the
+  keyboard in a short window such as the pane (section P). Each directory's results show as they
+  arrive, merged with the others'; a directory that doesn't answer within 10 seconds is left
+  out, and opening the search asks the server for its directories again. Results come 20 at a
+  time, with "Load more" at the end of the list. Without a directory, the usual dialog and
+  contact list;
 - **managed configuration** (MDM app config) for the standalone app, which stays off inside
   ATAK (section P), and with it the sign-in with only a username on the server the MDM sets;
-- **version names** from the fork's release tags (`git describe`), which the library sets by
-  hand instead (build changes).
+- **version names and codes** from the fork's release tags (`git describe`), which the library
+  sets by hand instead (build changes).
 
 This document lists every difference between `:conversations` and that base, why each exists,
 and how to move to a newer base.
@@ -34,7 +37,7 @@ tools/fork-diff.sh --stat          # changed files
 tools/fork-diff.sh > fork.patch    # unified diff, paths upstream/... and fork/...
 ```
 
-As of 2026-10-13 (moved to besteffortdev/conversation `2.20.4-fork.3`) it is **57 modified files,
+As of 2026-10-20 (moved to besteffortdev/conversation `2.20.4-fork.5`) it is **57 modified files,
 2 added files, 4 removed files** (the two flavor manifests and the base's app config schema,
 section P; 149 hunks), and the patch applies cleanly to the base. Every code change carries a
 `TAKCONVO` comment: `grep -rn TAKCONVO conversations/src`. When GitHub is unreachable,
@@ -73,7 +76,7 @@ Upstream's app `build.gradle` became a `com.android.library` build:
 
 - no `applicationId`, `versionCode`, `versionName`, signing or app-only settings. `BuildConfig`
   fields the code reads are declared by hand: `APP_NAME` = `TAK Convo`,
-  `VERSION_NAME` = `2.20.4-fork.3+takconvo` (the base's release tag: update it with the base),
+  `VERSION_NAME` = `2.20.4-fork.5+takconvo` (the base's release tag: update it with the base),
   `VERSION_CODE`, `APPLICATION_ID`, `PRIVACY_POLICY`. The
   `app_name` and `applicationId` string resources are set the same way.
 - `compileSdk 36` instead of 37. AGP 8.13 is the newest AGP the ATAK `takdev` Gradle plugin
@@ -399,7 +402,7 @@ Conversations APIs the plugin (`app/`) uses directly:
 The same steps move `:conversations` to a newer commit of besteffortdev/conversation (new
 features there, or that fork merging a newer upstream release), or to another base.
 
-1. **Read what changed** between the current base (`7de7706e`) and the target commit: the
+1. **Read what changed** between the current base (`c14e015b`) and the target commit: the
    base's commits, and upstream's changelog if it merged a newer release. Look for changes to
    the files in the tables above, to `XmppConnectionService`'s lifecycle, to dependencies, and
    for new windows, dialogs or popups that measure the activity's window (section P).

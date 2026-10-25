@@ -4,7 +4,7 @@
 // TAK.gov's pipeline writes both versions (gradle/typst.gradle)
 #show: userguide.with(
    plugin-name: "TAK Convo",
-   plugin-version: "0.11.0",
+   plugin-version: "0.12.0",
    platform: "ATAK",
    platform-version: "5.8.0",
 )

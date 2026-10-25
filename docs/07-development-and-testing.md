@@ -410,7 +410,9 @@ After an upstream merge, a dependency change or a change to the host:
    "Load more" at the end of the list adds the next 20; the log names each directory and how
    long it took), and Manual XMPP address opens the address dialog; Create
    private group chat › Choose participants and a chat's Start group chat / Invite contact
-   open it with + buttons and chips (close it with its back arrow or back to add no one).
+   open it with + buttons and chips, the contacts listed under Manual XMPP address before
+   anything is typed and narrowed down as you type, also after a rotation (close it with its
+   back arrow or back to add no one).
    Without a directory, the Add contact dialog. Group chat → channel details → back.
    Chat list › QR icon:
    Show QR Code shows the address; Scan QR Code shows the camera in the pane (`dumpsys

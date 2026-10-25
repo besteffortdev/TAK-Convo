@@ -1,7 +1,7 @@
 # Upstream
 
 This module is built from **besteffortdev/conversation**
-(https://github.com/besteffortdev/conversation, release `2.20.4-fork.5`, commit `c14e015b`),
+(https://github.com/besteffortdev/conversation, release `2.20.4-fork.6`, commit `85345727`),
 a fork of **Conversations 2.20.4**
 (https://codeberg.org/iNPUTmice/Conversations, tag `2.20.4`, commit `bf3269cd`) that adds
 XEP-0424 message retraction, a long-press message overlay, short names for users on other

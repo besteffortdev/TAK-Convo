@@ -67,7 +67,8 @@ and back again to return.
 - *Find people*: if your server has user directories, *Add contact* searches them all as you
   type; tap a name to add them. Results come 20 at a time: *Load more*, at the end of the list,
   shows the next ones. Inviting people to a chat or picking the members of a new private
-  group searches them too: tap *+* next to each person, then *Add* or *Create*.
+  group lists your contacts and searches the directories as you type: tap *+* next to each
+  person, then *Add* or *Create*.
 - *Messages* are encrypted with OMEMO when the other side supports it.
 - *Attachments*: the attachment button sends files, photos, a camera picture, a voice message
   or a location.

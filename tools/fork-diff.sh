@@ -21,7 +21,7 @@ if [ "${1:-}" = "--stat" ]; then
     STAT=true
     shift
 fi
-TAG=${1:-c14e015b7cdeb173b2a582ecbdb42b0598a84150}
+TAG=${1:-85345727f98a28ea63e6565256ca2c49ed90e8c0}
 UPSTREAM_URL=${UPSTREAM_URL:-https://github.com/besteffortdev/conversation.git}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WORK=$(mktemp -d)

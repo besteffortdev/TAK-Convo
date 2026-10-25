@@ -34,9 +34,6 @@ user's TAK identity.
 
 ## Status
 
-2026-09-30. Built for ATAK 5.6 and 5.8. Working on a Samsung Galaxy S23 (Android 16) with the
-ATAK 5.8.0.5 developer build, against an Openfire server (until the move to 5.6/5.8, also on a
-Galaxy S22+ with 5.5.1.8):
 
 | Works | Not yet |
 |---|---|

@@ -412,8 +412,9 @@ After an upstream merge, a dependency change or a change to the host:
    private group chat › Choose participants and a chat's Start group chat / Invite contact
    open it with + buttons and chips, the contacts listed under Manual XMPP address before
    anything is typed and narrowed down as you type, also after a rotation (close it with its
-   back arrow or back to add no one).
-   Without a directory, the Add contact dialog. Group chat → channel details → back.
+   back arrow or back to add no one). With the network off the search still opens, says it
+   isn't connected and keeps its results, and it searches again by itself once the account is
+   back. Without a directory, the Add contact dialog. Group chat → channel details → back.
    Chat list › QR icon:
    Show QR Code shows the address; Scan QR Code shows the camera in the pane (`dumpsys
    media.camera`: ATAK in PREVIEW), scanning another device's code opens that contact, and back

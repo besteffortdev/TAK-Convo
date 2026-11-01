@@ -68,7 +68,8 @@ and back again to return.
   type; tap a name to add them. Results come 20 at a time: *Load more*, at the end of the list,
   shows the next ones. Inviting people to a chat or picking the members of a new private
   group lists your contacts and searches the directories as you type: tap *+* next to each
-  person, then *Add* or *Create*.
+  person, then *Add* or *Create*. While you aren't connected the search says so, and it
+  searches again by itself once you are.
 - *Messages* are encrypted with OMEMO when the other side supports it.
 - *Attachments*: the attachment button sends files, photos, a camera picture, a voice message
   or a location.
